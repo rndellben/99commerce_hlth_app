@@ -1,0 +1,61 @@
+name: hlth_app
+description: "HLTH Smartband Companion App"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.8.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # State management
+  flutter_riverpod: ^2.6.1
+
+  # Navigation
+  go_router: ^14.8.1
+
+  # Database — drift (typed SQLite ORM). Per hlth-db-schema.md the canonical
+  # schema requires UUID PKs, Unix-sec timestamps, soft-delete, and
+  # composite unique constraints — much cleaner expressed in drift than
+  # raw sqflite.
+  drift: ^2.20.2
+  drift_flutter: ^0.2.4
+  path: ^1.9.1
+  path_provider: ^2.1.5
+  sqlite3_flutter_libs: ^0.5.27
+
+  # Immutable domain models (freezed). Per hlth-repository-api.md the
+  # service layer takes freezed models, not drift row classes.
+  freezed_annotation: ^2.4.4
+  json_annotation: ^4.9.0
+
+  # UUID v4 generation for primary keys.
+  uuid: ^4.5.1
+
+  # Charts (for health data visualization)
+  fl_chart: ^0.70.2
+
+  # Local storage for preferences
+  shared_preferences: ^2.3.5
+
+  # Runtime permissions (BLE scan/connect, location on Android <12)
+  permission_handler: ^11.3.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^5.0.0
+
+  # Code generation
+  build_runner: ^2.4.13
+  drift_dev: ^2.20.3
+  freezed: ^2.5.7
+  json_serializable: ^6.8.0
+
+flutter:
+  uses-material-design: true
