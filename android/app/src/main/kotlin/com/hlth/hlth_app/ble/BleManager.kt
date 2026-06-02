@@ -80,6 +80,11 @@ class BleManager(
         private const val PPG_EVENT_CHANNEL = "hlth/realtime_stream"
         private const val ACCEL_EVENT_CHANNEL = "hlth/realtime_stream_accel"
         private const val SCAN_TIMEOUT_MS = 10_000L
+        // HLT-11: periodic sync cadence (30 min). Long enough that battery
+        // cost is negligible on top of the always-on BLE connection; short
+        // enough to keep home-screen cards fresh and to make the band's
+        // 30-min HRV slot resolution observable without manual taps.
+        private const val PERIODIC_SYNC_INTERVAL_MS = 30L * 60L * 1000L
     }
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -97,6 +102,28 @@ class BleManager(
     // sync rate at one per 5 sec so we don't hammer the BLE channel if
     // notifications batch.
     private var lastRealtimeHrSyncMs: Long = 0L
+
+    // HLT-11: periodic sync tick. Posts a Runnable on the main looper every
+    // PERIODIC_SYNC_INTERVAL_MS while connected. The runnable just signals
+    // Dart via `onPeriodicSyncTick` — no business logic lives natively.
+    // Dart's PeriodicSyncCoordinator owns the actual sync orchestration.
+    //
+    // Lives in BleManager (not BleForegroundService) for two reasons:
+    //   1. Direct access to `methodChannel` — no IPC needed
+    //   2. The FG service keeps the process alive, so this Handler keeps
+    //      firing even when the activity is destroyed
+    private val periodicSyncRunnable = object : Runnable {
+        override fun run() {
+            try {
+                methodChannel.invokeMethod("onPeriodicSyncTick", null)
+                Log.i("HlthBLE", "periodic sync tick → Dart")
+            } catch (e: Exception) {
+                Log.w("HlthBLE", "periodic sync tick failed: ${e.message}")
+            }
+            // Re-arm
+            mainHandler.postDelayed(this, PERIODIC_SYNC_INTERVAL_MS)
+        }
+    }
     private lateinit var methodChannel: MethodChannel
     @Suppress("unused")
     private var ppgEventSink: EventChannel.EventSink? = null
@@ -162,11 +189,23 @@ class BleManager(
                 if (!hasBootstrapped) {
                     hasBootstrapped = true
                     mainHandler.postDelayed({ bootstrapBandAfterConnect() }, 1500)
+                    // HLT-11: kick off the periodic sync schedule. First tick
+                    // fires PERIODIC_SYNC_INTERVAL_MS after connect (not
+                    // immediately — Dart side handles startup sync on its own
+                    // when it wants to).
+                    mainHandler.postDelayed(
+                        periodicSyncRunnable,
+                        PERIODIC_SYNC_INTERVAL_MS
+                    )
+                    Log.i("HlthBLE", "periodic sync scheduled (every ${PERIODIC_SYNC_INTERVAL_MS / 60000} min)")
                 }
             } else {
                 hasBootstrapped = false
                 connectedDeviceName = ""
                 BleForegroundService.stop(context)
+                // HLT-11: cancel periodic sync — no point firing ticks
+                // while disconnected.
+                mainHandler.removeCallbacks(periodicSyncRunnable)
             }
         }
     }

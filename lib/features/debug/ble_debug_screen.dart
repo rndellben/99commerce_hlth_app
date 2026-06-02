@@ -7,7 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hlth_app/core/ble/ble_service.dart';
-import 'package:hlth_app/core/ble/sync_adapters.dart' as adapters;
 import 'package:hlth_app/core/bootstrap/active_session.dart';
 import 'package:hlth_app/core/database/enums.dart';
 import 'package:hlth_app/core/models/daily_metrics.dart';
@@ -22,9 +21,9 @@ import 'package:hlth_app/core/repositories/step_bucket_repository.dart';
 import 'package:hlth_app/core/services/activity_classifier.dart';
 import 'package:hlth_app/core/repositories/baseline_repository.dart';
 import 'package:hlth_app/core/repositories/bp_repository.dart';
-import 'package:hlth_app/core/repositories/hrv_repository.dart';
 import 'package:hlth_app/core/services/baseline_service.dart';
 import 'package:hlth_app/core/services/daily_aggregator.dart';
+import 'package:hlth_app/core/services/sync_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:uuid/uuid.dart';
 
@@ -137,6 +136,19 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
         }
         if (samples.isNotEmpty) {
           _push('PPG packet (${samples.length} samples): ${samples.first}');
+        }
+      }),
+      // HLT-11: log when the native scheduler fires + what each run did.
+      ble.periodicSyncTick.listen((_) {
+        _push('★ periodic sync tick fired (every 30 min while connected)');
+      }),
+      ref.read(periodicSyncCoordinatorProvider).runs.listen((result) {
+        final ok = result.allOk ? 'OK' : 'partial';
+        _push('★ periodic syncAll: $ok '
+            '(${result.totalSamples} samples, '
+            'aggregate=${result.aggregated ? "OK" : "skip"})');
+        for (final step in result.steps.where((s) => !s.ok)) {
+          _push('  ↳ ${step.metric}: ${step.error}');
         }
       }),
     ]);
@@ -308,186 +320,140 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
   Future<void> _getHeartRate() async {
     if (!_requireSession()) return;
     _push('getHrHistory: requesting...');
-    try {
-      final r = await ref.read(bleServiceProvider).getHrHistory();
-      final readings = (r['readings'] as List?) ?? const [];
-      final size = r['size'];
-      _push('getHrHistory: size=$size, ${readings.length} non-zero readings');
-      if (readings.isEmpty) {
-        _push('  (band has no HR data yet — wait for first interval)');
-        return;
-      }
-      // Read configured interval so the persisted intervalMin reflects band setting.
-      var hrIntervalMin = 10;
-      try {
-        final settings = await ref.read(bleServiceProvider).getScheduledHr();
-        hrIntervalMin = (settings['heartInterval'] as num?)?.toInt() ?? 10;
-      } catch (_) {}
-      // Raw native payload dump — see exactly what the band SDK returned.
-      _push('  raw: endFlag=${r['endFlag']} index=${r['index']} size=${r['size']} utcTime=${r['utcTime']}');
-      final rawArr = (r['rawArray'] as List?) ?? const [];
-      _push('  rawArray[${rawArr.length}]: ${_preview(rawArr, 24)}');
-      for (final reading in readings.take(8)) {
-        _push('    $reading');
-      }
-      if (readings.length > 8) _push('    ... +${readings.length - 8} more');
-
-      final samples = adapters.hrFromNative(
-        r,
-        userId: _activeUserId!,
-        deviceId: _activeDeviceId!,
-        hrIntervalMin: hrIntervalMin,
-      );
-      await ref.read(hrRepositoryProvider).insertMany(samples);
-      _push('  persisted ${samples.length} HR sample(s) (intervalMin=$hrIntervalMin)');
-    } catch (e) {
-      _push('getHrHistory error: $e');
+    final res = await ref.read(syncServiceProvider).syncHr(
+          userId: _activeUserId!,
+          deviceId: _activeDeviceId!,
+        );
+    if (!res.ok) {
+      _push('getHrHistory error: ${res.error}');
+      return;
     }
+    final r = res.rawMap ?? const {};
+    final readings = (r['readings'] as List?) ?? const [];
+    final size = r['size'];
+    _push('getHrHistory: size=$size, ${readings.length} non-zero readings');
+    if (res.note != null) {
+      _push('  (${res.note})');
+      return;
+    }
+    _push('  raw: endFlag=${r['endFlag']} index=${r['index']} size=${r['size']} utcTime=${r['utcTime']}');
+    final rawArr = (r['rawArray'] as List?) ?? const [];
+    _push('  rawArray[${rawArr.length}]: ${_preview(rawArr, 24)}');
+    for (final reading in readings.take(8)) {
+      _push('    $reading');
+    }
+    if (readings.length > 8) _push('    ... +${readings.length - 8} more');
+    final intervalMin = res.extra?['hrIntervalMin'] ?? 10;
+    _push('  persisted ${res.count} HR sample(s) (intervalMin=$intervalMin)');
   }
 
   Future<void> _getSpo2() async {
     if (!_requireSession()) return;
     _push('getSpO2History: requesting...');
-    try {
-      final entries = await ref.read(bleServiceProvider).getSpO2History();
-      _push('getSpO2History: ${entries.length} day(s) of data');
-      // Raw native payload — every day with full min/max arrays.
-      for (final day in entries) {
+    final res = await ref.read(syncServiceProvider).syncSpo2(
+          userId: _activeUserId!,
+          deviceId: _activeDeviceId!,
+        );
+    if (!res.ok) {
+      _push('getSpO2History error: ${res.error}');
+      return;
+    }
+    final entries = res.rawList ?? const [];
+    _push('getSpO2History: ${entries.length} day(s) of data');
+    for (final day in entries) {
+      if (day is Map) {
         _push('  day=${day['dateStr']} unixTime=${day['unixTime']}');
         _push('    minArray[24]=${_preview(day['minArray'], 24)}');
         _push('    maxArray[24]=${_preview(day['maxArray'], 24)}');
       }
-      final samples = adapters.spo2FromNative(
-        entries,
-        userId: _activeUserId!,
-        deviceId: _activeDeviceId!,
-      );
-      await ref.read(spo2RepositoryProvider).insertMany(samples);
-      _push('  persisted ${samples.length} SpO2 hourly sample(s)');
-    } catch (e) {
-      _push('getSpO2History error: $e');
     }
+    _push('  persisted ${res.count} SpO2 hourly sample(s)');
   }
 
   Future<void> _getSleep() async {
     if (!_requireSession()) return;
     _push('getSleepHistory: requesting...');
-    try {
-      final r = await ref.read(bleServiceProvider).getSleepHistory();
-      final stages = (r['stages'] as List?) ?? const [];
-      // Raw native payload — every field the band returned.
-      _push('  raw totals:');
-      _push('    totalSleepDuration=${r['totalSleepDuration']}');
-      _push('    deepDuration=${r['deepDuration']}  shallowDuration=${r['shallowDuration']}');
-      _push('    rapidDuration=${r['rapidDuration']}  awakeDuration=${r['awakeDuration']}');
-      _push('    sleepTime=${r['sleepTime']}  wakeTime=${r['wakeTime']}  wakingCount=${r['wakingCount']}');
-      _push('  raw stages (${stages.length}):');
-      for (var i = 0; i < stages.length && i < 12; i++) {
-        _push('    [$i] ${stages[i]}');
-      }
-      if (stages.length > 12) _push('    ... +${stages.length - 12} more');
-
-      final parsed = adapters.sleepFromNative(
-        r,
-        userId: _activeUserId!,
-        deviceId: _activeDeviceId!,
-      );
-      if (parsed == null) {
-        _push('  (no usable sleep data — sleepTime/wakeTime missing or stages empty)');
-        return;
-      }
-      final repo = ref.read(sleepRepositoryProvider);
-      await repo.createSession(parsed.session);
-      await repo.insertEpochs(parsed.session.id, parsed.epochs);
-      _push('  persisted session ${parsed.session.id.substring(0, 8)}…, ${parsed.epochs.length} epochs '
-          '(total=${parsed.session.totalMin}min)');
-    } catch (e) {
-      _push('getSleepHistory error: $e');
+    final res = await ref.read(syncServiceProvider).syncSleep(
+          userId: _activeUserId!,
+          deviceId: _activeDeviceId!,
+        );
+    if (!res.ok) {
+      _push('getSleepHistory error: ${res.error}');
+      return;
     }
+    final r = res.rawMap ?? const {};
+    final stages = (r['stages'] as List?) ?? const [];
+    _push('  raw totals:');
+    _push('    totalSleepDuration=${r['totalSleepDuration']}');
+    _push('    deepDuration=${r['deepDuration']}  shallowDuration=${r['shallowDuration']}');
+    _push('    rapidDuration=${r['rapidDuration']}  awakeDuration=${r['awakeDuration']}');
+    _push('    sleepTime=${r['sleepTime']}  wakeTime=${r['wakeTime']}  wakingCount=${r['wakingCount']}');
+    _push('  raw stages (${stages.length}):');
+    for (var i = 0; i < stages.length && i < 12; i++) {
+      _push('    [$i] ${stages[i]}');
+    }
+    if (stages.length > 12) _push('    ... +${stages.length - 12} more');
+    if (res.note != null) {
+      _push('  (${res.note})');
+      return;
+    }
+    final sessionId = res.extra?['sessionId'] as String? ?? '';
+    final totalMin = res.extra?['totalMin'];
+    _push('  persisted session ${sessionId.length >= 8 ? sessionId.substring(0, 8) : sessionId}…, ${res.count} epochs '
+        '(total=${totalMin}min)');
   }
 
   Future<void> _getSteps() async {
     if (!_requireSession()) return;
     _push('getDailyTotals: requesting...');
-    try {
-      final r = await ref.read(bleServiceProvider).getDailyTotals();
-      // Raw native payload — every field the band returned.
-      _push('  raw: date=${r['year']}-${r['month']}-${r['day']}  daysAgo=${r['daysAgo']}');
-      _push('  totalSteps=${r['totalSteps']}  runningSteps=${r['runningSteps']}');
-      _push('  walkDistance=${r['walkDistance']}m  calorie=${r['calorie']}');
-      _push('  sportDurationSec=${r['sportDurationSec']}  sleepDurationSec=${r['sleepDurationSec']}');
-      final metrics = adapters.dailyStepsFromNative(
-        r,
-        userId: _activeUserId!,
-      );
-      if (metrics == null) {
-        _push('  (no usable steps data — date fields missing)');
-        return;
-      }
-      // Upsert by (user, local_date) — if a row already exists for today,
-      // preserve any cardiac/sleep/etc. columns by merging into the existing row.
-      final existing = await ref
-          .read(dailyMetricsRepositoryProvider)
-          .getForDay(userId: _activeUserId!, localDate: metrics.localDate);
-      final merged = existing == null
-          ? metrics
-          : existing.copyWith(
-              steps: metrics.steps,
-              distanceM: metrics.distanceM,
-              caloriesKcal: metrics.caloriesKcal,
-              activeMinutes: metrics.activeMinutes,
-              computedAt: metrics.computedAt,
-            );
-      await ref.read(dailyMetricsRepositoryProvider).upsert(merged);
-      _push('  persisted daily_metrics for ${merged.localDate.toIso8601String().substring(0, 10)}');
-    } catch (e) {
-      _push('getDailyTotals error: $e');
+    final res = await ref.read(syncServiceProvider).syncSteps(
+          userId: _activeUserId!,
+        );
+    if (!res.ok) {
+      _push('getDailyTotals error: ${res.error}');
+      return;
     }
+    final r = res.rawMap ?? const {};
+    _push('  raw: date=${r['year']}-${r['month']}-${r['day']}  daysAgo=${r['daysAgo']}');
+    _push('  totalSteps=${r['totalSteps']}  runningSteps=${r['runningSteps']}');
+    _push('  walkDistance=${r['walkDistance']}m  calorie=${r['calorie']}');
+    _push('  sportDurationSec=${r['sportDurationSec']}  sleepDurationSec=${r['sleepDurationSec']}');
+    if (res.note != null) {
+      _push('  (${res.note})');
+      return;
+    }
+    final localDate = res.extra?['localDate'] ?? '';
+    _push('  persisted daily_metrics for $localDate');
   }
 
   Future<void> _getStepBuckets() async {
     if (!_requireSession()) return;
     _push('getStepBucketHistory: requesting (today)...');
-    try {
-      final native =
-          await ref.read(bleServiceProvider).getStepBucketHistory(dayOffset: 0);
-      _push('getStepBucketHistory: ${native.length} bucket(s) returned');
-      // Raw native payload — show first N non-zero rows so we can verify
-      // timeIndex / walkSteps / runSteps / distance / calorie before persisting.
-      var shown = 0;
-      for (final raw in native) {
-        final walk = (raw['walkSteps'] as num?)?.toInt() ?? 0;
-        final run = (raw['runSteps'] as num?)?.toInt() ?? 0;
-        if (walk + run == 0) continue; // skip empty 15-min slots
-        if (shown < 12) {
-          _push('    $raw');
-          shown++;
-        }
-      }
-      if (shown == 0) {
-        _push('  (all 96 buckets are empty — band may not have step data yet)');
-      }
-
-      final buckets = adapters.stepBucketsFromNative(
-        native,
-        userId: _activeUserId!,
-        deviceId: _activeDeviceId!,
-      );
-      await ref.read(stepBucketRepositoryProvider).insertMany(buckets);
-      if (buckets.isNotEmpty) {
-        final totalSteps = buckets.fold<int>(0, (a, b) => a + b.steps);
-        final totalDistance =
-            buckets.fold<int>(0, (a, b) => a + b.distanceM);
-        final totalCal =
-            buckets.fold<double>(0, (a, b) => a + b.caloriesKcal);
-        _push('  persisted ${buckets.length} non-empty bucket(s) '
-            '→ $totalSteps steps, ${totalDistance}m, ${totalCal.toStringAsFixed(0)} kcal');
-      } else {
-        _push('  no non-empty buckets to persist');
-      }
-    } catch (e) {
-      _push('getStepBucketHistory error: $e');
+    final res = await ref.read(syncServiceProvider).syncStepBuckets(
+          userId: _activeUserId!,
+          deviceId: _activeDeviceId!,
+        );
+    if (!res.ok) {
+      _push('getStepBucketHistory error: ${res.error}');
+      return;
     }
+    final native = res.rawList ?? const [];
+    _push('getStepBucketHistory: ${native.length} bucket(s) returned');
+    var shown = 0;
+    for (final raw in native) {
+      if (raw is! Map) continue;
+      final walk = (raw['walkSteps'] as num?)?.toInt() ?? 0;
+      final run = (raw['runSteps'] as num?)?.toInt() ?? 0;
+      if (walk + run == 0) continue; // skip empty 15-min slots
+      if (shown < 12) {
+        _push('    $raw');
+        shown++;
+      }
+    }
+    if (shown == 0) {
+      _push('  (all 96 buckets are empty — band may not have step data yet)');
+    }
+    _push('  persisted ${res.count} non-empty bucket(s)');
   }
 
   Future<void> _getHrv() async {
@@ -516,26 +482,23 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
     );
     if (dayOffset == null) return;
     _push('getHrvHistory: requesting (dayOffset=$dayOffset)...');
-    try {
-      final r = await ref.read(bleServiceProvider).getHrvHistory(dayOffset: dayOffset);
-      final values = (r['values'] as List?) ?? const [];
-      final intervalMin = r['intervalMinutes'];
-      final rawArr = (r['rawArray'] as List?) ?? const [];
-      _push('getHrvHistory: ${values.length} value(s), intervalMinutes=$intervalMin');
-      _push('  rawArray[${rawArr.length}]: ${_preview(rawArr, 24)}');
-      _push('  values: ${_preview(values, 16)}');
-
-      final samples = adapters.hrvFromNative(
-        r,
-        userId: _activeUserId!,
-        deviceId: _activeDeviceId!,
-        forDate: DateTime.now(),
-      );
-      await ref.read(hrvRepositoryProvider).insertMany(samples);
-      _push('  persisted ${samples.length} HRV sample(s)');
-    } catch (e) {
-      _push('getHrvHistory error: $e');
+    final res = await ref.read(syncServiceProvider).syncHrv(
+          userId: _activeUserId!,
+          deviceId: _activeDeviceId!,
+          dayOffset: dayOffset,
+        );
+    if (!res.ok) {
+      _push('getHrvHistory error: ${res.error}');
+      return;
     }
+    final r = res.rawMap ?? const {};
+    final values = (r['values'] as List?) ?? const [];
+    final intervalMin = r['intervalMinutes'];
+    final rawArr = (r['rawArray'] as List?) ?? const [];
+    _push('getHrvHistory: ${values.length} value(s), intervalMinutes=$intervalMin');
+    _push('  rawArray[${rawArr.length}]: ${_preview(rawArr, 24)}');
+    _push('  values: ${_preview(values, 16)}');
+    _push('  persisted ${res.count} HRV sample(s)');
   }
 
   Future<void> _getBp() async {
@@ -559,6 +522,30 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
     } catch (e) {
       _push('getBpHistory error: $e');
     }
+  }
+
+  /// HLT-11: triggers SyncService.syncAll via the coordinator. Same flow
+  /// the native 30-min tick uses, just on-demand for testing.
+  Future<void> _runAllSyncs() async {
+    if (!_requireSession()) return;
+    _push('runAll: triggering full sync sweep...');
+    final coord = ref.read(periodicSyncCoordinatorProvider);
+    final result = await coord.triggerNow();
+    if (result == null) {
+      _push('runAll: skipped — ${coord.lastSkipReason ?? "unknown reason"}');
+      return;
+    }
+    for (final step in result.steps) {
+      if (step.ok) {
+        final note = step.note != null ? '  (${step.note})' : '';
+        _push('  ${step.metric}: ${step.count} sample(s)$note');
+      } else {
+        _push('  ${step.metric}: ERROR — ${step.error}');
+      }
+    }
+    _push('  aggregate: ${result.aggregated ? "OK" : "skipped/failed"}');
+    _push('runAll: ${result.allOk ? "OK" : "completed with errors"} '
+        '(${result.totalSamples} total samples)');
   }
 
   Future<void> _aggregate() async {
@@ -944,6 +931,7 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
                   onHrv: _getHrv,
                   onBp: _getBp,
                   onStepBuckets: _getStepBuckets,
+                  onRunAll: _runAllSyncs,
                 ),
               ),
               const Divider(height: 1),
@@ -1172,6 +1160,7 @@ class _ActionBar extends StatelessWidget {
   final VoidCallback onHrv;
   final VoidCallback onBp;
   final VoidCallback onStepBuckets;
+  final VoidCallback onRunAll;
 
   const _ActionBar({
     required this.scanning,
@@ -1192,6 +1181,7 @@ class _ActionBar extends StatelessWidget {
     required this.onHrv,
     required this.onBp,
     required this.onStepBuckets,
+    required this.onRunAll,
   });
 
   @override
@@ -1306,6 +1296,15 @@ class _ActionBar extends StatelessWidget {
             label: const Text('Aggregate'),
             style: compactStyle.copyWith(
               backgroundColor: WidgetStateProperty.all(Colors.teal),
+              foregroundColor: WidgetStateProperty.all(Colors.white),
+            ),
+          ),
+          FilledButton.icon(
+            onPressed: connected ? onRunAll : null,
+            icon: const Icon(Icons.sync, size: 14),
+            label: const Text('Run All'),
+            style: compactStyle.copyWith(
+              backgroundColor: WidgetStateProperty.all(Colors.indigo),
               foregroundColor: WidgetStateProperty.all(Colors.white),
             ),
           ),

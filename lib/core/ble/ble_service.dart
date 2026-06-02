@@ -73,6 +73,11 @@ class BleService {
   //   1=HR, 2=BP, 3=SpO2, 4=steps, 5=temp, 7=exercise record, 0x0c=charging
   final _deviceNotify =
       StreamController<({int dataType, List<int> loadData})>.broadcast();
+  // HLT-11: native scheduler fires this every 30 min while connected. A
+  // top-level coordinator listens and triggers SyncService.syncAll(...).
+  // Kept as a broadcast stream so debug screens can also subscribe to log
+  // when each tick fires.
+  final _periodicSyncTick = StreamController<void>.broadcast();
 
   // Seed new subscribers with the current latched value so a widget that
   // subscribes after navigation reflects reality instead of `disconnected`.
@@ -106,6 +111,10 @@ class BleService {
   Stream<List<Map<String, dynamic>>> get rawPpgEvent => _rawPpgEvent.stream;
   Stream<({int dataType, List<int> loadData})> get deviceNotify =>
       _deviceNotify.stream;
+  /// HLT-11: native scheduler ticks. One event ~every 30 min while
+  /// connected. Subscribers should be idempotent and skip if a sync is
+  /// already running.
+  Stream<void> get periodicSyncTick => _periodicSyncTick.stream;
 
   BleService() {
     _setupEventChannels();
@@ -181,6 +190,9 @@ class BleService {
             dataType: m['dataType'] as int,
             loadData: loadRaw.cast<int>(),
           ));
+          break;
+        case 'onPeriodicSyncTick':
+          _periodicSyncTick.add(null);
           break;
       }
       return null;
@@ -372,6 +384,7 @@ class BleService {
     _nativeBleState.close();
     _rawPpgEvent.close();
     _deviceNotify.close();
+    _periodicSyncTick.close();
   }
 }
 
