@@ -79,6 +79,31 @@ class BleService {
   // when each tick fires.
   final _periodicSyncTick = StreamController<void>.broadcast();
 
+  // Realtime manualMode* measurement streams. Each tick emits an
+  // intermediate value during the band-side active measurement (~30s).
+  // See [BleManager.kt] startSpo2Stream / startHrvStream — and the
+  // documented list of NOT-streamable metrics there (sleep, steps,
+  // temperature, ECG).
+  /// Active-measurement HR stream (manualModeHeart). Distinct from
+  /// [realtimeHeartRate] which is passive (DeviceNotifyListener).
+  final _hrStream = StreamController<int>.broadcast();
+  final _spo2Stream =
+      StreamController<({int spo2, int hr})>.broadcast();
+  final _hrvStream =
+      StreamController<({int hrv, int hr, int stress})>.broadcast();
+
+  // QWatch's hero "One Key Measurement" — single ~30s call via the SDK's
+  // `startOneKey(0, 0, cb)` API. Returns HR + SpO2 + BP + fatigue + score
+  // in a single StartCalcDataRsp.
+  final _okmStream = StreamController<({
+    int hr,
+    int spo2,
+    int sbp,
+    int dbp,
+    int fatigue,
+    int score,
+  })>.broadcast();
+
   // Seed new subscribers with the current latched value so a widget that
   // subscribes after navigation reflects reality instead of `disconnected`.
   Stream<BleConnectionState> get connectionState async* {
@@ -94,6 +119,12 @@ class BleService {
   Stream<int> get realtimeHeartRate => _realtimeHeartRate.stream;
   Stream<int> get heartRateMeasured => _heartRateMeasured.stream;
   Stream<double> get spo2Measured => _spo2Measured.stream;
+  Stream<int> get hrActiveStream => _hrStream.stream;
+  Stream<({int spo2, int hr})> get spo2Stream => _spo2Stream.stream;
+  Stream<({int hrv, int hr, int stress})> get hrvStream =>
+      _hrvStream.stream;
+  Stream<({int hr, int spo2, int sbp, int dbp, int fatigue, int score})>
+      get oneKeyMeasurementStream => _okmStream.stream;
   Stream<({int sbp, int dbp})> get bloodPressureMeasured =>
       _bloodPressureMeasured.stream;
 
@@ -193,6 +224,33 @@ class BleService {
           break;
         case 'onPeriodicSyncTick':
           _periodicSyncTick.add(null);
+          break;
+        case 'onHeartStream':
+          _hrStream.add((args as Map)['hr'] as int);
+          break;
+        case 'onSpo2Stream':
+          final m = args as Map;
+          _spo2Stream
+              .add((spo2: m['spo2'] as int, hr: m['hr'] as int));
+          break;
+        case 'onHrvStream':
+          final m = args as Map;
+          _hrvStream.add((
+            hrv: m['hrv'] as int,
+            hr: m['hr'] as int,
+            stress: m['stress'] as int,
+          ));
+          break;
+        case 'onOneKeyMeasurementStream':
+          final m = args as Map;
+          _okmStream.add((
+            hr: m['hr'] as int,
+            spo2: m['spo2'] as int,
+            sbp: m['sbp'] as int,
+            dbp: m['dbp'] as int,
+            fatigue: (m['fatigue'] as int?) ?? 0,
+            score: (m['score'] as int?) ?? 0,
+          ));
           break;
       }
       return null;
@@ -305,18 +363,48 @@ class BleService {
     int startInterval = 5,
     int spo2Interval = 60,
     int hrvInterval = 30,
+    int bpIntervalMinutes = 60,
   }) async {
     final r = await _channel.invokeMethod('setScheduledMonitoring', {
       'hrInterval': hrInterval,
       'startInterval': startInterval,
       'spo2Interval': spo2Interval,
       'hrvInterval': hrvInterval,
+      'bpIntervalMinutes': bpIntervalMinutes,
     });
     return Map<String, dynamic>.from(r as Map);
   }
 
   Future<Map<String, dynamic>> getScheduledHr() async {
     final r = await _channel.invokeMethod('getScheduledHr');
+    return Map<String, dynamic>.from(r as Map);
+  }
+
+  /// Toggle the band's scheduled BP monitoring on/off and pick the cadence.
+  /// Defaults: enabled, all-day window (00:00 → 23:59), every 60 minutes.
+  Future<Map<String, dynamic>> setBpScheduled({
+    required bool enabled,
+    int intervalMinutes = 60,
+    int startHour = 0,
+    int startMinute = 0,
+    int endHour = 23,
+    int endMinute = 59,
+  }) async {
+    final r = await _channel.invokeMethod('setBpScheduled', {
+      'enabled': enabled,
+      'intervalMinutes': intervalMinutes,
+      'startHour': startHour,
+      'startMinute': startMinute,
+      'endHour': endHour,
+      'endMinute': endMinute,
+    });
+    return Map<String, dynamic>.from(r as Map);
+  }
+
+  /// Read the band's current scheduled BP monitoring config. Returns
+  /// `{isEnable, intervalMinutes, startHour, startMinute, endHour, endMinute}`.
+  Future<Map<String, dynamic>> getBpScheduled() async {
+    final r = await _channel.invokeMethod('getBpScheduled');
     return Map<String, dynamic>.from(r as Map);
   }
 
@@ -329,13 +417,28 @@ class BleService {
   // adapter layer in step 5.
   // ──────────────────────────────────────────────────────────────────────
 
-  Future<Map<String, dynamic>> getHrHistory() async {
-    final r = await _channel.invokeMethod('getHrHistory');
+  Future<Map<String, dynamic>> getHrHistory({int dayOffset = 0}) async {
+    final r = await _channel.invokeMethod(
+      'getHrHistory',
+      {'dayOffset': dayOffset},
+    );
     return Map<String, dynamic>.from(r as Map);
   }
 
   Future<List<Map<String, dynamic>>> getSpO2History() async {
     final r = await _channel.invokeMethod('getSpO2History');
+    if (r is! List) return const [];
+    return r.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  /// SpO2 for a specific day (0=today, 1..29=N days ago) via the SDK's
+  /// public per-day API. Returns the same shape as [getSpO2History] but
+  /// always wraps a single-day entry in a one-element list.
+  Future<List<Map<String, dynamic>>> getSpO2Day({int dayOffset = 0}) async {
+    final r = await _channel.invokeMethod(
+      'getSpO2Day',
+      {'dayOffset': dayOffset},
+    );
     if (r is! List) return const [];
     return r.map((e) => Map<String, dynamic>.from(e as Map)).toList();
   }
@@ -348,6 +451,82 @@ class BleService {
 
   Future<Map<String, dynamic>> getBpHistory() async {
     final r = await _channel.invokeMethod('getBpHistory');
+    return Map<String, dynamic>.from(r as Map);
+  }
+
+  /// BP per-day via the SDK's public API. Returns `{readings: [{time, sbp, dbp}]}` —
+  /// real systolic/diastolic pairs (unlike [getBpHistory] which on H59 returns
+  /// HR values dressed as BP).
+  Future<Map<String, dynamic>> getBpDay({int dayOffset = 0}) async {
+    final r = await _channel.invokeMethod(
+      'getBpDay',
+      {'dayOffset': dayOffset},
+    );
+    return Map<String, dynamic>.from(r as Map);
+  }
+
+  /// Trigger an on-demand BP measurement (~30s round-trip). Returns
+  /// `{sbp, dbp, hr, errCode}` once the band completes the reading. Same
+  /// path as the QRing demo's "Start Blood Pressure Measurement" button.
+  Future<Map<String, dynamic>> startBpMeasurement() async {
+    final r = await _channel.invokeMethod('startBpMeasurement');
+    return Map<String, dynamic>.from(r as Map);
+  }
+
+  /// Abort an in-flight BP measurement. Returns `{stopped: bool}`.
+  Future<Map<String, dynamic>> stopBpMeasurement() async {
+    final r = await _channel.invokeMethod('stopBpMeasurement');
+    return Map<String, dynamic>.from(r as Map);
+  }
+
+  /// Start an active-measurement HR stream (manualModeHeart). Subscribe
+  /// to [hrActiveStream] for live bpm updates.
+  Future<Map<String, dynamic>> startHeartStream() async {
+    final r = await _channel.invokeMethod('startHeartStream');
+    return Map<String, dynamic>.from(r as Map);
+  }
+
+  Future<Map<String, dynamic>> stopHeartStream() async {
+    final r = await _channel.invokeMethod('stopHeartStream');
+    return Map<String, dynamic>.from(r as Map);
+  }
+
+  /// Start a realtime SpO2 stream (manualModeSpO2). Subscribe to
+  /// [spo2Stream] to receive live `(spo2, hr)` updates during the ~30s
+  /// active measurement. Returns `{started: bool}`.
+  Future<Map<String, dynamic>> startSpo2Stream() async {
+    final r = await _channel.invokeMethod('startSpo2Stream');
+    return Map<String, dynamic>.from(r as Map);
+  }
+
+  Future<Map<String, dynamic>> stopSpo2Stream() async {
+    final r = await _channel.invokeMethod('stopSpo2Stream');
+    return Map<String, dynamic>.from(r as Map);
+  }
+
+  /// Start a realtime HRV stream (manualModeHrv). Subscribe to [hrvStream]
+  /// to receive live `(hrv, hr, stress)` updates during the measurement.
+  Future<Map<String, dynamic>> startHrvStream() async {
+    final r = await _channel.invokeMethod('startHrvStream');
+    return Map<String, dynamic>.from(r as Map);
+  }
+
+  Future<Map<String, dynamic>> stopHrvStream() async {
+    final r = await _channel.invokeMethod('stopHrvStream');
+    return Map<String, dynamic>.from(r as Map);
+  }
+
+  /// QWatch's "One Key Measurement". Starts a ~30s band-side active
+  /// measurement that streams HR + SpO2 + BP + HRV + Stress all at once
+  /// via [oneKeyMeasurementStream]. The first ticks often have placeholder
+  /// zeros while the band converges; the final tick has the full result.
+  Future<Map<String, dynamic>> startOneKeyMeasurement() async {
+    final r = await _channel.invokeMethod('startOneKeyMeasurement');
+    return Map<String, dynamic>.from(r as Map);
+  }
+
+  Future<Map<String, dynamic>> stopOneKeyMeasurement() async {
+    final r = await _channel.invokeMethod('stopOneKeyMeasurement');
     return Map<String, dynamic>.from(r as Map);
   }
 
@@ -371,6 +550,15 @@ class BleService {
     return r.map((e) => Map<String, dynamic>.from(e as Map)).toList();
   }
 
+  /// Demo-parity step buckets via public API (StepsActivity.kt:38-46).
+  /// dayOffset 0 → getTodayStepDetail, 1..29 → getStepDetail(dayIndex).
+  Future<List<Map<String, dynamic>>> getStepDay({int dayOffset = 0}) async {
+    final r =
+        await _channel.invokeMethod('getStepDay', {'dayOffset': dayOffset});
+    if (r is! List) return const [];
+    return r.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
   void dispose() {
     _connectionState.close();
     _discoveredDevices.close();
@@ -385,6 +573,10 @@ class BleService {
     _rawPpgEvent.close();
     _deviceNotify.close();
     _periodicSyncTick.close();
+    _hrStream.close();
+    _spo2Stream.close();
+    _hrvStream.close();
+    _okmStream.close();
   }
 }
 

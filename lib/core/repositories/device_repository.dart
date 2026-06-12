@@ -42,6 +42,15 @@ abstract class DeviceRepository {
 
   Future<bool> hasCapability(String deviceId, String capabilityKey);
   Future<void> deactivate(String deviceId);
+
+  /// Re-mark a previously-deactivated device row as active. Used by the
+  /// re-pair flow after Forget: the row already exists (matched by MAC)
+  /// so we restore its isActive flag instead of creating a duplicate.
+  Future<void> reactivate(String deviceId);
+
+  /// Set a friendly name for the device (local alias only — the band's
+  /// advertised BLE name cannot be changed via firmware).
+  Future<void> rename({required String deviceId, required String displayName});
 }
 
 class DeviceRepositoryImpl implements DeviceRepository {
@@ -182,6 +191,22 @@ class DeviceRepositoryImpl implements DeviceRepository {
   Future<void> deactivate(String deviceId) async {
     await (_db.update(_db.devices)..where((t) => t.id.equals(deviceId)))
         .write(const db.DevicesCompanion(isActive: Value(false)));
+  }
+
+  @override
+  Future<void> reactivate(String deviceId) async {
+    await (_db.update(_db.devices)..where((t) => t.id.equals(deviceId)))
+        .write(const db.DevicesCompanion(isActive: Value(true)));
+  }
+
+  @override
+  Future<void> rename({
+    required String deviceId,
+    required String displayName,
+  }) async {
+    await (_db.update(_db.devices)..where((t) => t.id.equals(deviceId))).write(
+      db.DevicesCompanion(displayName: Value(displayName)),
+    );
   }
 
   // ── helpers ──────────────────────────────────────────────────────────────

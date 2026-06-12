@@ -104,10 +104,15 @@ class FeatureGate {
 }
 
 /// Earliest active-device pairing timestamp — the user's "Day 0".
-final firstWearDateProvider = FutureProvider<DateTime?>((ref) async {
+/// Stream-backed so the home screen's "Day N of 14" counter reactively
+/// updates when the user pairs, forgets, or re-pairs a band (the binding
+/// flow toggles `devices.isActive`, which would otherwise leave a cached
+/// null from a one-shot FutureProvider read at app start).
+final firstWearDateProvider = StreamProvider<DateTime?>((ref) {
   final repo = ref.watch(deviceRepositoryProvider);
-  final device = await repo.getActiveForUser(ActiveSession.defaultUserId);
-  return device?.pairedAt;
+  return repo
+      .watchActive(ActiveSession.defaultUserId)
+      .map((device) => device?.pairedAt);
 });
 
 /// Map of metric → whether its 14-day baseline is established (≥7 samples).

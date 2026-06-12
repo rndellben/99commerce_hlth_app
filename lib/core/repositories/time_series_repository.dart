@@ -36,6 +36,6 @@ abstract class TimeSeriesRepository<T> {
 
   /// Hard delete is only available via retention sweeps. This soft-deletes
   /// (sets `deleted_at_utc`) for any row whose `captured_at_utc` is older
-  /// than `cutoff`.
-  Future<void> softDeleteBefore(DateTime cutoff);
+  /// than `cutoff`. Returns the number of rows soft-deleted.
+  Future<int> softDeleteBefore(DateTime cutoff);
 }

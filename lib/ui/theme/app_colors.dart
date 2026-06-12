@@ -19,6 +19,7 @@ class AppColors {
   static const Color activity = Color(0xFF2ED573);
   static const Color recovery = Color(0xFFFFA502);
   static const Color respiratory = Color(0xFF1E90FF);
+  static const Color bloodPressure = Color(0xFFFFA94D);
 
   // Score zones
   static const Color scoreExcellent = Color(0xFF2ED573);

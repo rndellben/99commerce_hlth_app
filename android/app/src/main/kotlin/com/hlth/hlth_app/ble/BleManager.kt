@@ -16,13 +16,14 @@ import com.oudmon.ble.base.bluetooth.ListenerKey
 import com.oudmon.ble.base.communication.CommandHandle
 import com.oudmon.ble.base.communication.Constants
 import com.oudmon.ble.base.communication.ICommandResponse
-import com.oudmon.ble.base.communication.ILargeDataSleepResponse
 import com.oudmon.ble.base.communication.LargeDataHandler
 import com.oudmon.ble.base.communication.bigData.BloodOxygenEntity
 import com.oudmon.ble.base.communication.bigData.IBloodOxygenCallback
+import com.oudmon.ble.base.communication.entity.BlePressure
 import com.oudmon.ble.base.communication.entity.BleStepDetails
+import com.oudmon.ble.base.communication.entity.StartEndTimeEntity
 import com.oudmon.ble.base.communication.req.BloodOxygenSettingReq
-import com.oudmon.ble.base.communication.req.HRVReq
+import com.oudmon.ble.base.communication.req.BpSettingReq
 import com.oudmon.ble.base.communication.req.HeartRateSettingReq
 import com.oudmon.ble.base.communication.req.HrvSettingReq
 import com.oudmon.ble.base.communication.req.ReadDetailSportDataReq
@@ -30,8 +31,10 @@ import com.oudmon.ble.base.communication.req.ReadHeartRateReq
 import com.oudmon.ble.base.communication.req.SetTimeReq
 import com.oudmon.ble.base.communication.req.SimpleKeyReq
 import com.oudmon.ble.base.communication.responseImpl.DeviceNotifyListener
+import com.oudmon.ble.base.communication.rsp.BaseRspCmd
 import com.oudmon.ble.base.communication.rsp.BloodOxygenSettingRsp
 import com.oudmon.ble.base.communication.rsp.BpDataRsp
+import com.oudmon.ble.base.communication.rsp.BpSettingRsp
 import com.oudmon.ble.base.communication.rsp.DeviceNotifyRsp
 import com.oudmon.ble.base.communication.rsp.HRVRsp
 import com.oudmon.ble.base.communication.rsp.HRVSettingRsp
@@ -39,6 +42,7 @@ import com.oudmon.ble.base.communication.rsp.HeartRateSettingRsp
 import com.oudmon.ble.base.communication.rsp.ReadDetailSportDataRsp
 import com.oudmon.ble.base.communication.rsp.ReadHeartRateRsp
 import com.oudmon.ble.base.communication.rsp.SetTimeRsp
+import com.oudmon.ble.base.communication.rsp.StartHeartRateRsp
 import com.oudmon.ble.base.bean.SleepDisplay
 import com.oudmon.ble.base.communication.rsp.StopHeartRateRsp
 import com.oudmon.ble.base.communication.rsp.TodaySportDataRsp
@@ -85,6 +89,19 @@ class BleManager(
         // enough to keep home-screen cards fresh and to make the band's
         // 30-min HRV slot resolution observable without manual taps.
         private const val PERIODIC_SYNC_INTERVAL_MS = 30L * 60L * 1000L
+
+        // Scan name-prefix allowlist (see [isHlthBandName]). Mirrors the
+        // QRing SDK's internal BleScannerHelper.sFILTER_PREFIX list +
+        // "H59" for the current HLTH band. Matched case-insensitively, so
+        // upper/lower variants collapse (O_/o_, Q_/q_, QC/qc).
+        private val BAND_NAME_PREFIXES = listOf(
+            "H59",
+            "O_", "Q_", "R3L", "QC", "Wa",
+            "T80", "T90", "T91", "T93", "T95", "TW68",
+            "S9",
+            "C60", "C66", "C67", "C68", "C80", "C86", "C88", "C96",
+            "wxb_w4"
+        )
     }
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -96,6 +113,7 @@ class BleManager(
     // BluetoothReceiver onConnectionChange callback so the foreground
     // service notification can show "HLTH — H59 Ring" instead of "HLTH".
     private var connectedDeviceName: String = ""
+    private var connectedAddress: String = ""
     // HLT-9: debounce floor for the realtime-HR trigger-then-sync flow.
     // The band fires dataType=1 ("new HR data exists") after each scheduled
     // measurement; we poke the band for the latest reading, but cap the
@@ -169,6 +187,14 @@ class BleManager(
         // Forward connection state changes from the SDK-level receiver
         // to Dart so the UI can react to drops/reconnects in real time.
         HlthApplication.bluetoothReceiver.onConnectionChange = { connected, name ->
+            // Auto-close any active manualMode streams when the band drops
+            // so callbacks don't fire after we're gone.
+            if (!connected) {
+                heartStreamActive = false
+                spo2StreamActive = false
+                hrvStreamActive = false
+                okmActive = false
+            }
             mainHandler.post {
                 methodChannel.invokeMethod(
                     if (connected) "onConnected" else "onDisconnect",
@@ -228,18 +254,42 @@ class BleManager(
                 startInterval = call.argument<Int>("startInterval") ?: 5,
                 spo2Interval = call.argument<Int>("spo2Interval") ?: 60,
                 hrvInterval = call.argument<Int>("hrvInterval") ?: 30,
+                bpIntervalMinutes = call.argument<Int>("bpIntervalMinutes") ?: 60,
                 result = result
             )
             "getScheduledHr" -> readHeartRateSettings(result)
+            "setBpScheduled" -> setBpScheduled(
+                enabled = call.argument<Boolean>("enabled") ?: true,
+                intervalMinutes = call.argument<Int>("intervalMinutes") ?: 60,
+                startHour = call.argument<Int>("startHour") ?: 0,
+                startMinute = call.argument<Int>("startMinute") ?: 0,
+                endHour = call.argument<Int>("endHour") ?: 23,
+                endMinute = call.argument<Int>("endMinute") ?: 59,
+                result = result
+            )
+            "getBpScheduled" -> getBpScheduled(result)
 
             // §3.7 History fetch
-            "getHrHistory" -> syncHeartRate(result)
+            "getHrHistory" -> syncHeartRate(call.argument<Int>("dayOffset") ?: 0, result)
             "getSpO2History" -> syncSpO2(result)
+            "getSpO2Day" -> syncSpO2Day(call.argument<Int>("dayOffset") ?: 0, result)
             "getHrvHistory" -> syncHRV(call.argument<Int>("dayOffset") ?: 0, result)
             "getBpHistory" -> syncBloodPressure(result)
+            "getBpDay" -> syncBloodPressureDay(call.argument<Int>("dayOffset") ?: 0, result)
+            "startBpMeasurement" -> startBpMeasurement(result)
+            "stopBpMeasurement" -> stopBpMeasurement(result)
+            "startHeartStream" -> startHeartStream(result)
+            "stopHeartStream" -> stopHeartStream(result)
+            "startSpo2Stream" -> startSpo2Stream(result)
+            "stopSpo2Stream" -> stopSpo2Stream(result)
+            "startHrvStream" -> startHrvStream(result)
+            "stopHrvStream" -> stopHrvStream(result)
+            "startOneKeyMeasurement" -> startOneKeyMeasurement(result)
+            "stopOneKeyMeasurement" -> stopOneKeyMeasurement(result)
             "getSleepHistory" -> syncSleep(call.argument<Int>("dayOffset") ?: 0, result)
             "getDailyTotals" -> syncSteps(result)
             "getStepBucketHistory" -> syncStepsDetail(call.argument<Int>("dayOffset") ?: 0, result)
+            "getStepDay" -> syncStepsDay(call.argument<Int>("dayOffset") ?: 0, result)
 
             // §3.6 Raw PPG measurement
             "startMeasureHrRaw" -> startPpgRawCapture(
@@ -337,16 +387,32 @@ class BleManager(
         }
     }
 
+    /**
+     * Mirror of the QRing demo's scan filter behavior. The SDK's
+     * BleScannerHelper applies a hardcoded prefix allowlist
+     * (O_, Q_, R3L, QC, T8x, C6x, S9, TW68, wxb_w4, Wa) that excludes
+     * everything else. The HLTH band advertises as "H59_xxxx", so we
+     * extend that list with "H59" (case-insensitive) — that's why the
+     * demo screen shows only the band, even though nearby phones / TVs /
+     * earbuds advertise too.
+     *
+     * If you ever onboard a different HLTH device model, add its prefix
+     * here.
+     */
+    private fun isHlthBandName(name: String?): Boolean {
+        if (name.isNullOrEmpty()) return false
+        return BAND_NAME_PREFIXES.any { name.startsWith(it, ignoreCase = true) }
+    }
+
     private val directScanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult?) {
             val device = result?.device ?: return
             val name = try { device.name } catch (_: SecurityException) { null }
             val address = device.address ?: return
             Log.d("HlthBLE", "direct scan hit: addr=$address name=$name rssi=${result.rssi}")
-            // Capture even nameless devices — H59 may not always include name
-            // in every advertisement packet. Display address as fallback name.
+            if (!isHlthBandName(name)) return
             discoveredDevices[address] = ScanEntry(
-                name = name ?: address,
+                name = name!!,
                 address = address,
                 rssi = result.rssi
             )
@@ -367,10 +433,9 @@ class BleManager(
             if (device == null) return
             val name = try { device.name } catch (_: SecurityException) { null }
             Log.d("HlthBLE", "SDK scan hit: addr=${device.address} name=$name rssi=$rssi")
-            // Don't filter on name — capture everything so H59 (which may
-            // advertise without a name in some packets) still appears.
+            if (!isHlthBandName(name)) return
             discoveredDevices[device.address] = ScanEntry(
-                name = name ?: device.address,
+                name = name!!,
                 address = device.address,
                 rssi = rssi
             )
@@ -394,6 +459,7 @@ class BleManager(
             // The QRing demo flips this true before connectDirectly.
             BleOperateManager.getInstance().setNeedConnect(true)
             BleOperateManager.getInstance().connectDirectly(deviceId)
+            connectedAddress = deviceId
             // The SDK confirms connection via EventBus BluetoothEvent. We
             // resolve optimistically here and forward the real state change
             // through onConnectionStateChange invokeMethod once wired.
@@ -568,6 +634,7 @@ class BleManager(
         startInterval: Int,
         spo2Interval: Int,
         hrvInterval: Int,
+        bpIntervalMinutes: Int,
         result: MethodChannel.Result
     ) {
         try {
@@ -608,6 +675,26 @@ class BleManager(
                 }
             )
 
+            // Scheduled BP monitoring — `BpSettingReq.getWriteInstance`
+            // takes an active-window + minute cadence. Default: all day,
+            // every 60 minutes. Matches the QRing demo's BP setting call
+            // shape (BloodPressureActivity.kt:83). Without this, the band
+            // never auto-measures BP and the home-screen BP card stays
+            // empty until a manual measurement is taken.
+            CommandHandle.getInstance().executeReqCmd(
+                BpSettingReq.getWriteInstance(
+                    true,
+                    StartEndTimeEntity(0, 0, 23, 59),
+                    bpIntervalMinutes
+                ),
+                ICommandResponse<BpSettingRsp> { rsp ->
+                    Log.i(
+                        "HlthBLE",
+                        "bp monitoring enable acked: isEnable=${rsp.isEnable} multiple=${rsp.multiple}"
+                    )
+                }
+            )
+
             // Read-backs — 2 seconds after the writes, ask the band what it
             // actually stored. On H59 the WRITE response is unreliable
             // (returns isEnable=false even when monitoring is active), but
@@ -634,6 +721,12 @@ class BleManager(
                             Log.i("HlthBLE", "hrv setting read-back: isEnable=${rsp.isEnable}")
                         }
                     )
+                    CommandHandle.getInstance().executeReqCmd(
+                        BpSettingReq.getReadInstance(),
+                        ICommandResponse<BpSettingRsp> { rsp ->
+                            Log.i("HlthBLE", "bp  setting read-back: isEnable=${rsp.isEnable} multiple=${rsp.multiple}")
+                        }
+                    )
                 } catch (_: Exception) {}
             }, 2000)
 
@@ -641,10 +734,84 @@ class BleManager(
                 "hrInterval" to hrInterval,
                 "startInterval" to startInterval,
                 "spo2Interval" to spo2Interval,
-                "hrvInterval" to hrvInterval
+                "hrvInterval" to hrvInterval,
+                "bpIntervalMinutes" to bpIntervalMinutes
             ))
         } catch (e: Exception) {
             result.error("CONFIG_FAILED", e.message, null)
+        }
+    }
+
+    /**
+     * Write the band's scheduled BP monitoring config. The band auto-runs
+     * a BP measurement every `intervalMinutes` between (startHour:Minute)
+     * and (endHour:Minute). Common case: enabled=true, all-day window,
+     * intervalMinutes=60.
+     *
+     * H59 quirk shared with HR/SpO2/HRV: the write ack's `isEnable` field
+     * is unreliable — always confirm via `getBpScheduled` after a short
+     * delay if you want ground truth.
+     */
+    private fun setBpScheduled(
+        enabled: Boolean,
+        intervalMinutes: Int,
+        startHour: Int,
+        startMinute: Int,
+        endHour: Int,
+        endMinute: Int,
+        result: MethodChannel.Result
+    ) {
+        try {
+            Log.i(
+                "HlthBLE",
+                "setBpScheduled: enabled=$enabled interval=${intervalMinutes}min window=$startHour:$startMinute→$endHour:$endMinute"
+            )
+            CommandHandle.getInstance().executeReqCmd(
+                BpSettingReq.getWriteInstance(
+                    enabled,
+                    StartEndTimeEntity(startHour, startMinute, endHour, endMinute),
+                    intervalMinutes
+                ),
+                ICommandResponse<BpSettingRsp> { rsp ->
+                    Log.i(
+                        "HlthBLE",
+                        "setBpScheduled ack: isEnable=${rsp.isEnable} multiple=${rsp.multiple}"
+                    )
+                    result.success(mapOf(
+                        "isEnable" to rsp.isEnable,
+                        "intervalMinutes" to rsp.multiple
+                    ))
+                }
+            )
+        } catch (e: Exception) {
+            Log.e("HlthBLE", "setBpScheduled failed", e)
+            result.error("BP_SCHED_FAILED", e.message, null)
+        }
+    }
+
+    private fun getBpScheduled(result: MethodChannel.Result) {
+        try {
+            CommandHandle.getInstance().executeReqCmd(
+                BpSettingReq.getReadInstance(),
+                ICommandResponse<BpSettingRsp> { rsp ->
+                    val w = rsp.startEndTimeEntity
+                    Log.i(
+                        "HlthBLE",
+                        "getBpScheduled: isEnable=${rsp.isEnable} multiple=${rsp.multiple} window=${w?.startHour}:${w?.startMinute}→${w?.endHour}:${w?.endMinute}"
+                    )
+                    result.success(mapOf(
+                        "isEnable" to rsp.isEnable,
+                        "intervalMinutes" to rsp.multiple,
+                        "startHour" to (w?.startHour ?: 0),
+                        "startMinute" to (w?.startMinute ?: 0),
+                        "endHour" to (w?.endHour ?: 23),
+                        "endMinute" to (w?.endMinute ?: 59)
+                    ))
+                }
+            )
+        } catch (e: Exception) {
+            Log.e("HlthBLE", "getBpScheduled failed", e)
+            result.error("BP_SCHED_READ_FAILED", e.message, null)
         }
     }
 
@@ -679,31 +846,58 @@ class BleManager(
      *   - For hrInterval=10, only every other slot has a value: [78,0,75,0,77,...]
      *   - Each byte is BPM; 0 = no reading for that slot
      */
-    private fun syncHeartRate(result: MethodChannel.Result) {
-        val nowTime = unixSecondsWithTzOffset()
-        try {
-            CommandHandle.getInstance().executeReqCmd(
-                ReadHeartRateReq(nowTime),
-                ICommandResponse<ReadHeartRateRsp> { rsp ->
-                    val array = rsp.getmHeartRateArray()
-                    val utcTime = rsp.getmUtcTime()
-                    val readings = parseHrArray(array, utcTime.toLong())
-                    // `size` and `index` are private with no getters — use reflection.
-                    val size = readPrivateInt(rsp, "size")
-                    val index = readPrivateInt(rsp, "index")
-                    result.success(mapOf(
-                        "endFlag" to rsp.isEndFlag,
-                        "index" to index,
-                        "size" to size,
-                        "utcTime" to utcTime,
-                        "readings" to readings,
-                        "rawArray" to (array?.map { it.toInt() and 0xFF } ?: emptyList<Int>())
-                    ))
-                    markSync()
+    private fun syncHeartRate(dayOffset: Int, result: MethodChannel.Result) {
+        // Uses the SDK's public API path (same as QRing demo's "Today Data" /
+        // "Specific Day Data" buttons — see HeartRateActivity.kt:54-58). The
+        // old direct `CommandHandle.executeReqCmd(ReadHeartRateReq(nowTime))`
+        // path worked for today's HR but had no day-offset support and
+        // bypassed the SDK's task scheduler. Switching to BleOperateManager
+        // gives us the same response shape (ReadHeartRateRsp) plus proper
+        // queueing, error routing, and dayOffset 0..29 backfill.
+        val replied = java.util.concurrent.atomic.AtomicBoolean(false)
+        val callback = object : BleOperateManager.HealthDataCallback<ReadHeartRateRsp> {
+            override fun onSuccess(rsp: ReadHeartRateRsp?) {
+                if (!replied.compareAndSet(false, true)) return
+                if (rsp == null) {
+                    Log.i("HlthBLE", "syncHR: onSuccess(null) — no HR data for day=$dayOffset")
+                    result.success(emptyMap<String, Any>())
+                    return
                 }
-            )
+                val array = rsp.getmHeartRateArray()
+                val utcTime = rsp.getmUtcTime()
+                val readings = parseHrArray(array, utcTime.toLong())
+                val size = readPrivateInt(rsp, "size")
+                val index = readPrivateInt(rsp, "index")
+                Log.i("HlthBLE", "syncHR: onSuccess day=$dayOffset utcTime=$utcTime size=$size readings=${readings.size}")
+                result.success(mapOf(
+                    "endFlag" to rsp.isEndFlag,
+                    "index" to index,
+                    "size" to size,
+                    "utcTime" to utcTime,
+                    "readings" to readings,
+                    "rawArray" to (array?.map { it.toInt() and 0xFF } ?: emptyList<Int>())
+                ))
+                markSync()
+            }
+
+            override fun onError(code: Int, message: String?) {
+                if (!replied.compareAndSet(false, true)) return
+                Log.w("HlthBLE", "syncHR: onError code=$code msg=$message")
+                result.error("SYNC_HR_FAILED", message ?: "code=$code", code)
+            }
+        }
+        try {
+            Log.i("HlthBLE", "syncHR: dayOffset=$dayOffset (BleOperateManager.getHeartRate)")
+            if (dayOffset == 0) {
+                BleOperateManager.getInstance().getTodayHeartRate(callback)
+            } else {
+                BleOperateManager.getInstance().getHeartRate(dayOffset, callback)
+            }
         } catch (e: Exception) {
-            result.error("SYNC_HR_FAILED", e.message, null)
+            if (replied.compareAndSet(false, true)) {
+                Log.e("HlthBLE", "syncHR dayOffset=$dayOffset failed", e)
+                result.error("SYNC_HR_FAILED", e.message, null)
+            }
         }
     }
 
@@ -738,8 +932,60 @@ class BleManager(
     }
 
     /**
-     * SpO2 sync — hourly min/max per day via LargeDataHandler.
-     * Each BloodOxygenEntity has minArray[24] and maxArray[24] (hourly).
+     * SpO2 single-day sync via the SDK's public per-day API (same call the
+     * QRing demo's "Specific Day Data" / "Today Data" buttons use — see
+     * BloodOxygenActivity.kt:78-84). dayOffset=0 maps to `getTodayBloodOxygen`,
+     * 1..29 to `getBloodOxygen(dayIndex)`. Response shape is the same
+     * BloodOxygenEntity that bulk sync already returns, so the Dart adapter
+     * doesn't need new code — we wrap it in a single-element list to match
+     * the bulk method's contract.
+     */
+    private fun syncSpO2Day(dayOffset: Int, result: MethodChannel.Result) {
+        val replied = java.util.concurrent.atomic.AtomicBoolean(false)
+        val callback = object : BleOperateManager.HealthDataCallback<BloodOxygenEntity> {
+            override fun onSuccess(entry: BloodOxygenEntity?) {
+                if (!replied.compareAndSet(false, true)) return
+                if (entry == null) {
+                    Log.i("HlthBLE", "syncSpO2Day: onSuccess(null) — no SpO2 data for day=$dayOffset")
+                    result.success(emptyList<Map<String, Any>>())
+                    return
+                }
+                Log.i("HlthBLE", "syncSpO2Day: onSuccess day=$dayOffset dateStr=${entry.dateStr} unix=${entry.unix_time}")
+                result.success(listOf(mapOf(
+                    "dateStr" to (entry.dateStr ?: ""),
+                    "unixTime" to entry.unix_time,
+                    "minArray" to (entry.minArray ?: emptyList<Int>()),
+                    "maxArray" to (entry.maxArray ?: emptyList<Int>())
+                )))
+                markSync()
+            }
+
+            override fun onError(code: Int, message: String?) {
+                if (!replied.compareAndSet(false, true)) return
+                Log.w("HlthBLE", "syncSpO2Day: onError code=$code msg=$message")
+                result.error("SYNC_SPO2_FAILED", message ?: "code=$code", code)
+            }
+        }
+        try {
+            Log.i("HlthBLE", "syncSpO2Day: dayOffset=$dayOffset (BleOperateManager.getBloodOxygen)")
+            if (dayOffset == 0) {
+                BleOperateManager.getInstance().getTodayBloodOxygen(callback)
+            } else {
+                BleOperateManager.getInstance().getBloodOxygen(dayOffset, callback)
+            }
+        } catch (e: Exception) {
+            if (replied.compareAndSet(false, true)) {
+                Log.e("HlthBLE", "syncSpO2Day dayOffset=$dayOffset failed", e)
+                result.error("SYNC_SPO2_FAILED", e.message, null)
+            }
+        }
+    }
+
+    /**
+     * SpO2 sync — hourly min/max per day via LargeDataHandler. Returns ALL
+     * stored days in one call. Each BloodOxygenEntity has minArray[24] and
+     * maxArray[24] (hourly). Equivalent to the QRing demo's
+     * "Sync Blood Oxygen Data" button.
      */
     private fun syncSpO2(result: MethodChannel.Result) {
         try {
@@ -781,23 +1027,448 @@ class BleManager(
      * the RMSSD ms we persist into `daily_metrics.hrv_rmssd_ms`.
      */
     private fun syncHRV(dayOffset: Int, result: MethodChannel.Result) {
+        // Uses the SDK's public per-day API — same call the QRing demo's
+        // "Today Data" / "Specific Day Data" buttons use (see
+        // HrvActivity.kt:bindHealthQueryActions). dayOffset=0 →
+        // getTodayHrv, 1..29 → getHrv(dayIndex). Same HRVRsp response so
+        // the Dart adapter is unchanged.
+        val replied = java.util.concurrent.atomic.AtomicBoolean(false)
+        val callback = object : BleOperateManager.HealthDataCallback<HRVRsp> {
+            override fun onSuccess(rsp: HRVRsp?) {
+                if (!replied.compareAndSet(false, true)) return
+                if (rsp == null) {
+                    Log.i("HlthBLE", "syncHRV: onSuccess(null) — no HRV data for day=$dayOffset")
+                    result.success(emptyMap<String, Any>())
+                    return
+                }
+                val arr = rsp.hrvArray
+                val values = arr?.map { (it.toInt() and 0xFF).toDouble() } ?: emptyList()
+                Log.i("HlthBLE", "syncHRV: onSuccess day=$dayOffset range=${rsp.range} arrSize=${arr?.size ?: 0}")
+                result.success(mapOf(
+                    "values" to values,
+                    "intervalMinutes" to rsp.range,
+                    "rawArray" to (arr?.map { it.toInt() and 0xFF } ?: emptyList<Int>())
+                ))
+                markSync()
+            }
+
+            override fun onError(code: Int, message: String?) {
+                if (!replied.compareAndSet(false, true)) return
+                Log.w("HlthBLE", "syncHRV: onError code=$code msg=$message")
+                result.error("SYNC_HRV_FAILED", message ?: "code=$code", code)
+            }
+        }
         try {
-            CommandHandle.getInstance().executeReqCmd(
-                HRVReq(dayOffset.toByte()),
-                ICommandResponse<HRVRsp> { rsp ->
-                    val arr = rsp.hrvArray
-                    // Each byte = RMSSD value in milliseconds, one per 30 min
-                    val values = arr?.map { (it.toInt() and 0xFF).toDouble() } ?: emptyList()
+            Log.i("HlthBLE", "syncHRV: dayOffset=$dayOffset (BleOperateManager.getHrv)")
+            if (dayOffset == 0) {
+                BleOperateManager.getInstance().getTodayHrv(callback)
+            } else {
+                BleOperateManager.getInstance().getHrv(dayOffset, callback)
+            }
+        } catch (e: Exception) {
+            if (replied.compareAndSet(false, true)) {
+                Log.e("HlthBLE", "syncHRV dayOffset=$dayOffset failed", e)
+                result.error("SYNC_HRV_FAILED", e.message, null)
+            }
+        }
+    }
+
+    /**
+     * BP single-day sync via the SDK's public per-day API. Same call the
+     * QRing demo's "Specific Day Data" button uses (BloodPressureActivity.kt:44).
+     * Returns `List<BlePressure>` where each entry has time/sbp/dbp — these
+     * are **real systolic/diastolic pairs**, unlike the legacy
+     * `CMD_BP_TIMING_MONITOR_DATA` path which on H59 returns HR values
+     * disguised as BP. Prefer this for any actual BP querying.
+     */
+    private fun syncBloodPressureDay(dayOffset: Int, result: MethodChannel.Result) {
+        val replied = java.util.concurrent.atomic.AtomicBoolean(false)
+        val callback = object : BleOperateManager.HealthDataCallback<MutableList<BlePressure>> {
+            override fun onSuccess(list: MutableList<BlePressure>?) {
+                if (!replied.compareAndSet(false, true)) return
+                if (list == null) {
+                    Log.i("HlthBLE", "syncBpDay: onSuccess(null) — no BP data for day=$dayOffset")
+                    result.success(emptyMap<String, Any>())
+                    return
+                }
+                Log.i("HlthBLE", "syncBpDay: onSuccess day=$dayOffset count=${list.size}")
+                result.success(mapOf(
+                    "readings" to list.map { bp ->
+                        mapOf("time" to bp.time, "sbp" to bp.sbp, "dbp" to bp.dbp)
+                    }
+                ))
+                markSync()
+            }
+
+            override fun onError(code: Int, message: String?) {
+                if (!replied.compareAndSet(false, true)) return
+                Log.w("HlthBLE", "syncBpDay: onError code=$code msg=$message")
+                result.error("SYNC_BP_FAILED", message ?: "code=$code", code)
+            }
+        }
+        try {
+            Log.i("HlthBLE", "syncBpDay: dayOffset=$dayOffset (BleOperateManager.getBloodPressure)")
+            if (dayOffset == 0) {
+                BleOperateManager.getInstance().getTodayBloodPressure(callback)
+            } else {
+                BleOperateManager.getInstance().getBloodPressure(dayOffset, callback)
+            }
+        } catch (e: Exception) {
+            if (replied.compareAndSet(false, true)) {
+                Log.e("HlthBLE", "syncBpDay dayOffset=$dayOffset failed", e)
+                result.error("SYNC_BP_FAILED", e.message, null)
+            }
+        }
+    }
+
+    /**
+     * Trigger an on-demand BP measurement. Same as the QRing demo's
+     * "Start Blood Pressure Measurement" button (BloodPressureActivity.kt:101).
+     * The band runs an active measurement (~30s) and fires the callback
+     * with sbp/dbp/heartRate. Use [stopBpMeasurement] to abort.
+     */
+    private fun startBpMeasurement(result: MethodChannel.Result) {
+        val replied = java.util.concurrent.atomic.AtomicBoolean(false)
+        try {
+            Log.i("HlthBLE", "startBpMeasurement: launching active measurement")
+            BleOperateManager.getInstance().manualModeBP(
+                ICommandResponse<StartHeartRateRsp> { rsp ->
+                    if (!replied.compareAndSet(false, true)) return@ICommandResponse
+                    if (rsp.status != BaseRspCmd.RESULT_OK) {
+                        Log.w("HlthBLE", "startBpMeasurement: status=${rsp.status} errCode=${rsp.errCode}")
+                        result.error("BP_MEASURE_FAILED", "status=${rsp.status}", null)
+                        return@ICommandResponse
+                    }
+                    Log.i("HlthBLE", "startBpMeasurement: sbp=${rsp.sbp} dbp=${rsp.dbp} hr=${rsp.heartRate}")
                     result.success(mapOf(
-                        "values" to values,
-                        "intervalMinutes" to rsp.range,
-                        "rawArray" to (arr?.map { it.toInt() and 0xFF } ?: emptyList<Int>())
+                        "sbp" to rsp.sbp,
+                        "dbp" to rsp.dbp,
+                        "hr" to rsp.heartRate,
+                        "errCode" to rsp.errCode.toInt()
                     ))
                     markSync()
-                }
+                },
+                false  // false = start, true = stop
             )
         } catch (e: Exception) {
-            result.error("SYNC_HRV_FAILED", e.message, null)
+            if (replied.compareAndSet(false, true)) {
+                Log.e("HlthBLE", "startBpMeasurement failed", e)
+                result.error("BP_MEASURE_FAILED", e.message, null)
+            }
+        }
+    }
+
+    /** Abort an in-flight BP measurement (the "Stop Blood Pressure Measurement" demo button). */
+    private fun stopBpMeasurement(result: MethodChannel.Result) {
+        val replied = java.util.concurrent.atomic.AtomicBoolean(false)
+        try {
+            Log.i("HlthBLE", "stopBpMeasurement: aborting active measurement")
+            BleOperateManager.getInstance().manualModeBP(
+                ICommandResponse<StartHeartRateRsp> { rsp ->
+                    if (!replied.compareAndSet(false, true)) return@ICommandResponse
+                    result.success(mapOf("stopped" to (rsp.status == BaseRspCmd.RESULT_OK)))
+                },
+                true
+            )
+        } catch (e: Exception) {
+            if (replied.compareAndSet(false, true)) {
+                Log.e("HlthBLE", "stopBpMeasurement failed", e)
+                result.error("BP_MEASURE_FAILED", e.message, null)
+            }
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Realtime measurement streams (manualMode* SDK APIs).
+    //
+    // SDK semantics (verified against the QRing demo + on-device): each
+    // `manualMode*(..., false)` kicks off a ~30-60s active band-side
+    // measurement. The callback fires once when the band has a converged
+    // value (or earlier with `value=0` if motion/contact aborts the read,
+    // which we filter out below). It is NOT a per-second tick stream —
+    // expect 1 update per Start, not 30. For per-second continuous data
+    // use the PPG raw stream (startMeasureHrRaw) instead.
+    //
+    // `manualMode*(..., true)` terminates the in-flight measurement.
+    //
+    // Not streamable per SDK PDF / API surface — explicitly noted so we
+    // don't keep re-asking:
+    //   • Sleep — only available via the daily-sync window (no live push)
+    //   • Step buckets / daily step totals — sync-only; the only "live"
+    //     step signal is DeviceNotifyListener dataType=4, which fires
+    //     once per band-side step count update (not a continuous stream).
+    //   • Temperature, ECG — H59 firmware doesn't expose these as streams
+    //     (only as on-demand single reads via syncTemperature equivalents).
+    // ──────────────────────────────────────────────────────────────────────
+
+    private var heartStreamActive = false
+    private var spo2StreamActive = false
+    private var hrvStreamActive = false
+
+    private fun startHeartStream(result: MethodChannel.Result) {
+        if (heartStreamActive) {
+            result.success(mapOf("started" to false, "reason" to "already streaming"))
+            return
+        }
+        heartStreamActive = true
+        try {
+            Log.i("HlthBLE", "startHeartStream: subscribing to manualModeHeart")
+            BleOperateManager.getInstance().manualModeHeart(
+                ICommandResponse<StartHeartRateRsp> { rsp ->
+                    if (!heartStreamActive) return@ICommandResponse
+                    if (rsp.status != BaseRspCmd.RESULT_OK) {
+                        Log.w("HlthBLE", "hr stream tick: status=${rsp.status}")
+                        return@ICommandResponse
+                    }
+                    val hr = when {
+                        rsp.heartRate > 0 -> rsp.heartRate
+                        rsp.heart > 0 -> rsp.heart
+                        rsp.value > 0 -> rsp.value
+                        else -> 0
+                    }
+                    if (hr <= 0) {
+                        Log.d("HlthBLE", "hr stream pre-converge tick")
+                        return@ICommandResponse
+                    }
+                    mainHandler.post {
+                        methodChannel.invokeMethod(
+                            "onHeartStream",
+                            mapOf("hr" to hr)
+                        )
+                    }
+                },
+                false
+            )
+            result.success(mapOf("started" to true))
+        } catch (e: Exception) {
+            heartStreamActive = false
+            Log.e("HlthBLE", "startHeartStream failed", e)
+            result.error("HR_STREAM_FAILED", e.message, null)
+        }
+    }
+
+    private fun stopHeartStream(result: MethodChannel.Result) {
+        if (!heartStreamActive) {
+            result.success(mapOf("stopped" to false, "reason" to "not streaming"))
+            return
+        }
+        heartStreamActive = false
+        try {
+            Log.i("HlthBLE", "stopHeartStream: stopping manualModeHeart")
+            BleOperateManager.getInstance().manualModeHeart(
+                ICommandResponse<StartHeartRateRsp> { _ -> },
+                true
+            )
+            result.success(mapOf("stopped" to true))
+        } catch (e: Exception) {
+            Log.e("HlthBLE", "stopHeartStream failed", e)
+            result.error("HR_STREAM_FAILED", e.message, null)
+        }
+    }
+
+    private fun startSpo2Stream(result: MethodChannel.Result) {
+        if (spo2StreamActive) {
+            result.success(mapOf("started" to false, "reason" to "already streaming"))
+            return
+        }
+        spo2StreamActive = true
+        try {
+            Log.i("HlthBLE", "startSpo2Stream: subscribing to manualModeSpO2")
+            BleOperateManager.getInstance().manualModeSpO2(
+                ICommandResponse<StartHeartRateRsp> { rsp ->
+                    if (!spo2StreamActive) return@ICommandResponse
+                    if (rsp.status != BaseRspCmd.RESULT_OK) {
+                        Log.w("HlthBLE", "spo2 stream tick: status=${rsp.status}")
+                        return@ICommandResponse
+                    }
+                    // Demo fallback (BloodOxygenActivity.kt:108): SDK puts
+                    // the converged SpO2 in `bloodOxygen` for some fw
+                    // builds and in `value` for others.
+                    val spo2 = if (rsp.bloodOxygen > 0) rsp.bloodOxygen else rsp.value
+                    val hr = rsp.heartRate
+                    if (spo2 <= 0) {
+                        // Pre-convergence noise — band still warming up.
+                        Log.d("HlthBLE", "spo2 stream pre-converge tick")
+                        return@ICommandResponse
+                    }
+                    mainHandler.post {
+                        methodChannel.invokeMethod(
+                            "onSpo2Stream",
+                            mapOf("spo2" to spo2, "hr" to hr)
+                        )
+                    }
+                },
+                false
+            )
+            result.success(mapOf("started" to true))
+        } catch (e: Exception) {
+            spo2StreamActive = false
+            Log.e("HlthBLE", "startSpo2Stream failed", e)
+            result.error("SPO2_STREAM_FAILED", e.message, null)
+        }
+    }
+
+    private fun stopSpo2Stream(result: MethodChannel.Result) {
+        if (!spo2StreamActive) {
+            result.success(mapOf("stopped" to false, "reason" to "not streaming"))
+            return
+        }
+        spo2StreamActive = false
+        try {
+            Log.i("HlthBLE", "stopSpo2Stream: stopping manualModeSpO2")
+            BleOperateManager.getInstance().manualModeSpO2(
+                ICommandResponse<StartHeartRateRsp> { _ -> },
+                true
+            )
+            result.success(mapOf("stopped" to true))
+        } catch (e: Exception) {
+            Log.e("HlthBLE", "stopSpo2Stream failed", e)
+            result.error("SPO2_STREAM_FAILED", e.message, null)
+        }
+    }
+
+    private fun startHrvStream(result: MethodChannel.Result) {
+        if (hrvStreamActive) {
+            result.success(mapOf("started" to false, "reason" to "already streaming"))
+            return
+        }
+        hrvStreamActive = true
+        try {
+            Log.i("HlthBLE", "startHrvStream: subscribing to manualModeHrv")
+            BleOperateManager.getInstance().manualModeHrv(
+                ICommandResponse<StartHeartRateRsp> { rsp ->
+                    if (!hrvStreamActive) return@ICommandResponse
+                    if (rsp.status != BaseRspCmd.RESULT_OK) {
+                        Log.w("HlthBLE", "hrv stream tick: status=${rsp.status}")
+                        return@ICommandResponse
+                    }
+                    // Same value-fallback as SpO2 (HrvActivity.kt:109).
+                    val hrv = if (rsp.hrv > 0) rsp.hrv else rsp.value
+                    val hr = rsp.heartRate
+                    val stress = rsp.stress
+                    if (hrv <= 0) {
+                        Log.d("HlthBLE", "hrv stream pre-converge tick")
+                        return@ICommandResponse
+                    }
+                    mainHandler.post {
+                        methodChannel.invokeMethod(
+                            "onHrvStream",
+                            mapOf("hrv" to hrv, "hr" to hr, "stress" to stress)
+                        )
+                    }
+                },
+                false
+            )
+            result.success(mapOf("started" to true))
+        } catch (e: Exception) {
+            hrvStreamActive = false
+            Log.e("HlthBLE", "startHrvStream failed", e)
+            result.error("HRV_STREAM_FAILED", e.message, null)
+        }
+    }
+
+    private fun stopHrvStream(result: MethodChannel.Result) {
+        if (!hrvStreamActive) {
+            result.success(mapOf("stopped" to false, "reason" to "not streaming"))
+            return
+        }
+        hrvStreamActive = false
+        try {
+            Log.i("HlthBLE", "stopHrvStream: stopping manualModeHrv")
+            BleOperateManager.getInstance().manualModeHrv(
+                ICommandResponse<StartHeartRateRsp> { _ -> },
+                true
+            )
+            result.success(mapOf("stopped" to true))
+        } catch (e: Exception) {
+            Log.e("HlthBLE", "stopHrvStream failed", e)
+            result.error("HRV_STREAM_FAILED", e.message, null)
+        }
+    }
+
+    // ─── One Key Measurement BP phase (manualModeBP per PDF 2.3.7) ──────
+    //
+    // The SDK's official `startOneKey(0, 0, cb)` mode-5 API is broken on
+    // H59 firmware: the band returns raw-PPG packets (type=13) on notify
+    // 0x69 instead of the combined health-check packet the SDK's
+    // OneKeyResp wrapper expects, causing an unrecoverable
+    // ClassCastException inside the SDK's QCDataParser dispatch path
+    // (confirmed 2026-06-11). No app-side workaround.
+    //
+    // So this "okm" call is just the BP leg of a chained measurement:
+    // `manualModeBP(cb, false)` — runs a ~30s active BP measurement and
+    // returns sbp/dbp via StartHeartRateRsp. The Dart screen orchestrates
+    // the HR → SpO2 → BP chain by calling startHeartStream /
+    // startSpo2Stream / startOneKeyMeasurement in sequence.
+
+    private var okmActive = false
+
+    private fun startOneKeyMeasurement(result: MethodChannel.Result) {
+        if (okmActive) {
+            result.success(mapOf("started" to false, "reason" to "already running"))
+            return
+        }
+        okmActive = true
+        try {
+            Log.i("HlthBLE", "startOneKeyMeasurement: manualModeBP (BP leg)")
+            BleOperateManager.getInstance().manualModeBP(
+                ICommandResponse<StartHeartRateRsp> { rsp ->
+                    if (!okmActive) return@ICommandResponse
+                    if (rsp.status != BaseRspCmd.RESULT_OK) {
+                        Log.w("HlthBLE", "okm/bp tick: status=${rsp.status}")
+                        return@ICommandResponse
+                    }
+                    val sbp = rsp.sbp
+                    val dbp = rsp.dbp
+                    val hr = rsp.heartRate
+                    if (sbp <= 0 || dbp <= 0) {
+                        Log.d("HlthBLE", "okm/bp pre-converge tick")
+                        return@ICommandResponse
+                    }
+                    Log.i(
+                        "HlthBLE",
+                        "okm/bp tick: sbp=$sbp dbp=$dbp hr=$hr err=${rsp.errCode}"
+                    )
+                    mainHandler.post {
+                        methodChannel.invokeMethod(
+                            "onOneKeyMeasurementStream",
+                            mapOf(
+                                "hr" to hr,
+                                "spo2" to 0,
+                                "sbp" to sbp,
+                                "dbp" to dbp,
+                                "fatigue" to 0,
+                                "score" to 0
+                            )
+                        )
+                    }
+                },
+                false
+            )
+            result.success(mapOf("started" to true))
+        } catch (e: Exception) {
+            okmActive = false
+            Log.e("HlthBLE", "startOneKeyMeasurement failed", e)
+            result.error("OKM_FAILED", e.message, null)
+        }
+    }
+
+    private fun stopOneKeyMeasurement(result: MethodChannel.Result) {
+        if (!okmActive) {
+            result.success(mapOf("stopped" to false, "reason" to "not running"))
+            return
+        }
+        okmActive = false
+        try {
+            Log.i("HlthBLE", "stopOneKeyMeasurement: manualModeBP stop")
+            BleOperateManager.getInstance().manualModeBP(
+                ICommandResponse<StartHeartRateRsp> { _ -> },
+                true
+            )
+            result.success(mapOf("stopped" to true))
+        } catch (e: Exception) {
+            Log.e("HlthBLE", "stopOneKeyMeasurement failed", e)
+            result.error("OKM_FAILED", e.message, null)
         }
     }
 
@@ -837,27 +1508,36 @@ class BleManager(
     }
 
     /**
-     * Sleep sync via the new sleep protocol. Returns sleep stages with
-     * type code: 1=deep, 2=light, 3=wake, 4=rem, 5=no_sleep/no_wear.
+     * Sleep sync for a specific past day (0 = today, 1..29 = N nights ago).
+     *
+     * Uses the SDK's PUBLIC API `BleOperateManager.getSleep(dayIndex,
+     * HealthDataCallback<SleepDisplay>)` — the same call the QRing demo's
+     * "Specific Day Data" button uses (see QRing_Android_SDK_1.0.0.17/app/
+     * .../activity/SleepActivity.kt:39). Earlier attempts used
+     * `LargeDataHandler.syncSleepListIndianDemand` (wrong — int arg is a
+     * flag, not day offset) and `SleepAnalyzerUtils.theDayBefore` via
+     * reflection (wrong — private internal API that hangs without the
+     * BleOperateManager wrapper's task scheduling). The public API
+     * handles command queuing, timeouts, and error surfacing internally.
+     *
+     * Stage type codes in SleepDisplay.list[].type: 1=deep, 2=light,
+     * 3=wake, 4=rem, 5=no_sleep/no_wear.
      */
     private fun syncSleep(dayOffset: Int, result: MethodChannel.Result) {
+        val replied = java.util.concurrent.atomic.AtomicBoolean(false)
         try {
-            // 2-param variant — the regular `syncSleepList` requires a
-            // second launch-sleep callback for lunch-nap support, which
-            // we don't need.
-            LargeDataHandler.getInstance().syncSleepListIndianDemand(
+            Log.i("HlthBLE", "syncSleep: dayOffset=$dayOffset (BleOperateManager.getSleep)")
+            BleOperateManager.getInstance().getSleep(
                 dayOffset,
-                object : ILargeDataSleepResponse {
-                    override fun sleepData(display: SleepDisplay?) {
+                object : BleOperateManager.HealthDataCallback<SleepDisplay> {
+                    override fun onSuccess(display: SleepDisplay?) {
+                        if (!replied.compareAndSet(false, true)) return
                         if (display == null) {
+                            Log.i("HlthBLE", "syncSleep: onSuccess(null) — no sleep data for day=$dayOffset")
                             result.success(emptyMap<String, Any>())
                             return
                         }
-                        // SleepDisplay.list is List<SleepDisplay.SleepDataBean>; each
-                        // bean exposes getSleepStart()/getSleepEnd() (long) and
-                        // getType() (int). The earlier reflection-on-"duration"
-                        // approach returned 0 for every stage because the SDK
-                        // never had a `duration` field — duration is end-start.
+                        Log.i("HlthBLE", "syncSleep: onSuccess sleepTime=${display.sleepTime}, list size=${display.list?.size ?: 0}")
                         val stages = try {
                             (display.list ?: emptyList()).map { bean ->
                                 mapOf(
@@ -883,10 +1563,19 @@ class BleManager(
                         ))
                         markSync()
                     }
+
+                    override fun onError(code: Int, message: String?) {
+                        if (!replied.compareAndSet(false, true)) return
+                        Log.w("HlthBLE", "syncSleep: onError code=$code msg=$message")
+                        result.error("SYNC_SLEEP_FAILED", message ?: "code=$code", code)
+                    }
                 }
             )
         } catch (e: Exception) {
-            result.error("SYNC_SLEEP_FAILED", e.message, null)
+            if (replied.compareAndSet(false, true)) {
+                Log.e("HlthBLE", "syncSleep dayOffset=$dayOffset failed", e)
+                result.error("SYNC_SLEEP_FAILED", e.message, null)
+            }
         }
     }
 
@@ -960,6 +1649,54 @@ class BleManager(
             )
         } catch (e: Exception) {
             result.error("SYNC_STEPS_DETAIL_FAILED", e.message, null)
+        }
+    }
+
+    /**
+     * Demo-parity step buckets via public API (StepsActivity.kt:38-46).
+     *   dayOffset 0  → BleOperateManager.getTodayStepDetail(callback)
+     *   dayOffset 1..29 → BleOperateManager.getStepDetail(dayIndex, callback)
+     * Returns the same 15-min bin shape as [syncStepsDetail] for shape compat.
+     */
+    private fun syncStepsDay(dayOffset: Int, result: MethodChannel.Result) {
+        val replied = java.util.concurrent.atomic.AtomicBoolean(false)
+        val callback = object : BleOperateManager.HealthDataCallback<List<BleStepDetails>> {
+            override fun onSuccess(data: List<BleStepDetails>?) {
+                if (!replied.compareAndSet(false, true)) return
+                val bins = (data ?: emptyList()).map { d ->
+                    mapOf(
+                        "year" to d.year,
+                        "month" to d.month,
+                        "day" to d.day,
+                        "timeIndex" to d.timeIndex,
+                        "walkSteps" to d.walkSteps,
+                        "runSteps" to d.runSteps,
+                        "calorie" to d.calorie,
+                        "distance" to d.distance
+                    )
+                }
+                Log.i("HlthBLE", "syncStepsDay dayOffset=$dayOffset bins=${bins.size}")
+                result.success(bins)
+                markSync()
+            }
+
+            override fun onError(errorCode: Int, errorMessage: String?) {
+                if (!replied.compareAndSet(false, true)) return
+                Log.w("HlthBLE", "syncStepsDay err=$errorCode msg=$errorMessage")
+                result.error("SYNC_STEPS_DAY_FAILED", "err=$errorCode $errorMessage", null)
+            }
+        }
+        try {
+            if (dayOffset == 0) {
+                BleOperateManager.getInstance().getTodayStepDetail(callback)
+            } else {
+                BleOperateManager.getInstance().getStepDetail(dayOffset, callback)
+            }
+        } catch (e: Exception) {
+            if (replied.compareAndSet(false, true)) {
+                Log.e("HlthBLE", "syncStepsDay dayOffset=$dayOffset failed", e)
+                result.error("SYNC_STEPS_DAY_FAILED", e.message, null)
+            }
         }
     }
 

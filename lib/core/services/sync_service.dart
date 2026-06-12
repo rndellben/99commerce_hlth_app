@@ -10,7 +10,11 @@ import 'package:hlth_app/core/repositories/hrv_repository.dart';
 import 'package:hlth_app/core/repositories/sleep_repository.dart';
 import 'package:hlth_app/core/repositories/spo2_repository.dart';
 import 'package:hlth_app/core/repositories/step_bucket_repository.dart';
+import 'package:hlth_app/core/processing/fall_detector.dart';
 import 'package:hlth_app/core/services/daily_aggregator.dart';
+import 'package:hlth_app/core/services/retention_sweep_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:math' as math;
 
 /// Per-step result. `error` is non-null on failure; counts are best-effort.
 ///
@@ -42,15 +46,31 @@ class SyncStepResult {
 }
 
 /// Aggregate of a `syncAll` run. Order matches execution order.
+///
+/// `retention` is populated by `PeriodicSyncCoordinator` when the daily
+/// gate elapsed and a sweep ran; null otherwise. `retentionSkipReason`
+/// is a short string ("last ran 4h ago") for visibility when the gate
+/// blocked the sweep — only set when retention is null AND the gate is
+/// the reason (not the case when the sweep ran successfully).
 class SyncRunResult {
-  const SyncRunResult({required this.steps, required this.aggregated});
+  const SyncRunResult({
+    required this.steps,
+    required this.aggregated,
+    this.retention,
+    this.retentionSkipReason,
+  });
 
   final List<SyncStepResult> steps;
   final bool aggregated;
+  final RetentionSweepResult? retention;
+  final String? retentionSkipReason;
 
   int get totalSamples => steps.fold(0, (a, s) => a + s.count);
   Iterable<SyncStepResult> get failed => steps.where((s) => !s.ok);
-  bool get allOk => failed.isEmpty && aggregated;
+  bool get allOk =>
+      failed.isEmpty &&
+      aggregated &&
+      (retention == null || retention!.allOk);
 }
 
 /// Centralized band-sync orchestration. Wraps each BLE history command,
@@ -118,9 +138,10 @@ class SyncService {
   Future<SyncStepResult> syncHr({
     required String userId,
     required String deviceId,
+    int dayOffset = 0,
   }) async {
     try {
-      final r = await ble.getHrHistory();
+      final r = await ble.getHrHistory(dayOffset: dayOffset);
       final readings = (r['readings'] as List?) ?? const [];
       if (readings.isEmpty) {
         return SyncStepResult(
@@ -175,12 +196,50 @@ class SyncService {
     }
   }
 
+  /// Sync a single day's SpO2 via the SDK's public per-day API. Same shape
+  /// as [syncSpo2] but only fetches one day instead of the band's full
+  /// stored window. Use for "Specific Day Data" debug parity with the
+  /// QRing demo.
+  Future<SyncStepResult> syncSpo2Day({
+    required String userId,
+    required String deviceId,
+    int dayOffset = 0,
+  }) async {
+    try {
+      final entries = await ble.getSpO2Day(dayOffset: dayOffset);
+      final samples = adapters.spo2FromNative(
+        entries,
+        userId: userId,
+        deviceId: deviceId,
+      );
+      await spo2Repo.insertMany(samples);
+      return SyncStepResult(
+        metric: 'spo2(d=$dayOffset)',
+        count: samples.length,
+        rawList: entries,
+      );
+    } catch (e) {
+      return SyncStepResult(metric: 'spo2(d=$dayOffset)', count: 0, error: e.toString());
+    }
+  }
+
+  /// Sync the most recent completed sleep session (dayOffset=1).
+  ///
+  /// Matches the QRing demo's "Specific Day Data" behavior with
+  /// dayIndex=1 — one BLE round-trip returning yesterday's stored
+  /// session. Per-day backfill (looping 1..7) was tried 2026-06-05 but
+  /// each call streams multi-frame `ReadSleepDetailsRsp` data; 7×
+  /// of that takes too long over BLE. Single-call keeps Sync Sleep
+  /// responsive; the periodic scheduler running each morning catches
+  /// each night as it's completed.
+  ///
+  /// Idempotent via `insertOnConflictUpdate` — safe to re-call.
   Future<SyncStepResult> syncSleep({
     required String userId,
     required String deviceId,
   }) async {
     try {
-      final r = await ble.getSleepHistory();
+      final r = await ble.getSleepHistory(dayOffset: 1);
       final parsed = adapters.sleepFromNative(
         r,
         userId: userId,
@@ -190,7 +249,7 @@ class SyncService {
         return SyncStepResult(
           metric: 'sleep',
           count: 0,
-          note: 'no usable sleep data — sleepTime/wakeTime missing or stages empty',
+          note: 'no sleep buffered on band',
           rawMap: r,
         );
       }
@@ -202,7 +261,9 @@ class SyncService {
         rawMap: r,
         extra: {
           'sessionId': parsed.session.id,
+          'startedAt': parsed.session.startedAt.toIso8601String(),
           'totalMin': parsed.session.totalMin,
+          'epochCount': parsed.epochs.length,
         },
       );
     } catch (e) {
@@ -335,20 +396,42 @@ class PeriodicSyncCoordinator {
   PeriodicSyncCoordinator({
     required this.sync,
     required this.deviceRepo,
+    required this.retentionSweep,
+    required this.ble,
     required Stream<void> tickStream,
-  }) {
+    this.fallSweepDuration = const Duration(seconds: 30),
+    FallDetector? fallDetector,
+  }) : _fallDetector = fallDetector ?? const FallDetector() {
     _tickSub = tickStream.listen((_) => _onTick());
   }
 
   final SyncService sync;
   final DeviceRepository deviceRepo;
+  final RetentionSweepService retentionSweep;
+  final BleService ble;
+  final Duration fallSweepDuration;
+  final FallDetector _fallDetector;
   StreamSubscription<void>? _tickSub;
   bool _inFlight = false;
   final _runs = StreamController<SyncRunResult>.broadcast();
+  final _fallSweeps = StreamController<FallSweepResult>.broadcast();
+
+  /// HLT-12: shared_preferences key for the last-swept timestamp (unix
+  /// sec). Persisted so the 24h gate survives app restarts.
+  static const _kLastSweptAtKey = 'retention_last_swept_at_utc_sec';
+  static const _sweepIntervalHours = 24;
 
   /// Most recent periodic-sync results. Debug screens subscribe to see
   /// when each tick fires and what it persisted.
   Stream<SyncRunResult> get runs => _runs.stream;
+
+  /// HLT-5: results from the background fall sweep that runs after each
+  /// periodic sync. Emits one event per scheduled tick (or per
+  /// `triggerNow(fallSweep: true)`). The H59 only emits accelerometer
+  /// data during active PPG capture, so each sweep starts a short
+  /// `startMeasureHrRaw` window, buffers the accel triples, then runs
+  /// the three-window state machine across that buffer.
+  Stream<FallSweepResult> get fallSweeps => _fallSweeps.stream;
 
   Future<void> _onTick() async {
     if (_inFlight) return;
@@ -358,11 +441,13 @@ class PeriodicSyncCoordinator {
         ActiveSession.defaultUserId,
       );
       if (device == null) return;
-      final result = await sync.syncAll(
-        userId: ActiveSession.defaultUserId,
-        deviceId: device.id,
-      );
+      final result = await _runSyncWithRetention(device.id);
       _runs.add(result);
+      // HLT-5: run the background fall sweep once data sync is done.
+      // Sequenced after sync so we never have two `startMeasureHrRaw`
+      // sessions racing for the same BLE link.
+      final fallResult = await _runFallSweep();
+      _fallSweeps.add(fallResult);
     } finally {
       _inFlight = false;
     }
@@ -370,7 +455,9 @@ class PeriodicSyncCoordinator {
 
   /// For debug screens / tests: trigger the same flow as a native tick.
   /// Returns `null` on skip; callers can read `lastSkipReason` for why.
-  Future<SyncRunResult?> triggerNow() async {
+  /// Pass `fallSweep: true` to also run the HLT-5 background fall sweep
+  /// (off by default for fast manual debug runs).
+  Future<SyncRunResult?> triggerNow({bool fallSweep = false}) async {
     if (_inFlight) {
       lastSkipReason = 'sync already in flight';
       return null;
@@ -387,15 +474,169 @@ class PeriodicSyncCoordinator {
         return null;
       }
       lastSkipReason = null;
-      final result = await sync.syncAll(
-        userId: ActiveSession.defaultUserId,
-        deviceId: device.id,
-      );
+      final result = await _runSyncWithRetention(device.id);
       _runs.add(result);
+      if (fallSweep) {
+        final sweepResult = await _runFallSweep();
+        _fallSweeps.add(sweepResult);
+      }
       return result;
     } finally {
       _inFlight = false;
     }
+  }
+
+  /// HLT-5: open a short PPG capture window, collect accel triples from
+  /// the realtime stream, then evaluate the three-window state machine
+  /// across the buffered samples.
+  ///
+  /// **H59 constraint:** raw accelerometer data is only emitted while
+  /// `startMeasureHrRaw` is running. We open the smallest window we can
+  /// (default 30 s) to keep battery impact low — that's ~1.7% duty
+  /// cycle when the periodic scheduler fires every 30 minutes.
+  Future<FallSweepResult> _runFallSweep() async {
+    final startedAt = DateTime.now().toUtc();
+    final durationS = fallSweepDuration.inSeconds;
+    final accelX = <int>[];
+    final accelY = <int>[];
+    final accelZ = <int>[];
+
+    StreamSubscription<List<Map<String, dynamic>>>? sub;
+    try {
+      sub = ble.rawPpgEvent.listen((samples) {
+        for (final s in samples) {
+          final ax = s['accel_x'];
+          final ay = s['accel_y'];
+          final az = s['accel_z'];
+          if (ax is num && ay is num && az is num) {
+            accelX.add(ax.toInt());
+            accelY.add(ay.toInt());
+            accelZ.add(az.toInt());
+          }
+        }
+      });
+
+      await ble.startMeasureHrRaw(durationSec: durationS);
+      // Add a small grace period so the band's final packets land in our
+      // buffer before we cancel the listener.
+      await Future<void>.delayed(Duration(seconds: durationS + 1));
+    } catch (e) {
+      await sub?.cancel();
+      try {
+        await ble.stopMeasure();
+      } catch (_) {}
+      return FallSweepResult(
+        sweptAt: startedAt,
+        captureDurationS: durationS,
+        sampleCount: accelX.length,
+        events: const [],
+        skipReason: 'capture failed: $e',
+      );
+    }
+    await sub.cancel();
+    try {
+      await ble.stopMeasure();
+    } catch (_) {}
+
+    if (accelX.length < 50) {
+      return FallSweepResult(
+        sweptAt: startedAt,
+        captureDurationS: durationS,
+        sampleCount: accelX.length,
+        events: const [],
+        skipReason: 'too few accel samples (${accelX.length})',
+      );
+    }
+
+    // Calibrate the local "1 g" reference from the median magnitude of
+    // the captured window. Using median (not mean) so a real impact
+    // doesn't pull the reference up and dilute the freefall threshold.
+    final magsRaw = List<double>.generate(accelX.length, (i) {
+      final x = accelX[i].toDouble();
+      final y = accelY[i].toDouble();
+      final z = accelZ[i].toDouble();
+      return math.sqrt(x * x + y * y + z * z);
+    });
+    final sortedMags = List<double>.from(magsRaw)..sort();
+    final oneGRaw = sortedMags[sortedMags.length ~/ 2];
+    if (oneGRaw <= 0) {
+      return FallSweepResult(
+        sweptAt: startedAt,
+        captureDurationS: durationS,
+        sampleCount: accelX.length,
+        events: const [],
+        skipReason: 'calibration returned zero — accel stream was flat',
+      );
+    }
+
+    final xMg = accelX
+        .map((v) => (v / oneGRaw * 1000).round())
+        .toList(growable: false);
+    final yMg = accelY
+        .map((v) => (v / oneGRaw * 1000).round())
+        .toList(growable: false);
+    final zMg = accelZ
+        .map((v) => (v / oneGRaw * 1000).round())
+        .toList(growable: false);
+
+    final fsHz = accelX.length / durationS;
+    final events = _fallDetector.detect(
+      accelXMilliG: xMg,
+      accelYMilliG: yMg,
+      accelZMilliG: zMg,
+      samplingRateHz: fsHz,
+    );
+
+    return FallSweepResult(
+      sweptAt: startedAt,
+      captureDurationS: durationS,
+      sampleCount: accelX.length,
+      events: events,
+      calibratedOneGRaw: oneGRaw,
+    );
+  }
+
+  /// Runs `sync.syncAll`, then evaluates the 24h gate for the retention
+  /// sweep. Either runs the sweep and attaches its result, or sets
+  /// `retentionSkipReason` on the returned `SyncRunResult`.
+  Future<SyncRunResult> _runSyncWithRetention(String deviceId) async {
+    final syncResult = await sync.syncAll(
+      userId: ActiveSession.defaultUserId,
+      deviceId: deviceId,
+    );
+
+    // Evaluate the retention gate after sync — order matters because the
+    // aggregator inside syncAll may have just created new daily_metrics
+    // rows. We don't want the sweep to clip rows the same run just wrote.
+    final prefs = await SharedPreferences.getInstance();
+    final lastSec = prefs.getInt(_kLastSweptAtKey);
+    final now = DateTime.now().toUtc();
+    final nowSec = now.millisecondsSinceEpoch ~/ 1000;
+
+    if (lastSec != null) {
+      final lastRunAt =
+          DateTime.fromMillisecondsSinceEpoch(lastSec * 1000, isUtc: true);
+      final elapsed = now.difference(lastRunAt);
+      if (elapsed < const Duration(hours: _sweepIntervalHours)) {
+        final hoursAgo = elapsed.inHours;
+        final humanAgo = hoursAgo < 1
+            ? '${elapsed.inMinutes}m ago'
+            : '${hoursAgo}h ago';
+        return SyncRunResult(
+          steps: syncResult.steps,
+          aggregated: syncResult.aggregated,
+          retentionSkipReason: 'last ran $humanAgo',
+        );
+      }
+    }
+
+    final retention = await retentionSweep.sweepAll(now: now);
+    await prefs.setInt(_kLastSweptAtKey, nowSec);
+    return SyncRunResult(
+      steps: syncResult.steps,
+      aggregated: syncResult.aggregated,
+      retention: retention,
+    );
   }
 
   /// Populated when `_onTick` / `triggerNow` return null. Cleared on
@@ -405,15 +646,19 @@ class PeriodicSyncCoordinator {
   void dispose() {
     _tickSub?.cancel();
     _runs.close();
+    _fallSweeps.close();
   }
 }
 
 final periodicSyncCoordinatorProvider =
     Provider<PeriodicSyncCoordinator>((ref) {
+  final ble = ref.watch(bleServiceProvider);
   final coord = PeriodicSyncCoordinator(
     sync: ref.watch(syncServiceProvider),
     deviceRepo: ref.watch(deviceRepositoryProvider),
-    tickStream: ref.watch(bleServiceProvider).periodicSyncTick,
+    retentionSweep: ref.watch(retentionSweepServiceProvider),
+    ble: ble,
+    tickStream: ble.periodicSyncTick,
   );
   ref.onDispose(coord.dispose);
   return coord;

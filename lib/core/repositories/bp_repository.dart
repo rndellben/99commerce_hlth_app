@@ -14,6 +14,21 @@ abstract class BpRepository extends TimeSeriesRepository<BpReading> {
     DateTime? from,
     DateTime? to,
   });
+
+  /// Downsamples raw `bp_readings` to **at most one reading per clock
+  /// hour** — picks the first sample inside each hour-bucket. Algorithms
+  /// that depend on BP at a fixed cadence (e.g. hourly trend analysis,
+  /// daily-metric aggregation) MUST consume readings via this method, not
+  /// `getInRange`, so that user-selectable scheduled-monitoring cadence
+  /// (15 / 30 / 60 min) doesn't change the algorithm's input density.
+  ///
+  /// Empty hours return no reading — the result list is not padded.
+  Future<List<BpReading>> getHourlySnapshots({
+    required String userId,
+    required DateTime from,
+    required DateTime to,
+    String? deviceId,
+  });
 }
 
 class BpRepositoryImpl implements BpRepository {
@@ -148,13 +163,39 @@ class BpRepositoryImpl implements BpRepository {
   }
 
   @override
-  Future<void> softDeleteBefore(DateTime cutoff) async {
-    await (_db.update(_db.bpReadings)
+  Future<int> softDeleteBefore(DateTime cutoff) async {
+    return (_db.update(_db.bpReadings)
           ..where((t) =>
               t.capturedAtUtc.isSmallerThanValue(_toSec(cutoff)) &
               t.deletedAtUtc.isNull()))
         .write(db.BpReadingsCompanion(
             deletedAtUtc: Value(_toSec(DateTime.now()))));
+  }
+
+  @override
+  Future<List<BpReading>> getHourlySnapshots({
+    required String userId,
+    required DateTime from,
+    required DateTime to,
+    String? deviceId,
+  }) async {
+    // Pull every raw sample in range (small set — at most ~24 readings/day
+    // at 60-min cadence, 96/day at 15-min). Bucket by floor(epochSec / 3600)
+    // and keep the first (lowest capturedAt) sample per bucket.
+    final rows = await getInRange(
+      userId: userId,
+      from: from,
+      to: to,
+      deviceId: deviceId,
+    );
+    final byHour = <int, BpReading>{};
+    for (final r in rows) {
+      final hourBucket = _toSec(r.capturedAt) ~/ 3600;
+      // getInRange returns ASC by capturedAtUtc, so the first put wins.
+      byHour.putIfAbsent(hourBucket, () => r);
+    }
+    final hours = byHour.keys.toList()..sort();
+    return [for (final h in hours) byHour[h]!];
   }
 
   @override

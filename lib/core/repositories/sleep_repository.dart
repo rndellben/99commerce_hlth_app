@@ -21,6 +21,17 @@ abstract class SleepRepository {
 
   Future<void> insertEpochs(String sessionId, List<SleepEpoch> epochs);
   Future<List<SleepEpoch>> getEpochsForSession(String sessionId);
+
+  /// HLT-12: soft-delete (sets `deleted_at_utc`) any session whose
+  /// `started_at_utc` is older than `cutoff`. Returns affected row count.
+  ///
+  /// TODO(HLT-13): sleep_epochs has no `deleted_at_utc` column. Orphan
+  /// epochs whose parent session got soft-deleted become unreachable via
+  /// `getEpochsForSession` (no one queries them once parent is hidden) but
+  /// still occupy disk. When backend sync needs grace-period hard delete,
+  /// add a schema migration that adds `deleted_at_utc` to sleep_epochs and
+  /// cascade-delete on session soft-delete.
+  Future<int> softDeleteSessionsBefore(DateTime cutoff);
 }
 
 class SleepRepositoryImpl implements SleepRepository {
@@ -169,6 +180,16 @@ class SleepRepositoryImpl implements SleepRepository {
           ..orderBy([(t) => OrderingTerm.asc(t.startedAtUtc)]))
         .get();
     return rows.map(_rowToEpoch).toList();
+  }
+
+  @override
+  Future<int> softDeleteSessionsBefore(DateTime cutoff) async {
+    return (_db.update(_db.sleepSessions)
+          ..where((t) =>
+              t.startedAtUtc.isSmallerThanValue(_toSec(cutoff)) &
+              t.deletedAtUtc.isNull()))
+        .write(db.SleepSessionsCompanion(
+            deletedAtUtc: Value(_toSec(DateTime.now()))));
   }
 }
 

@@ -141,8 +141,8 @@ class Spo2RepositoryImpl implements Spo2Repository {
   }
 
   @override
-  Future<void> softDeleteBefore(DateTime cutoff) async {
-    await (_db.update(_db.spo2Samples)
+  Future<int> softDeleteBefore(DateTime cutoff) async {
+    return (_db.update(_db.spo2Samples)
           ..where((t) =>
               t.capturedAtUtc.isSmallerThanValue(_toSec(cutoff)) &
               t.deletedAtUtc.isNull()))

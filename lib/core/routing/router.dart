@@ -2,11 +2,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hlth_app/features/activity/activity_screen.dart';
+import 'package:hlth_app/features/blood_pressure/blood_pressure_screen.dart';
 import 'package:hlth_app/features/debug/ble_debug_screen.dart';
 import 'package:hlth_app/features/heart_rate/heart_rate_screen.dart';
 import 'package:hlth_app/features/home/home_screen.dart';
 import 'package:hlth_app/features/onboarding/onboarding_screen.dart';
+import 'package:hlth_app/features/one_key/one_key_measurement_screen.dart';
 import 'package:hlth_app/features/recovery/recovery_screen.dart';
+import 'package:hlth_app/features/settings/device_settings_screen.dart';
 import 'package:hlth_app/features/settings/settings_screen.dart';
 import 'package:hlth_app/features/sleep/sleep_screen.dart';
 import 'package:hlth_app/features/spo2/spo2_screen.dart';
@@ -50,6 +53,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/recovery', builder: (context, state) => const RecoveryScreen()),
       GoRoute(path: '/onboarding', builder: (context, state) => const OnboardingScreen()),
       GoRoute(path: '/debug', builder: (context, state) => const BleDebugScreen()),
+      GoRoute(
+        path: '/settings/device',
+        builder: (context, state) => const DeviceSettingsScreen(),
+      ),
+      GoRoute(
+        path: '/one-key',
+        builder: (context, state) => const OneKeyMeasurementScreen(),
+      ),
+      GoRoute(
+        path: '/blood-pressure',
+        builder: (context, state) => const BloodPressureScreen(),
+      ),
     ],
   );
 });

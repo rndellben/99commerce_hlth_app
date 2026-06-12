@@ -48,7 +48,7 @@ class SettingsScreen extends ConsumerWidget {
           _SettingsTile(
             icon: connected ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
             title: 'HLTH Band',
-            subtitle: connected ? 'Connected' : 'Not connected — tap to pair',
+            subtitle: connected ? 'Connected' : 'Not connected — tap to manage',
             trailing: Container(
               width: 8,
               height: 8,
@@ -57,7 +57,7 @@ class SettingsScreen extends ConsumerWidget {
                 shape: BoxShape.circle,
               ),
             ),
-            onTap: () => context.push('/debug'),
+            onTap: () => context.push('/settings/device'),
           ),
           _SettingsTile(
             icon: Icons.battery_std,

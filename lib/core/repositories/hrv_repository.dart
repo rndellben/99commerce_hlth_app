@@ -144,8 +144,8 @@ class HrvRepositoryImpl implements HrvRepository {
   }
 
   @override
-  Future<void> softDeleteBefore(DateTime cutoff) async {
-    await (_db.update(_db.hrvSamples)
+  Future<int> softDeleteBefore(DateTime cutoff) async {
+    return (_db.update(_db.hrvSamples)
           ..where((t) =>
               t.capturedAtUtc.isSmallerThanValue(_toSec(cutoff)) &
               t.deletedAtUtc.isNull()))

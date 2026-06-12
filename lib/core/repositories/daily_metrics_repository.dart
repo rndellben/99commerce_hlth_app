@@ -34,6 +34,13 @@ abstract class DailyMetricsRepository {
     required String userId,
     required DateTime localDate,
   });
+
+  /// HLT-12: soft-delete (sets `deleted_at_utc`) any daily_metrics row
+  /// whose `local_date` is before `cutoff`. `localDate` is stored as TEXT
+  /// in ISO-8601 YYYY-MM-DD form, which sorts lexicographically the same
+  /// as chronologically — so a string compare is correct. Returns
+  /// affected row count.
+  Future<int> softDeleteBefore(DateTime cutoff);
 }
 
 class DailyMetricsRepositoryImpl implements DailyMetricsRepository {
@@ -208,6 +215,16 @@ class DailyMetricsRepositoryImpl implements DailyMetricsRepository {
         r.spo2OvernightAvg != null ||
         r.steps != null ||
         r.sleepTotalMin != null;
+  }
+
+  @override
+  Future<int> softDeleteBefore(DateTime cutoff) async {
+    return (_db.update(_db.dailyMetrics)
+          ..where((t) =>
+              t.localDate.isSmallerThanValue(_dateOnly(cutoff)) &
+              t.deletedAtUtc.isNull()))
+        .write(db.DailyMetricsCompanion(
+            deletedAtUtc: Value(_toSec(DateTime.now()))));
   }
 }
 

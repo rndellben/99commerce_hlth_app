@@ -40,6 +40,12 @@ class ActiveSession {
         ? await _deviceRepo.getByMacAddress(bandId)
         : null; // iOS peripheral lookup wired in onboarding step
     if (existing != null) {
+      // Re-pair after Forget: existing row is marked isActive=false. Flip
+      // it back on so getActiveForUser / the ★ Paired badge / My Device
+      // screen see the binding again.
+      if (!existing.isActive) {
+        await _deviceRepo.reactivate(existing.id);
+      }
       await _deviceRepo.updateConnectionState(
         deviceId: existing.id,
         lastConnectedAt: DateTime.now().toUtc(),

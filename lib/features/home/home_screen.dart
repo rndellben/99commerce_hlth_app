@@ -16,6 +16,14 @@ class HomeScreen extends ConsumerWidget {
     final today = ref.watch(todayDailyMetricsProvider).valueOrNull;
     final latestHr = ref.watch(latestHrSampleProvider).valueOrNull;
     final latestSpo2 = ref.watch(latestSpo2SampleProvider).valueOrNull;
+    final latestHrv = ref.watch(latestHrvSampleProvider).valueOrNull;
+    final latestBp = ref.watch(latestBpReadingProvider).valueOrNull;
+    final hrSpark = ref.watch(hrSparklineProvider).valueOrNull ?? const [];
+    final spo2Spark =
+        ref.watch(spo2SparklineProvider).valueOrNull ?? const [];
+    final hrvSpark = ref.watch(hrvSparklineProvider).valueOrNull ?? const [];
+    final bpSpark = ref.watch(bpSparklineProvider).valueOrNull ?? const [];
+    final todayLabel = _todayDateLabel();
 
     // Realtime HR (from band stream) takes precedence over stored samples.
     final ble = ref.watch(bleServiceProvider);
@@ -82,6 +90,8 @@ class HomeScreen extends ConsumerWidget {
                       unit: 'bpm',
                       icon: Icons.favorite,
                       color: AppColors.heartRate,
+                      date: todayLabel,
+                      sparkline: hrSpark,
                       onTap: () => context.push('/heart-rate'),
                     );
                   },
@@ -92,7 +102,40 @@ class HomeScreen extends ConsumerWidget {
                   unit: '%',
                   icon: Icons.air,
                   color: AppColors.spo2,
+                  date: todayLabel,
+                  sparkline: spo2Spark,
                   onTap: () => context.push('/spo2'),
+                ),
+                HealthMetricCard(
+                  title: 'Blood Pressure',
+                  value: latestBp == null
+                      ? '--'
+                      : '${latestBp.systolicMmhg}/${latestBp.diastolicMmhg}',
+                  unit: latestBp == null ? '' : 'mmHg',
+                  icon: Icons.monitor_heart_outlined,
+                  color: AppColors.bloodPressure,
+                  date: todayLabel,
+                  sparkline: bpSpark,
+                  onTap: () => context.push('/blood-pressure'),
+                ),
+                HealthMetricCard(
+                  title: 'HRV',
+                  value: latestHrv?.rmssdMs.toStringAsFixed(0) ??
+                      today?.hrvRmssdMs?.toStringAsFixed(0) ??
+                      '--',
+                  unit: 'ms',
+                  icon: Icons.show_chart,
+                  color: AppColors.respiratory,
+                  date: todayLabel,
+                  sparkline: hrvSpark,
+                ),
+                HealthMetricCard(
+                  title: 'One Key',
+                  value: 'Tap',
+                  unit: '',
+                  icon: Icons.touch_app,
+                  color: AppColors.recovery,
+                  onTap: () => context.push('/one-key'),
                 ),
                 HealthMetricCard(
                   title: 'Steps',
@@ -100,6 +143,7 @@ class HomeScreen extends ConsumerWidget {
                   unit: '',
                   icon: Icons.directions_walk,
                   color: AppColors.activity,
+                  date: todayLabel,
                   onTap: () => context.push('/activity'),
                 ),
                 HealthMetricCard(
@@ -118,13 +162,7 @@ class HomeScreen extends ConsumerWidget {
                   unit: 'bpm',
                   icon: Icons.monitor_heart,
                   color: AppColors.heartRate,
-                ),
-                HealthMetricCard(
-                  title: 'HRV',
-                  value: today?.hrvRmssdMs?.toStringAsFixed(0) ?? '--',
-                  unit: 'ms',
-                  icon: Icons.show_chart,
-                  color: AppColors.respiratory,
+                  date: todayLabel,
                 ),
                 HealthMetricCard(
                   title: 'Recovery',
@@ -188,6 +226,12 @@ class HomeScreen extends ConsumerWidget {
     final h = minutes ~/ 60;
     final m = minutes % 60;
     return '$h.${(m * 10 / 60).round()}';
+  }
+
+  String _todayDateLabel() {
+    final now = DateTime.now();
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${now.year}-${two(now.month)}-${two(now.day)}';
   }
 }
 

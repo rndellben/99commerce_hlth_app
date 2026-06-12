@@ -248,6 +248,13 @@ DailyMetrics? dailyStepsFromNative(
 
   final sessionId = _uuid.v4();
   final epochs = <SleepEpoch>[];
+  // Accumulators used to derive session-level fields the schema reserves
+  // (`coverageGapMin`, `hasUnweared`, `protocolVersion`) but the band
+  // doesn't return directly. We walk the epoch list once here instead of
+  // re-iterating downstream.
+  var coverageGapMin = 0;
+  var hasUnweared = false;
+  var sawRemEpoch = false;
   for (final raw in stagesRaw) {
     final m = Map<String, dynamic>.from(raw as Map);
     final start = (m['sleepStart'] as num?)?.toInt() ?? 0;
@@ -260,16 +267,35 @@ DailyMetrics? dailyStepsFromNative(
     final endMs = inMs ? end : end * 1000;
     final durMin = ((endMs - startMs) / 60000).round();
     if (durMin <= 0) continue;
+    final stage = _sleepStage(type);
+    if (stage == SleepStage.unweared || stage == SleepStage.noSleep) {
+      // Per hlth-db-schema.md §4.3: coverageGapMin is the unweared time
+      // *within* the sleep window. Type 5 (no_sleep/no_wear) is the
+      // canonical signal for that. Type 4 (REM) only fires on
+      // protocol v2 firmware, so its presence tells us the band is on
+      // the new protocol.
+      coverageGapMin += durMin;
+      hasUnweared = true;
+    }
+    if (stage == SleepStage.rem) sawRemEpoch = true;
     epochs.add(SleepEpoch(
       id: _uuid.v4(),
       sessionId: sessionId,
       userId: userId,
       startedAt: _utcFromMs(startMs),
       durationMin: durMin,
-      stage: _sleepStage(type),
+      stage: stage,
       source: DataSource.bandScheduled,
     ));
   }
+
+  // Protocol detection: H59 firmware exposes REM only on v2 ("new sleep
+  // protocol", per sdk_ring.pdf §4 `SetTimeRsp.mNewSleepProtocol`).
+  // Rather than thread the bootstrap flag through the platform channel,
+  // we infer from the payload — if either the rolled-up REM minutes are
+  // non-zero or any epoch is type=4 (REM), the band is on v2.
+  final isNewProtocol = remMin > 0 || sawRemEpoch;
+  final protocolVersion = isNewProtocol ? 2 : 1;
 
   final session = SleepSession(
     id: sessionId,
@@ -279,12 +305,14 @@ DailyMetrics? dailyStepsFromNative(
     endedAt: endedAt,
     tzOffsetMin: tz,
     type: SleepSessionType.night,
-    protocolVersion: 1,
+    protocolVersion: protocolVersion,
     totalMin: totalMin,
     deepMin: deepMin,
     lightMin: lightMin,
     remMin: remMin,
     awakeMin: awakeMin,
+    coverageGapMin: coverageGapMin,
+    hasUnweared: hasUnweared,
     source: DataSource.bandScheduled,
   );
   return (session: session, epochs: epochs);

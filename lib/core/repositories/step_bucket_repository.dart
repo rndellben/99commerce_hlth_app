@@ -25,6 +25,11 @@ abstract class StepBucketRepository {
     required DateTime localDate,
     required int tzOffsetMin,
   });
+
+  /// HLT-12: soft-delete (sets `deleted_at_utc`) any bucket whose
+  /// `bucket_start_at_utc` is older than `cutoff`. Returns affected row
+  /// count. Hard delete deferred until a backend-sync grace period needs it.
+  Future<int> softDeleteBefore(DateTime cutoff);
 }
 
 class StepBucketRepositoryImpl implements StepBucketRepository {
@@ -141,6 +146,16 @@ class StepBucketRepositoryImpl implements StepBucketRepository {
               _db.stepBuckets.deletedAtUtc.isNull()))
         .getSingle();
     return (row.read(sum) ?? 0).toInt();
+  }
+
+  @override
+  Future<int> softDeleteBefore(DateTime cutoff) async {
+    return (_db.update(_db.stepBuckets)
+          ..where((t) =>
+              t.bucketStartAtUtc.isSmallerThanValue(_toSec(cutoff)) &
+              t.deletedAtUtc.isNull()))
+        .write(db.StepBucketsCompanion(
+            deletedAtUtc: Value(_toSec(DateTime.now()))));
   }
 }
 

@@ -101,44 +101,99 @@ class SignalProcessor {
     return min(100.0, max(0.0, snrScore * 0.5 + regularityScore * 0.5));
   }
 
-  /// Detect heartbeat peaks in filtered PPG signal.
+  /// Detect heartbeat peaks in a bandpass-filtered PPG signal.
   ///
-  /// Follows hlth-engineering-primer.md Section 2 Stage 4 exactly.
-  /// For noisy real-world PPG (motion, loose fit), the primer recommends
-  /// the `heartpy` library — not parameter tweaks. We port the canonical
-  /// formula here and treat accuracy on noisy data as a Phase 4+ concern.
+  /// Ports `scipy.signal.find_peaks` semantics: collect strict local
+  /// maxima, then apply height → prominence → distance filters as
+  /// independent stages. Matches the reference pipeline at
+  /// `hlth_pipeline/pipeline/peaks.py` exactly.
+  ///
+  /// Thresholds (from `hlth-engineering-primer.md` §2 Stage 4):
+  ///   * `min_distance = (60/180) * fs`  — caps detected HR at 180 bpm
+  ///   * `height       = median + 0.3·σ` — must clear the noise floor
+  ///   * `prominence   = 0.1·σ`          — must stand out from neighbours
+  ///
+  /// Prominence is computed the scipy way (`peak_prominences`): from each
+  /// candidate, walk outward until a strictly-higher sample is found,
+  /// take the minimum along the way as the left/right base, prominence =
+  /// `peak − max(left_base, right_base)`. The previous Dart impl used a
+  /// fixed ±min_distance window for the local-min search, which grossly
+  /// underestimates real prominence and was the root cause of the
+  /// 4-7 peaks-per-30s under-count on H59 captures.
   List<int> detectPeaks(Float64List ppgFiltered) {
-    final minDistance = (0.33 * samplingRate).toInt(); // max 180 bpm
+    if (ppgFiltered.length < 3) return const [];
+
+    final minDistance = (0.33 * samplingRate).toInt();
     final median = _median(ppgFiltered);
     final std = _std(ppgFiltered.toList());
-    final threshold = median + 0.3 * std;
-    final prominence = 0.1 * std;
+    final heightThreshold = median + 0.3 * std;
+    final prominenceThreshold = 0.1 * std;
 
-    final peaks = <int>[];
-
+    // Stage 1: every strict local maximum is a candidate.
+    final candidates = <int>[];
     for (int i = 1; i < ppgFiltered.length - 1; i++) {
       if (ppgFiltered[i] > ppgFiltered[i - 1] &&
-          ppgFiltered[i] > ppgFiltered[i + 1] &&
-          ppgFiltered[i] > threshold) {
-        // Check prominence
-        final leftMin = _localMin(ppgFiltered, max(0, i - minDistance), i);
-        final rightMin = _localMin(
-            ppgFiltered, i, min(ppgFiltered.length - 1, i + minDistance));
-        final peakProminence =
-            ppgFiltered[i] - max(leftMin, rightMin);
+          ppgFiltered[i] > ppgFiltered[i + 1]) {
+        candidates.add(i);
+      }
+    }
+    if (candidates.isEmpty) return const [];
 
-        if (peakProminence > prominence) {
-          // Check distance from last peak
-          if (peaks.isEmpty || (i - peaks.last) >= minDistance) {
-            peaks.add(i);
-          } else if (ppgFiltered[i] > ppgFiltered[peaks.last]) {
-            peaks[peaks.length - 1] = i; // Replace with higher peak
-          }
-        }
+    // Stage 2: drop anything below the height floor.
+    // Stage 3: compute scipy-style prominence and drop below the floor.
+    final survivors = <int>[];
+    for (final idx in candidates) {
+      if (ppgFiltered[idx] <= heightThreshold) continue;
+      if (_peakProminence(ppgFiltered, idx) <= prominenceThreshold) continue;
+      survivors.add(idx);
+    }
+    if (survivors.isEmpty) return const [];
+
+    // Stage 4: distance filter (scipy `_select_by_peak_distance`). Walk
+    // surviving peaks in height-descending order; when a tall peak is
+    // kept, mark any shorter peak inside ±min_distance as removed. This
+    // resolves clusters of close maxima without the buggy "replace on the
+    // fly" logic of the previous implementation.
+    final keep = List<bool>.filled(survivors.length, true);
+    final orderByHeight = List<int>.generate(survivors.length, (i) => i)
+      ..sort((a, b) => ppgFiltered[survivors[b]]
+          .compareTo(ppgFiltered[survivors[a]]));
+    for (final k in orderByHeight) {
+      if (!keep[k]) continue;
+      final myIdx = survivors[k];
+      for (int j = 0; j < survivors.length; j++) {
+        if (j == k || !keep[j]) continue;
+        if ((survivors[j] - myIdx).abs() < minDistance) keep[j] = false;
       }
     }
 
-    return peaks;
+    final result = <int>[];
+    for (int k = 0; k < survivors.length; k++) {
+      if (keep[k]) result.add(survivors[k]);
+    }
+    return result;
+  }
+
+  /// scipy-style prominence: walk outward from `peak` until a sample
+  /// strictly higher than the peak is hit (or the signal boundary), then
+  /// take the minimum value seen on each side. Prominence is the peak
+  /// height minus the higher of the two side-minima.
+  double _peakProminence(Float64List signal, int peak) {
+    final h = signal[peak];
+
+    double leftMin = h;
+    for (int i = peak - 1; i >= 0; i--) {
+      if (signal[i] > h) break;
+      if (signal[i] < leftMin) leftMin = signal[i];
+    }
+
+    double rightMin = h;
+    for (int i = peak + 1; i < signal.length; i++) {
+      if (signal[i] > h) break;
+      if (signal[i] < rightMin) rightMin = signal[i];
+    }
+
+    return h - max(leftMin, rightMin);
   }
 
   /// Extract R-R intervals in milliseconds from peak indices.
@@ -211,13 +266,6 @@ class SignalProcessor {
     return sqrt(sumSquaredDiffs / data.length);
   }
 
-  double _localMin(Float64List data, int start, int end) {
-    double minVal = double.infinity;
-    for (int i = start; i <= end && i < data.length; i++) {
-      if (data[i] < minVal) minVal = data[i];
-    }
-    return minVal;
-  }
 }
 
 class _BiquadCoeffs {
