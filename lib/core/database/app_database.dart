@@ -34,6 +34,7 @@ part 'app_database.g.dart';
     SleepEpochs,
     Baselines,
     SyncState,
+    CloudSyncOutbox,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -42,7 +43,7 @@ class AppDatabase extends _$AppDatabase {
   /// Bump on every schema change. Add a migration step in
   /// `migration` below. See hlth-db-schema.md §"Schema versioning".
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -60,6 +61,10 @@ class AppDatabase extends _$AppDatabase {
             await customStatement(
               'CREATE UNIQUE INDEX IF NOT EXISTS idx_stress_dedup ON stress_samples(user_id, device_id, captured_at_utc, source)',
             );
+          }
+          // v2 → v3: add cloud_sync_outbox table for Supabase sync
+          if (from < 3) {
+            await m.createTable(cloudSyncOutbox);
           }
         },
       );

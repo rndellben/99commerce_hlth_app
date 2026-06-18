@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hlth_app/core/auth/current_user_provider.dart';
+import 'package:hlth_app/core/config/region_detector.dart';
+import 'package:hlth_app/core/services/consent_service.dart';
 import 'package:hlth_app/features/activity/activity_screen.dart';
 import 'package:hlth_app/features/auth/auth_screen.dart';
 import 'package:hlth_app/features/auth/privacy_screen.dart';
@@ -29,6 +31,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   final notifier = _RouterRefreshNotifier();
   ref.listen(userProfileProvider, (_, __) => notifier.bump());
   ref.listen(authStateProvider, (_, __) => notifier.bump());
+  ref.listen(hasRequiredConsentProvider, (_, __) => notifier.bump());
   ref.onDispose(notifier.dispose);
 
   return GoRouter(
@@ -59,6 +62,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final atOnboarding = loc == '/onboarding';
       if (!hasProfile && !atOnboarding) return '/onboarding';
       if (hasProfile && atOnboarding) return '/';
+
+      // Consent gate: if geo config requires explicit consent and
+      // the user hasn't granted it yet, redirect to onboarding.
+      final geoConfig = ref.read(geoConfigProvider);
+      if (geoConfig.requiresExplicitConsent) {
+        final hasConsent =
+            ref.read(hasRequiredConsentProvider).valueOrNull ?? true;
+        if (!hasConsent && !atOnboarding && loc != '/privacy') {
+          return '/onboarding';
+        }
+      }
+
       return null;
     },
     routes: [

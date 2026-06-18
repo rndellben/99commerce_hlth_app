@@ -5,6 +5,8 @@ import 'package:hlth_app/core/models/daily_metrics.dart';
 
 /// hlth-repository-api.md §4.6
 abstract class DailyMetricsRepository {
+  Future<DailyMetrics?> getById(String id);
+
   Future<DailyMetrics?> getForDay({
     required String userId,
     required DateTime localDate,
@@ -51,6 +53,14 @@ class DailyMetricsRepositoryImpl implements DailyMetricsRepository {
   DateTime _toDt(int sec) =>
       DateTime.fromMillisecondsSinceEpoch(sec * 1000, isUtc: true);
   String _dateOnly(DateTime dt) => dt.toIso8601String().substring(0, 10);
+
+  @override
+  Future<DailyMetrics?> getById(String id) async {
+    final row = await (_db.select(_db.dailyMetrics)
+          ..where((t) => t.id.equals(id)))
+        .getSingleOrNull();
+    return row == null ? null : _rowToDomain(row);
+  }
 
   DailyMetrics _rowToDomain(db.DailyMetric r) => DailyMetrics(
         id: r.id,

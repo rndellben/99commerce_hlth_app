@@ -1,8 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hlth_app/core/bootstrap/active_session.dart';
+import 'package:hlth_app/core/models/entitlement.dart';
 import 'package:hlth_app/core/repositories/baseline_repository.dart';
 import 'package:hlth_app/core/repositories/device_repository.dart';
 import 'package:hlth_app/core/services/baseline_service.dart';
+import 'package:hlth_app/core/services/entitlement_service.dart';
 
 /// Progressive feature unlock per hlth-onboarding-timeline.md.
 ///
@@ -19,10 +21,16 @@ class FeatureGate {
   FeatureGate({
     required this.daysSinceFirstWear,
     this.baselineEstablished = const {},
+    this.tier = SubscriptionTier.free,
   });
 
   final int daysSinceFirstWear;
   final Map<String, bool> baselineEstablished;
+
+  /// Subscription tier — gates server-side premium features.
+  final SubscriptionTier tier;
+
+  bool get _isPremium => tier == SubscriptionTier.premium;
 
   bool _baseline(String metric) => baselineEstablished[metric] ?? false;
 
@@ -90,6 +98,13 @@ class FeatureGate {
   // ── Day 90+ — longevity / trends ────────────────────────────────────────
   bool get longTermTrends => daysSinceFirstWear >= 90;
 
+  // ── Premium (server-side) features ──────────────────────────────────────
+  bool get aiInsights => _isPremium;
+  bool get advancedSleepScoring => _isPremium && daysSinceFirstWear >= 7;
+  bool get healthRiskPredictions => _isPremium && daysSinceFirstWear >= 30;
+  bool get crossMetricCorrelations => _isPremium && daysSinceFirstWear >= 14;
+  bool get trendAnalysis => _isPremium && longTermTrends;
+
   // ── UX helpers ──────────────────────────────────────────────────────────
   int get daysUntilRecovery => _daysUntil(14);
   int get daysUntilIllnessWarning => _daysUntil(30);
@@ -135,11 +150,13 @@ final featureGateProvider = Provider<FeatureGate>((ref) {
   final firstWear = ref.watch(firstWearDateProvider).valueOrNull;
   final baselines =
       ref.watch(baselineEstablishedProvider).valueOrNull ?? const {};
+  final entitlement = ref.watch(entitlementProvider).valueOrNull;
   final days = firstWear == null
       ? 0
       : DateTime.now().toUtc().difference(firstWear.toUtc()).inDays;
   return FeatureGate(
     daysSinceFirstWear: days,
     baselineEstablished: baselines,
+    tier: entitlement?.effectiveTier ?? SubscriptionTier.free,
   );
 });

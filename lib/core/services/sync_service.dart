@@ -13,6 +13,8 @@ import 'package:hlth_app/core/repositories/step_bucket_repository.dart';
 import 'package:hlth_app/core/repositories/stress_repository.dart';
 import 'package:hlth_app/core/processing/fall_detector.dart';
 import 'package:hlth_app/core/services/daily_aggregator.dart';
+import 'package:hlth_app/core/auth/current_user_provider.dart';
+import 'package:hlth_app/core/services/cloud_sync_service.dart';
 import 'package:hlth_app/core/services/retention_sweep_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math' as math;
@@ -95,6 +97,7 @@ class SyncService {
     required this.stepBucketRepo,
     required this.dailyRepo,
     required this.aggregator,
+    required this.cloudSync,
   });
 
   final BleService ble;
@@ -106,6 +109,7 @@ class SyncService {
   final StepBucketRepository stepBucketRepo;
   final DailyMetricsRepository dailyRepo;
   final DailyAggregator aggregator;
+  final CloudSyncService cloudSync;
 
   /// Runs every band sync in sequence, then re-aggregates the last 14
   /// days into `daily_metrics`. Continues past individual failures.
@@ -137,6 +141,15 @@ class SyncService {
       // Aggregation failures are logged as a non-fatal step result
       // rather than thrown; the next run will retry.
     }
+
+    // Enqueue recent metrics for cloud sync (non-fatal).
+    try {
+      await cloudSync.enqueueRecentMetrics(userId: userId);
+      await cloudSync.enqueueIdentity(userId: userId);
+    } catch (_) {
+      // Cloud enqueue failure shouldn't break band sync.
+    }
+
     return SyncRunResult(steps: steps, aggregated: aggregated);
   }
 
@@ -434,6 +447,7 @@ final syncServiceProvider = Provider<SyncService>((ref) {
     stepBucketRepo: ref.watch(stepBucketRepositoryProvider),
     dailyRepo: ref.watch(dailyMetricsRepositoryProvider),
     aggregator: ref.watch(dailyAggregatorProvider),
+    cloudSync: ref.watch(cloudSyncServiceProvider),
   );
 });
 
@@ -454,6 +468,8 @@ class PeriodicSyncCoordinator {
     required this.deviceRepo,
     required this.retentionSweep,
     required this.ble,
+    required this.cloudSync,
+    required this.authUserIdReader,
     required Stream<void> tickStream,
     this.fallSweepDuration = const Duration(seconds: 30),
     FallDetector? fallDetector,
@@ -470,6 +486,8 @@ class PeriodicSyncCoordinator {
   final DeviceRepository deviceRepo;
   final RetentionSweepService retentionSweep;
   final BleService ble;
+  final CloudSyncService cloudSync;
+  final String? Function() authUserIdReader;
   final Duration fallSweepDuration;
   final FallDetector _fallDetector;
   StreamSubscription<void>? _tickSub;
@@ -530,6 +548,13 @@ class PeriodicSyncCoordinator {
       if (device == null) return;
       final result = await _runSyncWithRetention(device.id);
       _runs.add(result);
+      // Drain cloud outbox after band sync (non-fatal).
+      try {
+        final authUid = authUserIdReader();
+        if (authUid != null) {
+          await cloudSync.processOutbox(authUserId: authUid);
+        }
+      } catch (_) {}
       // HLT-5: run the background fall sweep once data sync is done.
       // Sequenced after sync so we never have two `startMeasureHrRaw`
       // sessions racing for the same BLE link.
@@ -746,6 +771,8 @@ final periodicSyncCoordinatorProvider =
     deviceRepo: ref.watch(deviceRepositoryProvider),
     retentionSweep: ref.watch(retentionSweepServiceProvider),
     ble: ble,
+    cloudSync: ref.watch(cloudSyncServiceProvider),
+    authUserIdReader: () => ref.read(currentUserIdProvider),
     tickStream: ble.periodicSyncTick,
   );
   ref.onDispose(coord.dispose);
