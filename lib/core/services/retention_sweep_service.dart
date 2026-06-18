@@ -6,6 +6,7 @@ import 'package:hlth_app/core/repositories/hrv_repository.dart';
 import 'package:hlth_app/core/repositories/sleep_repository.dart';
 import 'package:hlth_app/core/repositories/spo2_repository.dart';
 import 'package:hlth_app/core/repositories/step_bucket_repository.dart';
+import 'package:hlth_app/core/repositories/stress_repository.dart';
 
 /// Per-table sweep result. `error` non-null on failure; count is the
 /// number of rows soft-deleted on this pass.
@@ -58,6 +59,7 @@ class RetentionSweepService {
   RetentionSweepService({
     required this.hrRepo,
     required this.hrvRepo,
+    required this.stressRepo,
     required this.spo2Repo,
     required this.bpRepo,
     required this.stepBucketRepo,
@@ -67,6 +69,7 @@ class RetentionSweepService {
 
   final HrRepository hrRepo;
   final HrvRepository hrvRepo;
+  final StressRepository stressRepo;
   final Spo2Repository spo2Repo;
   final BpRepository bpRepo;
   final StepBucketRepository stepBucketRepo;
@@ -89,6 +92,7 @@ class RetentionSweepService {
     final steps = <RetentionSweepStepResult>[
       await _sweep('hr_samples', () => hrRepo.softDeleteBefore(rawCutoff)),
       await _sweep('hrv_samples', () => hrvRepo.softDeleteBefore(rawCutoff)),
+      await _sweep('stress_samples', () => stressRepo.softDeleteBefore(rawCutoff)),
       await _sweep('spo2_samples', () => spo2Repo.softDeleteBefore(rawCutoff)),
       await _sweep('bp_readings', () => bpRepo.softDeleteBefore(rawCutoff)),
       await _sweep(
@@ -132,6 +136,7 @@ final retentionSweepServiceProvider = Provider<RetentionSweepService>((ref) {
   return RetentionSweepService(
     hrRepo: ref.watch(hrRepositoryProvider),
     hrvRepo: ref.watch(hrvRepositoryProvider),
+    stressRepo: ref.watch(stressRepositoryProvider),
     spo2Repo: ref.watch(spo2RepositoryProvider),
     bpRepo: ref.watch(bpRepositoryProvider),
     stepBucketRepo: ref.watch(stepBucketRepositoryProvider),

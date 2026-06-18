@@ -18,11 +18,14 @@ class HomeScreen extends ConsumerWidget {
     final latestSpo2 = ref.watch(latestSpo2SampleProvider).valueOrNull;
     final latestHrv = ref.watch(latestHrvSampleProvider).valueOrNull;
     final latestBp = ref.watch(latestBpReadingProvider).valueOrNull;
+    final latestStress = ref.watch(latestStressSampleProvider).valueOrNull;
     final hrSpark = ref.watch(hrSparklineProvider).valueOrNull ?? const [];
     final spo2Spark =
         ref.watch(spo2SparklineProvider).valueOrNull ?? const [];
     final hrvSpark = ref.watch(hrvSparklineProvider).valueOrNull ?? const [];
     final bpSpark = ref.watch(bpSparklineProvider).valueOrNull ?? const [];
+    final stressSpark =
+        ref.watch(stressSparklineProvider).valueOrNull ?? const [];
     final todayLabel = _todayDateLabel();
 
     // Realtime HR (from band stream) takes precedence over stored samples.
@@ -128,6 +131,17 @@ class HomeScreen extends ConsumerWidget {
                   color: AppColors.respiratory,
                   date: todayLabel,
                   sparkline: hrvSpark,
+                  onTap: () => context.push('/hrv'),
+                ),
+                HealthMetricCard(
+                  title: 'Stress',
+                  value: latestStress?.stressScore.toString() ?? '--',
+                  unit: latestStress == null ? '' : _stressLabel(latestStress.stressScore),
+                  icon: Icons.spa_outlined,
+                  color: AppColors.warning,
+                  date: todayLabel,
+                  sparkline: stressSpark,
+                  onTap: () => context.push('/stress'),
                 ),
                 HealthMetricCard(
                   title: 'One Key',
@@ -232,6 +246,13 @@ class HomeScreen extends ConsumerWidget {
     final now = DateTime.now();
     String two(int n) => n.toString().padLeft(2, '0');
     return '${now.year}-${two(now.month)}-${two(now.day)}';
+  }
+
+  String _stressLabel(int score) {
+    if (score < 30) return 'Relax';
+    if (score < 60) return 'Normal';
+    if (score < 80) return 'Medium';
+    return 'High';
   }
 }
 

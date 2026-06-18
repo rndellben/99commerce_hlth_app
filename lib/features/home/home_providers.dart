@@ -7,6 +7,7 @@ import 'package:hlth_app/core/repositories/daily_metrics_repository.dart';
 import 'package:hlth_app/core/repositories/hr_repository.dart';
 import 'package:hlth_app/core/repositories/hrv_repository.dart';
 import 'package:hlth_app/core/repositories/spo2_repository.dart';
+import 'package:hlth_app/core/repositories/stress_repository.dart';
 
 /// Today's `daily_metrics` row (null until the aggregator has run).
 final todayDailyMetricsProvider = StreamProvider<DailyMetrics?>((ref) {
@@ -39,6 +40,12 @@ final latestHrvSampleProvider = StreamProvider<HrvSample?>((ref) {
 /// Latest stored BP reading.
 final latestBpReadingProvider = StreamProvider<BpReading?>((ref) {
   final repo = ref.watch(bpRepositoryProvider);
+  return repo.watchLatest(userId: ActiveSession.defaultUserId);
+});
+
+/// Latest stored stress sample.
+final latestStressSampleProvider = StreamProvider<StressSample?>((ref) {
+  final repo = ref.watch(stressRepositoryProvider);
   return repo.watchLatest(userId: ActiveSession.defaultUserId);
 });
 
@@ -93,4 +100,28 @@ final bpSparklineProvider = StreamProvider<List<double>>((ref) {
         to: DateTime.now().toUtc(),
       )
       .map((rows) => rows.map((r) => r.systolicMmhg.toDouble()).toList());
+});
+
+final stressSparklineProvider = StreamProvider<List<double>>((ref) {
+  final repo = ref.watch(stressRepositoryProvider);
+  return repo
+      .watchInRange(
+        userId: ActiveSession.defaultUserId,
+        from: _last24hCutoff(),
+        to: DateTime.now().toUtc(),
+      )
+      .map((rows) => rows.map((r) => r.stressScore.toDouble()).toList());
+});
+
+/// Today's stress samples (full day) — for the Day tab on the detail screen.
+final todayStressSamplesProvider = StreamProvider<List<StressSample>>((ref) {
+  final repo = ref.watch(stressRepositoryProvider);
+  final now = DateTime.now();
+  final start = DateTime(now.year, now.month, now.day).toUtc();
+  final end = start.add(const Duration(days: 1));
+  return repo.watchInRange(
+    userId: ActiveSession.defaultUserId,
+    from: start,
+    to: end,
+  );
 });

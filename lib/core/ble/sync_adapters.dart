@@ -129,6 +129,65 @@ List<HrvSample> hrvFromNative(
   return out;
 }
 
+/// Stress ("pressure") — native shape:
+/// `{values: [N slots 0-100], intervalMinutes, offset, zeroTimeMs, rawArray}`.
+///
+/// Slot timestamping prefers `zeroTimeMs` from the band's `PressureRsp.today`
+/// field — that's the band's own midnight-of-the-day anchor for this batch.
+/// Using it correctly handles the H59 wear-day quirk where day 0 (today)
+/// is empty and day 1 returns 65+ slots spanning yesterday + today: the
+/// band tells us what date the first slot belongs to and we just trust it.
+/// Falls back to `now() - dayOffset days` if zeroTimeMs is null (older fw).
+List<StressSample> stressFromNative(
+  Map<String, dynamic> native, {
+  required String userId,
+  required String deviceId,
+  required DateTime forDate,
+  int? tzOffsetMin,
+}) {
+  final values = (native['values'] as List?)?.cast<num>() ?? const [];
+  final intervalMin = (native['intervalMinutes'] as num?)?.toInt() ?? 30;
+  if (values.isEmpty) return const [];
+  final tz = tzOffsetMin ?? _localTzOffsetMin();
+
+  // Prefer band-supplied anchor. SDK's `DateUtil.getZeroTime()` returns
+  // unix SECONDS at the band's local midnight (despite the name, it's
+  // not ms — verified 2026-06-12 with bandDay=2026-6-11 zeroTime=1781107200
+  // which is 2026-06-10 16:00 UTC, i.e. 2026-06-11 00:00 in UTC+8 local).
+  // Multiply by 1000 to get a UTC instant; that IS dayStartUtc for slots.
+  final zeroTimeSec = (native['zeroTimeMs'] as num?)?.toInt();
+  final DateTime dayStartUtc;
+  if (zeroTimeSec != null && zeroTimeSec > 0) {
+    dayStartUtc = DateTime.fromMillisecondsSinceEpoch(
+      zeroTimeSec * 1000,
+      isUtc: true,
+    );
+  } else {
+    final localMidnightAsUtc =
+        DateTime.utc(forDate.year, forDate.month, forDate.day);
+    dayStartUtc = localMidnightAsUtc.subtract(Duration(minutes: tz));
+  }
+
+  final out = <StressSample>[];
+  for (var i = 0; i < values.length; i++) {
+    final v = values[i].toInt();
+    if (v <= 0) continue; // 0 = no measurement that slot
+    if (v > 100) continue; // out of range — band protocol caps at 100
+    out.add(StressSample(
+      id: _uuid.v4(),
+      userId: userId,
+      deviceId: deviceId,
+      capturedAt: dayStartUtc.add(Duration(minutes: i * intervalMin)),
+      tzOffsetMin: tz,
+      stressScore: v,
+      rangeMin: intervalMin,
+      source: DataSource.bandScheduled,
+      algorithmVersion: _algoVersion,
+    ));
+  }
+  return out;
+}
+
 /// 15-minute step buckets — native shape: list of
 ///   `{year, month, day, timeIndex (0-95), walkSteps, runSteps, calorie, distance}`.
 ///

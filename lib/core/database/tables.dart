@@ -136,6 +136,28 @@ class HrvSamples extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+/// Stress samples — band-side "pressure" feature, mirrors HRV shape.
+/// Each sample is one slot in the band's scheduled pressureArray (typically
+/// 30-min slot resolution, value 0-100). Source PressureRsp via
+/// BleOperateManager.getPressure(dayIdx, ...).
+class StressSamples extends Table {
+  TextColumn get id => text()();
+  TextColumn get userId => text().references(Users, #id)();
+  TextColumn get deviceId => text().references(Devices, #id)();
+  IntColumn get capturedAtUtc => integer()();
+  IntColumn get capturedTzOffsetMin => integer()();
+  IntColumn get source => intEnum<DataSource>()();
+  IntColumn get quality => integer().nullable()();
+  TextColumn get algorithmVersion => text().nullable()();
+  IntColumn get createdAtUtc => integer()();
+  IntColumn get deletedAtUtc => integer().nullable()();
+  IntColumn get stressScore => integer()(); // 0-100
+  IntColumn get rangeMin => integer()(); // slot duration (typically 30)
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 /// hlth-db-schema.md §3.4
 class Spo2Samples extends Table {
   TextColumn get id => text()();

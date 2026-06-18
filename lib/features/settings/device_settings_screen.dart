@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hlth_app/core/ble/ble_service.dart';
 import 'package:hlth_app/core/bootstrap/active_session.dart';
 import 'package:hlth_app/core/models/device.dart';
 import 'package:hlth_app/core/repositories/device_repository.dart';
@@ -23,11 +24,18 @@ class DeviceSettingsScreen extends ConsumerStatefulWidget {
 class _DeviceSettingsScreenState extends ConsumerState<DeviceSettingsScreen> {
   Device? _bound;
   bool _loading = true;
+  bool _connecting = false;
 
   @override
   void initState() {
     super.initState();
     _load();
+    // Kick off a one-shot battery poll so the row isn't stuck at "—"
+    // when the band is already connected. No-op when disconnected; the
+    // native side will retry after the next reconnect bootstrap.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(bleServiceProvider).requestBattery();
+    });
   }
 
   Future<void> _load() async {
@@ -86,6 +94,26 @@ class _DeviceSettingsScreenState extends ConsumerState<DeviceSettingsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Renamed to "$newName"')),
       );
+    }
+  }
+
+  Future<void> _connect() async {
+    final bound = _bound;
+    if (bound == null || bound.macAddress == null) return;
+    setState(() => _connecting = true);
+    try {
+      await ref.read(bleServiceProvider).connect(bound.macAddress!);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Connecting to band…')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Connect failed: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _connecting = false);
     }
   }
 
@@ -151,15 +179,15 @@ class _DeviceSettingsScreenState extends ConsumerState<DeviceSettingsScreen> {
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             const Text(
-              'Pair your HLTH band from the BLE Debug screen to get started.',
+              'Tap below to scan for your HLTH band.',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey),
             ),
             const SizedBox(height: 24),
             FilledButton.icon(
-              icon: const Icon(Icons.bluetooth),
-              label: const Text('Open BLE Debug'),
-              onPressed: () => context.push('/debug'),
+              icon: const Icon(Icons.bluetooth_searching),
+              label: const Text('Pair Device'),
+              onPressed: () => context.push('/pairing'),
             ),
           ],
         ),
@@ -168,6 +196,12 @@ class _DeviceSettingsScreenState extends ConsumerState<DeviceSettingsScreen> {
   }
 
   Widget _buildBoundState(BuildContext context, Device d) {
+    final ble = ref.watch(bleServiceProvider);
+    final connStateAsync = ref.watch(bleConnectionStateProvider);
+    final connected = connStateAsync.maybeWhen(
+      data: (s) => s == BleConnectionState.connected,
+      orElse: () => false,
+    );
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
@@ -179,13 +213,33 @@ class _DeviceSettingsScreenState extends ConsumerState<DeviceSettingsScreen> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.bluetooth_connected,
-                        color: AppColors.primary),
+                    Icon(
+                      connected
+                          ? Icons.bluetooth_connected
+                          : Icons.bluetooth_disabled,
+                      color: connected
+                          ? AppColors.primary
+                          : AppColors.textTertiary,
+                    ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Text(
-                        d.displayName,
-                        style: Theme.of(context).textTheme.titleLarge,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            d.displayName,
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                          Text(
+                            connected ? 'Connected' : 'Disconnected',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: connected
+                                  ? AppColors.success
+                                  : AppColors.textTertiary,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -197,8 +251,48 @@ class _DeviceSettingsScreenState extends ConsumerState<DeviceSettingsScreen> {
                 _kv('Last connected',
                     d.lastConnectedAt == null ? '—' : _fmtDate(d.lastConnectedAt!)),
                 _kv('Firmware', d.firmwareVersion ?? '—'),
-                _kv('Battery',
-                    d.lastBatteryPercent == null ? '—' : '${d.lastBatteryPercent}%'),
+                StreamBuilder<({int level, bool charging})>(
+                  stream: ble.batteryUpdate,
+                  builder: (context, snap) {
+                    final live = snap.data;
+                    final label = live != null
+                        ? '${live.level}%${live.charging ? ' · Charging' : ''}'
+                        : d.lastBatteryPercent == null
+                            ? '—'
+                            : '${d.lastBatteryPercent}% (last)';
+                    return _kv('Battery', label);
+                  },
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    icon: _connecting
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Icon(connected
+                            ? Icons.check_circle
+                            : Icons.bluetooth),
+                    label: Text(
+                      _connecting
+                          ? 'Connecting…'
+                          : connected
+                              ? 'Connected'
+                              : 'Connect',
+                    ),
+                    onPressed: (_connecting || connected) ? null : _connect,
+                    style: FilledButton.styleFrom(
+                      backgroundColor:
+                          connected ? AppColors.success : AppColors.primary,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -211,11 +305,19 @@ class _DeviceSettingsScreenState extends ConsumerState<DeviceSettingsScreen> {
           onTap: _rename,
         ),
         ListTile(
+          leading: const Icon(Icons.bluetooth_searching,
+              color: AppColors.primary),
+          title: const Text('Pair another device'),
+          subtitle: const Text('Set up a new ring or switch bands'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => context.push('/pairing'),
+        ),
+        ListTile(
           leading: const Icon(Icons.delete_forever, color: Colors.red),
           title: const Text('Forget device',
               style: TextStyle(color: Colors.red)),
           subtitle: const Text(
-              'Break the pairing. Health data is kept; re-pair from BLE Debug.'),
+              'Break the pairing. Health data is kept; pair again from above.'),
           onTap: _forget,
         ),
       ],

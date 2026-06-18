@@ -781,6 +781,348 @@ abstract class _HrvSample implements HrvSample {
 }
 
 /// @nodoc
+mixin _$StressSample {
+  String get id => throw _privateConstructorUsedError;
+  String get userId => throw _privateConstructorUsedError;
+  String get deviceId => throw _privateConstructorUsedError;
+  DateTime get capturedAt => throw _privateConstructorUsedError;
+  int get tzOffsetMin => throw _privateConstructorUsedError;
+  int get stressScore => throw _privateConstructorUsedError;
+  int get rangeMin => throw _privateConstructorUsedError;
+  DataSource get source => throw _privateConstructorUsedError;
+  int? get quality => throw _privateConstructorUsedError;
+  String? get algorithmVersion => throw _privateConstructorUsedError;
+
+  /// Create a copy of StressSample
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $StressSampleCopyWith<StressSample> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $StressSampleCopyWith<$Res> {
+  factory $StressSampleCopyWith(
+    StressSample value,
+    $Res Function(StressSample) then,
+  ) = _$StressSampleCopyWithImpl<$Res, StressSample>;
+  @useResult
+  $Res call({
+    String id,
+    String userId,
+    String deviceId,
+    DateTime capturedAt,
+    int tzOffsetMin,
+    int stressScore,
+    int rangeMin,
+    DataSource source,
+    int? quality,
+    String? algorithmVersion,
+  });
+}
+
+/// @nodoc
+class _$StressSampleCopyWithImpl<$Res, $Val extends StressSample>
+    implements $StressSampleCopyWith<$Res> {
+  _$StressSampleCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of StressSample
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? id = null,
+    Object? userId = null,
+    Object? deviceId = null,
+    Object? capturedAt = null,
+    Object? tzOffsetMin = null,
+    Object? stressScore = null,
+    Object? rangeMin = null,
+    Object? source = null,
+    Object? quality = freezed,
+    Object? algorithmVersion = freezed,
+  }) {
+    return _then(
+      _value.copyWith(
+            id: null == id
+                ? _value.id
+                : id // ignore: cast_nullable_to_non_nullable
+                      as String,
+            userId: null == userId
+                ? _value.userId
+                : userId // ignore: cast_nullable_to_non_nullable
+                      as String,
+            deviceId: null == deviceId
+                ? _value.deviceId
+                : deviceId // ignore: cast_nullable_to_non_nullable
+                      as String,
+            capturedAt: null == capturedAt
+                ? _value.capturedAt
+                : capturedAt // ignore: cast_nullable_to_non_nullable
+                      as DateTime,
+            tzOffsetMin: null == tzOffsetMin
+                ? _value.tzOffsetMin
+                : tzOffsetMin // ignore: cast_nullable_to_non_nullable
+                      as int,
+            stressScore: null == stressScore
+                ? _value.stressScore
+                : stressScore // ignore: cast_nullable_to_non_nullable
+                      as int,
+            rangeMin: null == rangeMin
+                ? _value.rangeMin
+                : rangeMin // ignore: cast_nullable_to_non_nullable
+                      as int,
+            source: null == source
+                ? _value.source
+                : source // ignore: cast_nullable_to_non_nullable
+                      as DataSource,
+            quality: freezed == quality
+                ? _value.quality
+                : quality // ignore: cast_nullable_to_non_nullable
+                      as int?,
+            algorithmVersion: freezed == algorithmVersion
+                ? _value.algorithmVersion
+                : algorithmVersion // ignore: cast_nullable_to_non_nullable
+                      as String?,
+          )
+          as $Val,
+    );
+  }
+}
+
+/// @nodoc
+abstract class _$$StressSampleImplCopyWith<$Res>
+    implements $StressSampleCopyWith<$Res> {
+  factory _$$StressSampleImplCopyWith(
+    _$StressSampleImpl value,
+    $Res Function(_$StressSampleImpl) then,
+  ) = __$$StressSampleImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call({
+    String id,
+    String userId,
+    String deviceId,
+    DateTime capturedAt,
+    int tzOffsetMin,
+    int stressScore,
+    int rangeMin,
+    DataSource source,
+    int? quality,
+    String? algorithmVersion,
+  });
+}
+
+/// @nodoc
+class __$$StressSampleImplCopyWithImpl<$Res>
+    extends _$StressSampleCopyWithImpl<$Res, _$StressSampleImpl>
+    implements _$$StressSampleImplCopyWith<$Res> {
+  __$$StressSampleImplCopyWithImpl(
+    _$StressSampleImpl _value,
+    $Res Function(_$StressSampleImpl) _then,
+  ) : super(_value, _then);
+
+  /// Create a copy of StressSample
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? id = null,
+    Object? userId = null,
+    Object? deviceId = null,
+    Object? capturedAt = null,
+    Object? tzOffsetMin = null,
+    Object? stressScore = null,
+    Object? rangeMin = null,
+    Object? source = null,
+    Object? quality = freezed,
+    Object? algorithmVersion = freezed,
+  }) {
+    return _then(
+      _$StressSampleImpl(
+        id: null == id
+            ? _value.id
+            : id // ignore: cast_nullable_to_non_nullable
+                  as String,
+        userId: null == userId
+            ? _value.userId
+            : userId // ignore: cast_nullable_to_non_nullable
+                  as String,
+        deviceId: null == deviceId
+            ? _value.deviceId
+            : deviceId // ignore: cast_nullable_to_non_nullable
+                  as String,
+        capturedAt: null == capturedAt
+            ? _value.capturedAt
+            : capturedAt // ignore: cast_nullable_to_non_nullable
+                  as DateTime,
+        tzOffsetMin: null == tzOffsetMin
+            ? _value.tzOffsetMin
+            : tzOffsetMin // ignore: cast_nullable_to_non_nullable
+                  as int,
+        stressScore: null == stressScore
+            ? _value.stressScore
+            : stressScore // ignore: cast_nullable_to_non_nullable
+                  as int,
+        rangeMin: null == rangeMin
+            ? _value.rangeMin
+            : rangeMin // ignore: cast_nullable_to_non_nullable
+                  as int,
+        source: null == source
+            ? _value.source
+            : source // ignore: cast_nullable_to_non_nullable
+                  as DataSource,
+        quality: freezed == quality
+            ? _value.quality
+            : quality // ignore: cast_nullable_to_non_nullable
+                  as int?,
+        algorithmVersion: freezed == algorithmVersion
+            ? _value.algorithmVersion
+            : algorithmVersion // ignore: cast_nullable_to_non_nullable
+                  as String?,
+      ),
+    );
+  }
+}
+
+/// @nodoc
+
+class _$StressSampleImpl implements _StressSample {
+  const _$StressSampleImpl({
+    required this.id,
+    required this.userId,
+    required this.deviceId,
+    required this.capturedAt,
+    required this.tzOffsetMin,
+    required this.stressScore,
+    required this.rangeMin,
+    required this.source,
+    this.quality,
+    this.algorithmVersion,
+  });
+
+  @override
+  final String id;
+  @override
+  final String userId;
+  @override
+  final String deviceId;
+  @override
+  final DateTime capturedAt;
+  @override
+  final int tzOffsetMin;
+  @override
+  final int stressScore;
+  @override
+  final int rangeMin;
+  @override
+  final DataSource source;
+  @override
+  final int? quality;
+  @override
+  final String? algorithmVersion;
+
+  @override
+  String toString() {
+    return 'StressSample(id: $id, userId: $userId, deviceId: $deviceId, capturedAt: $capturedAt, tzOffsetMin: $tzOffsetMin, stressScore: $stressScore, rangeMin: $rangeMin, source: $source, quality: $quality, algorithmVersion: $algorithmVersion)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$StressSampleImpl &&
+            (identical(other.id, id) || other.id == id) &&
+            (identical(other.userId, userId) || other.userId == userId) &&
+            (identical(other.deviceId, deviceId) ||
+                other.deviceId == deviceId) &&
+            (identical(other.capturedAt, capturedAt) ||
+                other.capturedAt == capturedAt) &&
+            (identical(other.tzOffsetMin, tzOffsetMin) ||
+                other.tzOffsetMin == tzOffsetMin) &&
+            (identical(other.stressScore, stressScore) ||
+                other.stressScore == stressScore) &&
+            (identical(other.rangeMin, rangeMin) ||
+                other.rangeMin == rangeMin) &&
+            (identical(other.source, source) || other.source == source) &&
+            (identical(other.quality, quality) || other.quality == quality) &&
+            (identical(other.algorithmVersion, algorithmVersion) ||
+                other.algorithmVersion == algorithmVersion));
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    runtimeType,
+    id,
+    userId,
+    deviceId,
+    capturedAt,
+    tzOffsetMin,
+    stressScore,
+    rangeMin,
+    source,
+    quality,
+    algorithmVersion,
+  );
+
+  /// Create a copy of StressSample
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$StressSampleImplCopyWith<_$StressSampleImpl> get copyWith =>
+      __$$StressSampleImplCopyWithImpl<_$StressSampleImpl>(this, _$identity);
+}
+
+abstract class _StressSample implements StressSample {
+  const factory _StressSample({
+    required final String id,
+    required final String userId,
+    required final String deviceId,
+    required final DateTime capturedAt,
+    required final int tzOffsetMin,
+    required final int stressScore,
+    required final int rangeMin,
+    required final DataSource source,
+    final int? quality,
+    final String? algorithmVersion,
+  }) = _$StressSampleImpl;
+
+  @override
+  String get id;
+  @override
+  String get userId;
+  @override
+  String get deviceId;
+  @override
+  DateTime get capturedAt;
+  @override
+  int get tzOffsetMin;
+  @override
+  int get stressScore;
+  @override
+  int get rangeMin;
+  @override
+  DataSource get source;
+  @override
+  int? get quality;
+  @override
+  String? get algorithmVersion;
+
+  /// Create a copy of StressSample
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$StressSampleImplCopyWith<_$StressSampleImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
 mixin _$Spo2Sample {
   String get id => throw _privateConstructorUsedError;
   String get userId => throw _privateConstructorUsedError;

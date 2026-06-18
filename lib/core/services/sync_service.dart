@@ -10,6 +10,7 @@ import 'package:hlth_app/core/repositories/hrv_repository.dart';
 import 'package:hlth_app/core/repositories/sleep_repository.dart';
 import 'package:hlth_app/core/repositories/spo2_repository.dart';
 import 'package:hlth_app/core/repositories/step_bucket_repository.dart';
+import 'package:hlth_app/core/repositories/stress_repository.dart';
 import 'package:hlth_app/core/processing/fall_detector.dart';
 import 'package:hlth_app/core/services/daily_aggregator.dart';
 import 'package:hlth_app/core/services/retention_sweep_service.dart';
@@ -90,6 +91,7 @@ class SyncService {
     required this.spo2Repo,
     required this.sleepRepo,
     required this.hrvRepo,
+    required this.stressRepo,
     required this.stepBucketRepo,
     required this.dailyRepo,
     required this.aggregator,
@@ -100,6 +102,7 @@ class SyncService {
   final Spo2Repository spo2Repo;
   final SleepRepository sleepRepo;
   final HrvRepository hrvRepo;
+  final StressRepository stressRepo;
   final StepBucketRepository stepBucketRepo;
   final DailyMetricsRepository dailyRepo;
   final DailyAggregator aggregator;
@@ -123,6 +126,8 @@ class SyncService {
     steps.add(await syncStepBuckets(userId: userId, deviceId: deviceId));
     steps.add(await syncHrv(userId: userId, deviceId: deviceId, dayOffset: 0));
     steps.add(await syncHrv(userId: userId, deviceId: deviceId, dayOffset: 1));
+    steps.add(await syncStress(userId: userId, deviceId: deviceId, dayOffset: 0));
+    steps.add(await syncStress(userId: userId, deviceId: deviceId, dayOffset: 1));
 
     var aggregated = false;
     try {
@@ -223,23 +228,22 @@ class SyncService {
     }
   }
 
-  /// Sync the most recent completed sleep session (dayOffset=1).
+  /// Sync a single sleep session by day-offset (0 = today, 1 = yesterday,
+  /// up to 7 per SDK §2.3.3 "Synchronize the details of new sleep data").
   ///
-  /// Matches the QRing demo's "Specific Day Data" behavior with
-  /// dayIndex=1 — one BLE round-trip returning yesterday's stored
-  /// session. Per-day backfill (looping 1..7) was tried 2026-06-05 but
-  /// each call streams multi-frame `ReadSleepDetailsRsp` data; 7×
-  /// of that takes too long over BLE. Single-call keeps Sync Sleep
-  /// responsive; the periodic scheduler running each morning catches
-  /// each night as it's completed.
+  /// Default dayOffset=1 matches the periodic scheduler's "pull last
+  /// night every morning" behavior. Pass an explicit offset (or call
+  /// `syncSleepRange`) when a UI surface needs a specific historical
+  /// day — e.g. the Sleep detail screen's date picker.
   ///
   /// Idempotent via `insertOnConflictUpdate` — safe to re-call.
   Future<SyncStepResult> syncSleep({
     required String userId,
     required String deviceId,
+    int dayOffset = 1,
   }) async {
     try {
-      final r = await ble.getSleepHistory(dayOffset: 1);
+      final r = await ble.getSleepHistory(dayOffset: dayOffset);
       final parsed = adapters.sleepFromNative(
         r,
         userId: userId,
@@ -269,6 +273,28 @@ class SyncService {
     } catch (e) {
       return SyncStepResult(metric: 'sleep', count: 0, error: e.toString());
     }
+  }
+
+  /// Sync sleep sessions for a contiguous run of day-offsets.
+  ///
+  /// `offsets` is the list of day-offsets to pull (0=today through 7).
+  /// Each offset becomes one BLE round-trip via `syncSleep`. Errors on
+  /// individual offsets are captured in the returned step results — the
+  /// loop never throws.
+  Future<List<SyncStepResult>> syncSleepRange({
+    required String userId,
+    required String deviceId,
+    required Iterable<int> offsets,
+  }) async {
+    final out = <SyncStepResult>[];
+    for (final offset in offsets) {
+      out.add(await syncSleep(
+        userId: userId,
+        deviceId: deviceId,
+        dayOffset: offset,
+      ));
+    }
+    return out;
   }
 
   /// Persists today's running totals into `daily_metrics`, merging into
@@ -366,6 +392,35 @@ class SyncService {
       );
     }
   }
+
+  Future<SyncStepResult> syncStress({
+    required String userId,
+    required String deviceId,
+    required int dayOffset,
+  }) async {
+    try {
+      final r = await ble.getStressDay(dayOffset: dayOffset);
+      final forDate = DateTime.now().subtract(Duration(days: dayOffset));
+      final samples = adapters.stressFromNative(
+        r,
+        userId: userId,
+        deviceId: deviceId,
+        forDate: forDate,
+      );
+      await stressRepo.insertMany(samples);
+      return SyncStepResult(
+        metric: 'stress(d=$dayOffset)',
+        count: samples.length,
+        rawMap: r,
+      );
+    } catch (e) {
+      return SyncStepResult(
+        metric: 'stress(d=$dayOffset)',
+        count: 0,
+        error: e.toString(),
+      );
+    }
+  }
 }
 
 final syncServiceProvider = Provider<SyncService>((ref) {
@@ -375,6 +430,7 @@ final syncServiceProvider = Provider<SyncService>((ref) {
     spo2Repo: ref.watch(spo2RepositoryProvider),
     sleepRepo: ref.watch(sleepRepositoryProvider),
     hrvRepo: ref.watch(hrvRepositoryProvider),
+    stressRepo: ref.watch(stressRepositoryProvider),
     stepBucketRepo: ref.watch(stepBucketRepositoryProvider),
     dailyRepo: ref.watch(dailyMetricsRepositoryProvider),
     aggregator: ref.watch(dailyAggregatorProvider),
@@ -403,6 +459,11 @@ class PeriodicSyncCoordinator {
     FallDetector? fallDetector,
   }) : _fallDetector = fallDetector ?? const FallDetector() {
     _tickSub = tickStream.listen((_) => _onTick());
+    // Auto-sync on connect: every time the band transitions into
+    // `connected`, kick off a one-shot sync so the home cards populate
+    // without the user having to open the debug screen first. Guarded by
+    // `_inFlight` so it composes cleanly with the periodic tick.
+    _connSub = ble.connectionState.listen(_onConnectionChange);
   }
 
   final SyncService sync;
@@ -412,6 +473,8 @@ class PeriodicSyncCoordinator {
   final Duration fallSweepDuration;
   final FallDetector _fallDetector;
   StreamSubscription<void>? _tickSub;
+  StreamSubscription<BleConnectionState>? _connSub;
+  BleConnectionState? _lastConnState;
   bool _inFlight = false;
   final _runs = StreamController<SyncRunResult>.broadcast();
   final _fallSweeps = StreamController<FallSweepResult>.broadcast();
@@ -432,6 +495,30 @@ class PeriodicSyncCoordinator {
   /// `startMeasureHrRaw` window, buffers the accel triples, then runs
   /// the three-window state machine across that buffer.
   Stream<FallSweepResult> get fallSweeps => _fallSweeps.stream;
+
+  /// Fires `triggerNow()` once per `disconnected → connected` edge so
+   /// data populates without the user having to open the debug screen.
+   /// The band sometimes emits redundant `connected` events; we only act
+   /// on the transition, not every duplicate.
+   ///
+   /// A 1.5s settle delay lets the band finish its post-connect time
+   /// handshake before we start pulling — without it, the first sync can
+   /// race the band's clock-set and land samples with stale timestamps.
+   void _onConnectionChange(BleConnectionState state) {
+     final prev = _lastConnState;
+     _lastConnState = state;
+     if (state != BleConnectionState.connected) return;
+     if (prev == BleConnectionState.connected) return; // dedup
+     Future<void>.delayed(const Duration(milliseconds: 1500), () async {
+       try {
+         await triggerNow();
+       } catch (_) {
+         // triggerNow already swallows per-step errors and surfaces via
+         // `_runs`. Anything reaching here is unexpected — let it die
+         // quietly so we don't kill the listener.
+       }
+     });
+   }
 
   Future<void> _onTick() async {
     if (_inFlight) return;
@@ -645,6 +732,7 @@ class PeriodicSyncCoordinator {
 
   void dispose() {
     _tickSub?.cancel();
+    _connSub?.cancel();
     _runs.close();
     _fallSweeps.close();
   }

@@ -26,15 +26,19 @@ import com.oudmon.ble.base.communication.req.BloodOxygenSettingReq
 import com.oudmon.ble.base.communication.req.BpSettingReq
 import com.oudmon.ble.base.communication.req.HeartRateSettingReq
 import com.oudmon.ble.base.communication.req.HrvSettingReq
+import com.oudmon.ble.base.communication.req.PressureSettingReq
 import com.oudmon.ble.base.communication.req.ReadDetailSportDataReq
 import com.oudmon.ble.base.communication.req.ReadHeartRateReq
 import com.oudmon.ble.base.communication.req.SetTimeReq
 import com.oudmon.ble.base.communication.req.SimpleKeyReq
 import com.oudmon.ble.base.communication.responseImpl.DeviceNotifyListener
 import com.oudmon.ble.base.communication.rsp.BaseRspCmd
+import com.oudmon.ble.base.communication.rsp.BatteryRsp
 import com.oudmon.ble.base.communication.rsp.BloodOxygenSettingRsp
 import com.oudmon.ble.base.communication.rsp.BpDataRsp
 import com.oudmon.ble.base.communication.rsp.BpSettingRsp
+import com.oudmon.ble.base.communication.rsp.PressureRsp
+import com.oudmon.ble.base.communication.rsp.PressureSettingRsp
 import com.oudmon.ble.base.communication.rsp.DeviceNotifyRsp
 import com.oudmon.ble.base.communication.rsp.HRVRsp
 import com.oudmon.ble.base.communication.rsp.HRVSettingRsp
@@ -246,6 +250,7 @@ class BleManager(
             "stopScan" -> stopScan(result)
             "connect" -> connect(call.argument<String>("deviceId"), result)
             "disconnect" -> disconnect(result)
+            "getBattery" -> getBattery(result)
 
             // §3.5 Scheduled monitoring config — single first-pair entry point
             // until we split into per-metric setScheduledXxx in step 5+.
@@ -268,6 +273,12 @@ class BleManager(
                 result = result
             )
             "getBpScheduled" -> getBpScheduled(result)
+            "setStressScheduled" -> setStressScheduled(
+                enabled = call.argument<Boolean>("enabled") ?: true,
+                result = result
+            )
+            "getStressScheduled" -> getStressScheduled(result)
+            "getStressDay" -> syncStressDay(call.argument<Int>("dayOffset") ?: 0, result)
 
             // §3.7 History fetch
             "getHrHistory" -> syncHeartRate(call.argument<Int>("dayOffset") ?: 0, result)
@@ -516,6 +527,67 @@ class BleManager(
                 Log.w("HlthBLE", "bootstrap: SetTimeReq failed: ${e.message}")
             }
         }, 800)
+
+        // 1500ms after time-set: poll battery so the UI has a value to show
+        // without the user having to wait for the first periodic tick.
+        mainHandler.postDelayed({
+            try {
+                CommandHandle.getInstance().executeReqCmd(
+                    SimpleKeyReq(Constants.CMD_GET_DEVICE_ELECTRICITY_VALUE),
+                    ICommandResponse<BatteryRsp> { rsp ->
+                        if (rsp != null && rsp.status == BaseRspCmd.RESULT_OK) {
+                            val level = rsp.batteryValue
+                            Log.i("HlthBLE", "bootstrap: battery $level%")
+                            mainHandler.post {
+                                methodChannel.invokeMethod(
+                                    "onBatteryUpdate",
+                                    mapOf("battery" to level, "charging" to false)
+                                )
+                            }
+                        }
+                    }
+                )
+            } catch (e: Exception) {
+                Log.w("HlthBLE", "bootstrap: battery poll failed: ${e.message}")
+            }
+        }, 2300)
+    }
+
+    /**
+     * Request the band's battery level via `CMD_GET_DEVICE_ELECTRICITY_VALUE`
+     * (sdk_ring.pdf §2.3.2 "bracelet battery"). Pushes the result back to
+     * Dart as `onBatteryUpdate { battery: int 0-100, charging: false }`.
+     *
+     * The H59's BatteryRsp doesn't expose a charging flag in this response;
+     * charging state would need a separate `DeviceNotifyListener` hook (TBD).
+     * For now we report `charging=false` so the Dart `({level, charging})`
+     * tuple stays well-formed.
+     */
+    private fun getBattery(result: MethodChannel.Result) {
+        try {
+            CommandHandle.getInstance().executeReqCmd(
+                SimpleKeyReq(Constants.CMD_GET_DEVICE_ELECTRICITY_VALUE),
+                ICommandResponse<BatteryRsp> { rsp ->
+                    if (rsp != null && rsp.status == BaseRspCmd.RESULT_OK) {
+                        val level = rsp.batteryValue
+                        Log.i("HlthBLE", "getBattery: $level%")
+                        mainHandler.post {
+                            methodChannel.invokeMethod(
+                                "onBatteryUpdate",
+                                mapOf("battery" to level, "charging" to false)
+                            )
+                        }
+                        result.success(mapOf("level" to level, "charging" to false))
+                    } else {
+                        Log.w("HlthBLE", "getBattery: bad status ${rsp?.status}")
+                        result.success(null)
+                    }
+                }
+            )
+        } catch (e: Exception) {
+            Log.e("HlthBLE", "getBattery failed", e)
+            result.error("BATTERY_FAILED", e.message, null)
+        }
     }
 
     private fun disconnect(result: MethodChannel.Result) {
@@ -695,6 +767,21 @@ class BleManager(
                 }
             )
 
+            // Scheduled stress ("pressure") monitoring — pure on/off
+            // toggle (band uses its own ~30 min slot cadence). Without
+            // this the band never populates the pressureArray and the
+            // home-screen Stress card stays empty. Same H59 ack quirk:
+            // response isEnable is unreliable; trust the read-back.
+            CommandHandle.getInstance().executeReqCmd(
+                PressureSettingReq.getWriteInstance(true),
+                ICommandResponse<PressureSettingRsp> { rsp ->
+                    Log.i(
+                        "HlthBLE",
+                        "stress monitoring enable acked: isEnable=${rsp.isEnable}"
+                    )
+                }
+            )
+
             // Read-backs — 2 seconds after the writes, ask the band what it
             // actually stored. On H59 the WRITE response is unreliable
             // (returns isEnable=false even when monitoring is active), but
@@ -725,6 +812,12 @@ class BleManager(
                         BpSettingReq.getReadInstance(),
                         ICommandResponse<BpSettingRsp> { rsp ->
                             Log.i("HlthBLE", "bp  setting read-back: isEnable=${rsp.isEnable} multiple=${rsp.multiple}")
+                        }
+                    )
+                    CommandHandle.getInstance().executeReqCmd(
+                        PressureSettingReq.getReadInstance(),
+                        ICommandResponse<PressureSettingRsp> { rsp ->
+                            Log.i("HlthBLE", "stress setting read-back: isEnable=${rsp.isEnable}")
                         }
                     )
                 } catch (_: Exception) {}
@@ -812,6 +905,109 @@ class BleManager(
         } catch (e: Exception) {
             Log.e("HlthBLE", "getBpScheduled failed", e)
             result.error("BP_SCHED_READ_FAILED", e.message, null)
+        }
+    }
+
+    /**
+     * Toggle the band's scheduled stress ("pressure") monitoring. Unlike
+     * BP/HR/SpO2/HRV settings, this is a pure on/off — the band picks
+     * its own measurement cadence (~30 min slot, confirmed via QWatch
+     * Pro screenshots + PressureRsp.range field). Same write-ack quirk
+     * applies on H59 fw (returns isEnable=false on success) — callers
+     * should reconcile via getStressScheduled.
+     */
+    private fun setStressScheduled(
+        enabled: Boolean,
+        result: MethodChannel.Result
+    ) {
+        try {
+            Log.i("HlthBLE", "setStressScheduled: enabled=$enabled")
+            CommandHandle.getInstance().executeReqCmd(
+                PressureSettingReq.getWriteInstance(enabled),
+                ICommandResponse<PressureSettingRsp> { rsp ->
+                    Log.i("HlthBLE", "setStressScheduled ack: isEnable=${rsp.isEnable}")
+                    result.success(mapOf("isEnable" to rsp.isEnable))
+                }
+            )
+        } catch (e: Exception) {
+            Log.e("HlthBLE", "setStressScheduled failed", e)
+            result.error("STRESS_SCHED_FAILED", e.message, null)
+        }
+    }
+
+    private fun getStressScheduled(result: MethodChannel.Result) {
+        try {
+            CommandHandle.getInstance().executeReqCmd(
+                PressureSettingReq.getReadInstance(),
+                ICommandResponse<PressureSettingRsp> { rsp ->
+                    Log.i("HlthBLE", "getStressScheduled: isEnable=${rsp.isEnable}")
+                    result.success(mapOf("isEnable" to rsp.isEnable))
+                }
+            )
+        } catch (e: Exception) {
+            Log.e("HlthBLE", "getStressScheduled failed", e)
+            result.error("STRESS_SCHED_READ_FAILED", e.message, null)
+        }
+    }
+
+    /**
+     * Stress single-day sync via the SDK's public per-day API. Mirrors
+     * the HRV path: dayOffset 0 → getTodayPressure, 1..29 → getPressure.
+     * Response shape is identical to HRVRsp — pressureArray (one byte
+     * per slot, 0-100), range (slot duration in min, typically 30),
+     * offset, today (DateUtil with date components).
+     */
+    private fun syncStressDay(dayOffset: Int, result: MethodChannel.Result) {
+        val replied = java.util.concurrent.atomic.AtomicBoolean(false)
+        val callback = object : BleOperateManager.HealthDataCallback<PressureRsp> {
+            override fun onSuccess(rsp: PressureRsp?) {
+                if (!replied.compareAndSet(false, true)) return
+                if (rsp == null) {
+                    Log.i("HlthBLE", "syncStressDay: onSuccess(null) — no data for day=$dayOffset")
+                    result.success(emptyMap<String, Any>())
+                    return
+                }
+                val arr = rsp.pressureArray
+                val values = arr?.map { it.toInt() and 0xFF } ?: emptyList()
+                // `today` is the band's day-anchor for this response —
+                // use it instead of computing `now() - dayOffset` because
+                // H59 sometimes files slots under a different day index
+                // than we asked for (same quirk as HRV). When today is
+                // null, the slots really do belong to (now - dayOffset).
+                val today = rsp.today
+                val zeroTimeMs: Long? = today?.zeroTime
+                Log.i(
+                    "HlthBLE",
+                    "syncStressDay: day=$dayOffset range=${rsp.range}min arrSize=${arr?.size ?: 0} offset=${rsp.offset} bandDay=${today?.year}-${today?.month}-${today?.day} zeroTimeMs=$zeroTimeMs"
+                )
+                result.success(mapOf(
+                    "values" to values,
+                    "intervalMinutes" to rsp.range,
+                    "offset" to rsp.offset,
+                    "zeroTimeMs" to zeroTimeMs,
+                    "rawArray" to values
+                ))
+                markSync()
+            }
+
+            override fun onError(code: Int, message: String?) {
+                if (!replied.compareAndSet(false, true)) return
+                Log.w("HlthBLE", "syncStressDay: onError code=$code msg=$message")
+                result.error("SYNC_STRESS_FAILED", message ?: "code=$code", code)
+            }
+        }
+        try {
+            Log.i("HlthBLE", "syncStressDay: dayOffset=$dayOffset (BleOperateManager.getPressure)")
+            if (dayOffset == 0) {
+                BleOperateManager.getInstance().getTodayPressure(callback)
+            } else {
+                BleOperateManager.getInstance().getPressure(dayOffset, callback)
+            }
+        } catch (e: Exception) {
+            if (replied.compareAndSet(false, true)) {
+                Log.e("HlthBLE", "syncStressDay dayOffset=$dayOffset failed", e)
+                result.error("SYNC_STRESS_FAILED", e.message, null)
+            }
         }
     }
 

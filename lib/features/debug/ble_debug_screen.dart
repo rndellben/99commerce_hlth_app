@@ -914,6 +914,36 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
     _push('  persisted ${res.count} HRV sample(s)');
   }
 
+  Future<void> _getStress() async {
+    if (!_requireSession()) return;
+    // SDK supports dayOffset 0..29 via BleOperateManager.getPressure.
+    // Mirror of HRV: same wear-day quirk likely applies, so the prompt
+    // lets us walk through offsets to find where the band actually
+    // filed today's slots.
+    final dayOffset = await _promptDayIndex(title: 'Stress Specific Day');
+    if (dayOffset == null) return;
+    _push('getStressDay: requesting (dayOffset=$dayOffset)...');
+    final res = await ref.read(syncServiceProvider).syncStress(
+          userId: _activeUserId!,
+          deviceId: _activeDeviceId!,
+          dayOffset: dayOffset,
+        );
+    if (!res.ok) {
+      _push('getStressDay error: ${res.error}');
+      return;
+    }
+    final r = res.rawMap ?? const {};
+    final values = (r['values'] as List?) ?? const [];
+    final intervalMin = r['intervalMinutes'];
+    final offset = r['offset'];
+    final rawArr = (r['rawArray'] as List?) ?? const [];
+    _push(
+        'getStressDay: ${values.length} value(s), intervalMinutes=$intervalMin offset=$offset');
+    _push('  rawArray[${rawArr.length}]: ${_preview(rawArr, 24)}');
+    _push('  values: ${_preview(values, 16)}');
+    _push('  persisted ${res.count} stress sample(s)');
+  }
+
   Future<void> _getBp() async {
     if (!_requireSession()) return;
     _push('getBpHistory: requesting...');
@@ -1679,6 +1709,7 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
                   onDbCounts: _showDbCounts,
                   onAggregate: _aggregate,
                   onHrv: _getHrv,
+                  onStress: _getStress,
                   onBp: _getBp,
                   onBpDay: _getBpSpecificDay,
                   onBpStart: _startBpMeasurement,
@@ -1966,6 +1997,7 @@ class _ActionBar extends StatelessWidget {
   final VoidCallback onDbCounts;
   final VoidCallback onAggregate;
   final VoidCallback onHrv;
+  final VoidCallback onStress;
   final VoidCallback onBp;
   final VoidCallback onBpDay;
   final VoidCallback onBpStart;
@@ -2008,6 +2040,7 @@ class _ActionBar extends StatelessWidget {
     required this.onDbCounts,
     required this.onAggregate,
     required this.onHrv,
+    required this.onStress,
     required this.onBp,
     required this.onBpDay,
     required this.onBpStart,
@@ -2125,6 +2158,11 @@ class _ActionBar extends StatelessWidget {
             onPressed: connected ? onHrv : null,
             style: compactStyle,
             child: const Text('Sync HRV'),
+          ),
+          OutlinedButton(
+            onPressed: connected ? onStress : null,
+            style: compactStyle,
+            child: const Text('Stress Day'),
           ),
           OutlinedButton(
             onPressed: connected ? onBp : null,

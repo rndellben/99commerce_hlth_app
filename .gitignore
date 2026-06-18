@@ -44,3 +44,8 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 build_old_*/
+
+# Supabase / secrets — keep example committed, real env file local-only
+hlth.env.json
+hlth.env.*.json
+!hlth.env.example.json

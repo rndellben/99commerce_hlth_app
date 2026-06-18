@@ -42,6 +42,25 @@ class HrvSample with _$HrvSample {
   }) = _HrvSample;
 }
 
+/// Band-side "pressure" (stress) sample. Mirrors HRV slot shape — one
+/// sample per band-side scheduling slot (typically 30 min). Score 0-100,
+/// QWatch zones: 0-29 relax, 30-59 normal, 60-79 medium, 80-100 high.
+@freezed
+class StressSample with _$StressSample {
+  const factory StressSample({
+    required String id,
+    required String userId,
+    required String deviceId,
+    required DateTime capturedAt,
+    required int tzOffsetMin,
+    required int stressScore,
+    required int rangeMin,
+    required DataSource source,
+    int? quality,
+    String? algorithmVersion,
+  }) = _StressSample;
+}
+
 /// hlth-db-schema.md §3.4.
 @freezed
 class Spo2Sample with _$Spo2Sample {

@@ -3931,6 +3931,756 @@ class HrvSamplesCompanion extends UpdateCompanion<HrvSample> {
   }
 }
 
+class $StressSamplesTable extends StressSamples
+    with TableInfo<$StressSamplesTable, StressSample> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StressSamplesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+    'user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES users (id)',
+    ),
+  );
+  static const VerificationMeta _deviceIdMeta = const VerificationMeta(
+    'deviceId',
+  );
+  @override
+  late final GeneratedColumn<String> deviceId = GeneratedColumn<String>(
+    'device_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES devices (id)',
+    ),
+  );
+  static const VerificationMeta _capturedAtUtcMeta = const VerificationMeta(
+    'capturedAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> capturedAtUtc = GeneratedColumn<int>(
+    'captured_at_utc',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _capturedTzOffsetMinMeta =
+      const VerificationMeta('capturedTzOffsetMin');
+  @override
+  late final GeneratedColumn<int> capturedTzOffsetMin = GeneratedColumn<int>(
+    'captured_tz_offset_min',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<DataSource, int> source =
+      GeneratedColumn<int>(
+        'source',
+        aliasedName,
+        false,
+        type: DriftSqlType.int,
+        requiredDuringInsert: true,
+      ).withConverter<DataSource>($StressSamplesTable.$convertersource);
+  static const VerificationMeta _qualityMeta = const VerificationMeta(
+    'quality',
+  );
+  @override
+  late final GeneratedColumn<int> quality = GeneratedColumn<int>(
+    'quality',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _algorithmVersionMeta = const VerificationMeta(
+    'algorithmVersion',
+  );
+  @override
+  late final GeneratedColumn<String> algorithmVersion = GeneratedColumn<String>(
+    'algorithm_version',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtUtcMeta = const VerificationMeta(
+    'createdAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> createdAtUtc = GeneratedColumn<int>(
+    'created_at_utc',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtUtcMeta = const VerificationMeta(
+    'deletedAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> deletedAtUtc = GeneratedColumn<int>(
+    'deleted_at_utc',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _stressScoreMeta = const VerificationMeta(
+    'stressScore',
+  );
+  @override
+  late final GeneratedColumn<int> stressScore = GeneratedColumn<int>(
+    'stress_score',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _rangeMinMeta = const VerificationMeta(
+    'rangeMin',
+  );
+  @override
+  late final GeneratedColumn<int> rangeMin = GeneratedColumn<int>(
+    'range_min',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    userId,
+    deviceId,
+    capturedAtUtc,
+    capturedTzOffsetMin,
+    source,
+    quality,
+    algorithmVersion,
+    createdAtUtc,
+    deletedAtUtc,
+    stressScore,
+    rangeMin,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'stress_samples';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StressSample> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('user_id')) {
+      context.handle(
+        _userIdMeta,
+        userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_userIdMeta);
+    }
+    if (data.containsKey('device_id')) {
+      context.handle(
+        _deviceIdMeta,
+        deviceId.isAcceptableOrUnknown(data['device_id']!, _deviceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_deviceIdMeta);
+    }
+    if (data.containsKey('captured_at_utc')) {
+      context.handle(
+        _capturedAtUtcMeta,
+        capturedAtUtc.isAcceptableOrUnknown(
+          data['captured_at_utc']!,
+          _capturedAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_capturedAtUtcMeta);
+    }
+    if (data.containsKey('captured_tz_offset_min')) {
+      context.handle(
+        _capturedTzOffsetMinMeta,
+        capturedTzOffsetMin.isAcceptableOrUnknown(
+          data['captured_tz_offset_min']!,
+          _capturedTzOffsetMinMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_capturedTzOffsetMinMeta);
+    }
+    if (data.containsKey('quality')) {
+      context.handle(
+        _qualityMeta,
+        quality.isAcceptableOrUnknown(data['quality']!, _qualityMeta),
+      );
+    }
+    if (data.containsKey('algorithm_version')) {
+      context.handle(
+        _algorithmVersionMeta,
+        algorithmVersion.isAcceptableOrUnknown(
+          data['algorithm_version']!,
+          _algorithmVersionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at_utc')) {
+      context.handle(
+        _createdAtUtcMeta,
+        createdAtUtc.isAcceptableOrUnknown(
+          data['created_at_utc']!,
+          _createdAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtUtcMeta);
+    }
+    if (data.containsKey('deleted_at_utc')) {
+      context.handle(
+        _deletedAtUtcMeta,
+        deletedAtUtc.isAcceptableOrUnknown(
+          data['deleted_at_utc']!,
+          _deletedAtUtcMeta,
+        ),
+      );
+    }
+    if (data.containsKey('stress_score')) {
+      context.handle(
+        _stressScoreMeta,
+        stressScore.isAcceptableOrUnknown(
+          data['stress_score']!,
+          _stressScoreMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_stressScoreMeta);
+    }
+    if (data.containsKey('range_min')) {
+      context.handle(
+        _rangeMinMeta,
+        rangeMin.isAcceptableOrUnknown(data['range_min']!, _rangeMinMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_rangeMinMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  StressSample map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StressSample(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      userId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}user_id'],
+      )!,
+      deviceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}device_id'],
+      )!,
+      capturedAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}captured_at_utc'],
+      )!,
+      capturedTzOffsetMin: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}captured_tz_offset_min'],
+      )!,
+      source: $StressSamplesTable.$convertersource.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.int,
+          data['${effectivePrefix}source'],
+        )!,
+      ),
+      quality: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}quality'],
+      ),
+      algorithmVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}algorithm_version'],
+      ),
+      createdAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at_utc'],
+      )!,
+      deletedAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}deleted_at_utc'],
+      ),
+      stressScore: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}stress_score'],
+      )!,
+      rangeMin: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}range_min'],
+      )!,
+    );
+  }
+
+  @override
+  $StressSamplesTable createAlias(String alias) {
+    return $StressSamplesTable(attachedDatabase, alias);
+  }
+
+  static JsonTypeConverter2<DataSource, int, int> $convertersource =
+      const EnumIndexConverter<DataSource>(DataSource.values);
+}
+
+class StressSample extends DataClass implements Insertable<StressSample> {
+  final String id;
+  final String userId;
+  final String deviceId;
+  final int capturedAtUtc;
+  final int capturedTzOffsetMin;
+  final DataSource source;
+  final int? quality;
+  final String? algorithmVersion;
+  final int createdAtUtc;
+  final int? deletedAtUtc;
+  final int stressScore;
+  final int rangeMin;
+  const StressSample({
+    required this.id,
+    required this.userId,
+    required this.deviceId,
+    required this.capturedAtUtc,
+    required this.capturedTzOffsetMin,
+    required this.source,
+    this.quality,
+    this.algorithmVersion,
+    required this.createdAtUtc,
+    this.deletedAtUtc,
+    required this.stressScore,
+    required this.rangeMin,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['user_id'] = Variable<String>(userId);
+    map['device_id'] = Variable<String>(deviceId);
+    map['captured_at_utc'] = Variable<int>(capturedAtUtc);
+    map['captured_tz_offset_min'] = Variable<int>(capturedTzOffsetMin);
+    {
+      map['source'] = Variable<int>(
+        $StressSamplesTable.$convertersource.toSql(source),
+      );
+    }
+    if (!nullToAbsent || quality != null) {
+      map['quality'] = Variable<int>(quality);
+    }
+    if (!nullToAbsent || algorithmVersion != null) {
+      map['algorithm_version'] = Variable<String>(algorithmVersion);
+    }
+    map['created_at_utc'] = Variable<int>(createdAtUtc);
+    if (!nullToAbsent || deletedAtUtc != null) {
+      map['deleted_at_utc'] = Variable<int>(deletedAtUtc);
+    }
+    map['stress_score'] = Variable<int>(stressScore);
+    map['range_min'] = Variable<int>(rangeMin);
+    return map;
+  }
+
+  StressSamplesCompanion toCompanion(bool nullToAbsent) {
+    return StressSamplesCompanion(
+      id: Value(id),
+      userId: Value(userId),
+      deviceId: Value(deviceId),
+      capturedAtUtc: Value(capturedAtUtc),
+      capturedTzOffsetMin: Value(capturedTzOffsetMin),
+      source: Value(source),
+      quality: quality == null && nullToAbsent
+          ? const Value.absent()
+          : Value(quality),
+      algorithmVersion: algorithmVersion == null && nullToAbsent
+          ? const Value.absent()
+          : Value(algorithmVersion),
+      createdAtUtc: Value(createdAtUtc),
+      deletedAtUtc: deletedAtUtc == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAtUtc),
+      stressScore: Value(stressScore),
+      rangeMin: Value(rangeMin),
+    );
+  }
+
+  factory StressSample.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StressSample(
+      id: serializer.fromJson<String>(json['id']),
+      userId: serializer.fromJson<String>(json['userId']),
+      deviceId: serializer.fromJson<String>(json['deviceId']),
+      capturedAtUtc: serializer.fromJson<int>(json['capturedAtUtc']),
+      capturedTzOffsetMin: serializer.fromJson<int>(
+        json['capturedTzOffsetMin'],
+      ),
+      source: $StressSamplesTable.$convertersource.fromJson(
+        serializer.fromJson<int>(json['source']),
+      ),
+      quality: serializer.fromJson<int?>(json['quality']),
+      algorithmVersion: serializer.fromJson<String?>(json['algorithmVersion']),
+      createdAtUtc: serializer.fromJson<int>(json['createdAtUtc']),
+      deletedAtUtc: serializer.fromJson<int?>(json['deletedAtUtc']),
+      stressScore: serializer.fromJson<int>(json['stressScore']),
+      rangeMin: serializer.fromJson<int>(json['rangeMin']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'userId': serializer.toJson<String>(userId),
+      'deviceId': serializer.toJson<String>(deviceId),
+      'capturedAtUtc': serializer.toJson<int>(capturedAtUtc),
+      'capturedTzOffsetMin': serializer.toJson<int>(capturedTzOffsetMin),
+      'source': serializer.toJson<int>(
+        $StressSamplesTable.$convertersource.toJson(source),
+      ),
+      'quality': serializer.toJson<int?>(quality),
+      'algorithmVersion': serializer.toJson<String?>(algorithmVersion),
+      'createdAtUtc': serializer.toJson<int>(createdAtUtc),
+      'deletedAtUtc': serializer.toJson<int?>(deletedAtUtc),
+      'stressScore': serializer.toJson<int>(stressScore),
+      'rangeMin': serializer.toJson<int>(rangeMin),
+    };
+  }
+
+  StressSample copyWith({
+    String? id,
+    String? userId,
+    String? deviceId,
+    int? capturedAtUtc,
+    int? capturedTzOffsetMin,
+    DataSource? source,
+    Value<int?> quality = const Value.absent(),
+    Value<String?> algorithmVersion = const Value.absent(),
+    int? createdAtUtc,
+    Value<int?> deletedAtUtc = const Value.absent(),
+    int? stressScore,
+    int? rangeMin,
+  }) => StressSample(
+    id: id ?? this.id,
+    userId: userId ?? this.userId,
+    deviceId: deviceId ?? this.deviceId,
+    capturedAtUtc: capturedAtUtc ?? this.capturedAtUtc,
+    capturedTzOffsetMin: capturedTzOffsetMin ?? this.capturedTzOffsetMin,
+    source: source ?? this.source,
+    quality: quality.present ? quality.value : this.quality,
+    algorithmVersion: algorithmVersion.present
+        ? algorithmVersion.value
+        : this.algorithmVersion,
+    createdAtUtc: createdAtUtc ?? this.createdAtUtc,
+    deletedAtUtc: deletedAtUtc.present ? deletedAtUtc.value : this.deletedAtUtc,
+    stressScore: stressScore ?? this.stressScore,
+    rangeMin: rangeMin ?? this.rangeMin,
+  );
+  StressSample copyWithCompanion(StressSamplesCompanion data) {
+    return StressSample(
+      id: data.id.present ? data.id.value : this.id,
+      userId: data.userId.present ? data.userId.value : this.userId,
+      deviceId: data.deviceId.present ? data.deviceId.value : this.deviceId,
+      capturedAtUtc: data.capturedAtUtc.present
+          ? data.capturedAtUtc.value
+          : this.capturedAtUtc,
+      capturedTzOffsetMin: data.capturedTzOffsetMin.present
+          ? data.capturedTzOffsetMin.value
+          : this.capturedTzOffsetMin,
+      source: data.source.present ? data.source.value : this.source,
+      quality: data.quality.present ? data.quality.value : this.quality,
+      algorithmVersion: data.algorithmVersion.present
+          ? data.algorithmVersion.value
+          : this.algorithmVersion,
+      createdAtUtc: data.createdAtUtc.present
+          ? data.createdAtUtc.value
+          : this.createdAtUtc,
+      deletedAtUtc: data.deletedAtUtc.present
+          ? data.deletedAtUtc.value
+          : this.deletedAtUtc,
+      stressScore: data.stressScore.present
+          ? data.stressScore.value
+          : this.stressScore,
+      rangeMin: data.rangeMin.present ? data.rangeMin.value : this.rangeMin,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StressSample(')
+          ..write('id: $id, ')
+          ..write('userId: $userId, ')
+          ..write('deviceId: $deviceId, ')
+          ..write('capturedAtUtc: $capturedAtUtc, ')
+          ..write('capturedTzOffsetMin: $capturedTzOffsetMin, ')
+          ..write('source: $source, ')
+          ..write('quality: $quality, ')
+          ..write('algorithmVersion: $algorithmVersion, ')
+          ..write('createdAtUtc: $createdAtUtc, ')
+          ..write('deletedAtUtc: $deletedAtUtc, ')
+          ..write('stressScore: $stressScore, ')
+          ..write('rangeMin: $rangeMin')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    userId,
+    deviceId,
+    capturedAtUtc,
+    capturedTzOffsetMin,
+    source,
+    quality,
+    algorithmVersion,
+    createdAtUtc,
+    deletedAtUtc,
+    stressScore,
+    rangeMin,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StressSample &&
+          other.id == this.id &&
+          other.userId == this.userId &&
+          other.deviceId == this.deviceId &&
+          other.capturedAtUtc == this.capturedAtUtc &&
+          other.capturedTzOffsetMin == this.capturedTzOffsetMin &&
+          other.source == this.source &&
+          other.quality == this.quality &&
+          other.algorithmVersion == this.algorithmVersion &&
+          other.createdAtUtc == this.createdAtUtc &&
+          other.deletedAtUtc == this.deletedAtUtc &&
+          other.stressScore == this.stressScore &&
+          other.rangeMin == this.rangeMin);
+}
+
+class StressSamplesCompanion extends UpdateCompanion<StressSample> {
+  final Value<String> id;
+  final Value<String> userId;
+  final Value<String> deviceId;
+  final Value<int> capturedAtUtc;
+  final Value<int> capturedTzOffsetMin;
+  final Value<DataSource> source;
+  final Value<int?> quality;
+  final Value<String?> algorithmVersion;
+  final Value<int> createdAtUtc;
+  final Value<int?> deletedAtUtc;
+  final Value<int> stressScore;
+  final Value<int> rangeMin;
+  final Value<int> rowid;
+  const StressSamplesCompanion({
+    this.id = const Value.absent(),
+    this.userId = const Value.absent(),
+    this.deviceId = const Value.absent(),
+    this.capturedAtUtc = const Value.absent(),
+    this.capturedTzOffsetMin = const Value.absent(),
+    this.source = const Value.absent(),
+    this.quality = const Value.absent(),
+    this.algorithmVersion = const Value.absent(),
+    this.createdAtUtc = const Value.absent(),
+    this.deletedAtUtc = const Value.absent(),
+    this.stressScore = const Value.absent(),
+    this.rangeMin = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  StressSamplesCompanion.insert({
+    required String id,
+    required String userId,
+    required String deviceId,
+    required int capturedAtUtc,
+    required int capturedTzOffsetMin,
+    required DataSource source,
+    this.quality = const Value.absent(),
+    this.algorithmVersion = const Value.absent(),
+    required int createdAtUtc,
+    this.deletedAtUtc = const Value.absent(),
+    required int stressScore,
+    required int rangeMin,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       userId = Value(userId),
+       deviceId = Value(deviceId),
+       capturedAtUtc = Value(capturedAtUtc),
+       capturedTzOffsetMin = Value(capturedTzOffsetMin),
+       source = Value(source),
+       createdAtUtc = Value(createdAtUtc),
+       stressScore = Value(stressScore),
+       rangeMin = Value(rangeMin);
+  static Insertable<StressSample> custom({
+    Expression<String>? id,
+    Expression<String>? userId,
+    Expression<String>? deviceId,
+    Expression<int>? capturedAtUtc,
+    Expression<int>? capturedTzOffsetMin,
+    Expression<int>? source,
+    Expression<int>? quality,
+    Expression<String>? algorithmVersion,
+    Expression<int>? createdAtUtc,
+    Expression<int>? deletedAtUtc,
+    Expression<int>? stressScore,
+    Expression<int>? rangeMin,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (userId != null) 'user_id': userId,
+      if (deviceId != null) 'device_id': deviceId,
+      if (capturedAtUtc != null) 'captured_at_utc': capturedAtUtc,
+      if (capturedTzOffsetMin != null)
+        'captured_tz_offset_min': capturedTzOffsetMin,
+      if (source != null) 'source': source,
+      if (quality != null) 'quality': quality,
+      if (algorithmVersion != null) 'algorithm_version': algorithmVersion,
+      if (createdAtUtc != null) 'created_at_utc': createdAtUtc,
+      if (deletedAtUtc != null) 'deleted_at_utc': deletedAtUtc,
+      if (stressScore != null) 'stress_score': stressScore,
+      if (rangeMin != null) 'range_min': rangeMin,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  StressSamplesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? userId,
+    Value<String>? deviceId,
+    Value<int>? capturedAtUtc,
+    Value<int>? capturedTzOffsetMin,
+    Value<DataSource>? source,
+    Value<int?>? quality,
+    Value<String?>? algorithmVersion,
+    Value<int>? createdAtUtc,
+    Value<int?>? deletedAtUtc,
+    Value<int>? stressScore,
+    Value<int>? rangeMin,
+    Value<int>? rowid,
+  }) {
+    return StressSamplesCompanion(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      deviceId: deviceId ?? this.deviceId,
+      capturedAtUtc: capturedAtUtc ?? this.capturedAtUtc,
+      capturedTzOffsetMin: capturedTzOffsetMin ?? this.capturedTzOffsetMin,
+      source: source ?? this.source,
+      quality: quality ?? this.quality,
+      algorithmVersion: algorithmVersion ?? this.algorithmVersion,
+      createdAtUtc: createdAtUtc ?? this.createdAtUtc,
+      deletedAtUtc: deletedAtUtc ?? this.deletedAtUtc,
+      stressScore: stressScore ?? this.stressScore,
+      rangeMin: rangeMin ?? this.rangeMin,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
+    }
+    if (deviceId.present) {
+      map['device_id'] = Variable<String>(deviceId.value);
+    }
+    if (capturedAtUtc.present) {
+      map['captured_at_utc'] = Variable<int>(capturedAtUtc.value);
+    }
+    if (capturedTzOffsetMin.present) {
+      map['captured_tz_offset_min'] = Variable<int>(capturedTzOffsetMin.value);
+    }
+    if (source.present) {
+      map['source'] = Variable<int>(
+        $StressSamplesTable.$convertersource.toSql(source.value),
+      );
+    }
+    if (quality.present) {
+      map['quality'] = Variable<int>(quality.value);
+    }
+    if (algorithmVersion.present) {
+      map['algorithm_version'] = Variable<String>(algorithmVersion.value);
+    }
+    if (createdAtUtc.present) {
+      map['created_at_utc'] = Variable<int>(createdAtUtc.value);
+    }
+    if (deletedAtUtc.present) {
+      map['deleted_at_utc'] = Variable<int>(deletedAtUtc.value);
+    }
+    if (stressScore.present) {
+      map['stress_score'] = Variable<int>(stressScore.value);
+    }
+    if (rangeMin.present) {
+      map['range_min'] = Variable<int>(rangeMin.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StressSamplesCompanion(')
+          ..write('id: $id, ')
+          ..write('userId: $userId, ')
+          ..write('deviceId: $deviceId, ')
+          ..write('capturedAtUtc: $capturedAtUtc, ')
+          ..write('capturedTzOffsetMin: $capturedTzOffsetMin, ')
+          ..write('source: $source, ')
+          ..write('quality: $quality, ')
+          ..write('algorithmVersion: $algorithmVersion, ')
+          ..write('createdAtUtc: $createdAtUtc, ')
+          ..write('deletedAtUtc: $deletedAtUtc, ')
+          ..write('stressScore: $stressScore, ')
+          ..write('rangeMin: $rangeMin, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $Spo2SamplesTable extends Spo2Samples
     with TableInfo<$Spo2SamplesTable, Spo2Sample> {
   @override
@@ -11377,6 +12127,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $DevicesTable devices = $DevicesTable(this);
   late final $HrSamplesTable hrSamples = $HrSamplesTable(this);
   late final $HrvSamplesTable hrvSamples = $HrvSamplesTable(this);
+  late final $StressSamplesTable stressSamples = $StressSamplesTable(this);
   late final $Spo2SamplesTable spo2Samples = $Spo2SamplesTable(this);
   late final $BpReadingsTable bpReadings = $BpReadingsTable(this);
   late final $StepBucketsTable stepBuckets = $StepBucketsTable(this);
@@ -11395,6 +12146,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     devices,
     hrSamples,
     hrvSamples,
+    stressSamples,
     spo2Samples,
     bpReadings,
     stepBuckets,
@@ -11501,6 +12253,24 @@ final class $$UsersTableReferences
     ).filter((f) => f.userId.id.sqlEquals($_itemColumn<String>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_hrvSamplesRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$StressSamplesTable, List<StressSample>>
+  _stressSamplesRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.stressSamples,
+    aliasName: $_aliasNameGenerator(db.users.id, db.stressSamples.userId),
+  );
+
+  $$StressSamplesTableProcessedTableManager get stressSamplesRefs {
+    final manager = $$StressSamplesTableTableManager(
+      $_db,
+      $_db.stressSamples,
+    ).filter((f) => f.userId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_stressSamplesRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -11767,6 +12537,31 @@ class $$UsersTableFilterComposer extends Composer<_$AppDatabase, $UsersTable> {
           }) => $$HrvSamplesTableFilterComposer(
             $db: $db,
             $table: $db.hrvSamples,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> stressSamplesRefs(
+    Expression<bool> Function($$StressSamplesTableFilterComposer f) f,
+  ) {
+    final $$StressSamplesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.stressSamples,
+      getReferencedColumn: (t) => t.userId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$StressSamplesTableFilterComposer(
+            $db: $db,
+            $table: $db.stressSamples,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -12135,6 +12930,31 @@ class $$UsersTableAnnotationComposer
     return f(composer);
   }
 
+  Expression<T> stressSamplesRefs<T extends Object>(
+    Expression<T> Function($$StressSamplesTableAnnotationComposer a) f,
+  ) {
+    final $$StressSamplesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.stressSamples,
+      getReferencedColumn: (t) => t.userId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$StressSamplesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.stressSamples,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
   Expression<T> spo2SamplesRefs<T extends Object>(
     Expression<T> Function($$Spo2SamplesTableAnnotationComposer a) f,
   ) {
@@ -12329,6 +13149,7 @@ class $$UsersTableTableManager
             bool devicesRefs,
             bool hrSamplesRefs,
             bool hrvSamplesRefs,
+            bool stressSamplesRefs,
             bool spo2SamplesRefs,
             bool bpReadingsRefs,
             bool stepBucketsRefs,
@@ -12401,6 +13222,7 @@ class $$UsersTableTableManager
                 devicesRefs = false,
                 hrSamplesRefs = false,
                 hrvSamplesRefs = false,
+                stressSamplesRefs = false,
                 spo2SamplesRefs = false,
                 bpReadingsRefs = false,
                 stepBucketsRefs = false,
@@ -12416,6 +13238,7 @@ class $$UsersTableTableManager
                     if (devicesRefs) db.devices,
                     if (hrSamplesRefs) db.hrSamples,
                     if (hrvSamplesRefs) db.hrvSamples,
+                    if (stressSamplesRefs) db.stressSamples,
                     if (spo2SamplesRefs) db.spo2Samples,
                     if (bpReadingsRefs) db.bpReadings,
                     if (stepBucketsRefs) db.stepBuckets,
@@ -12489,6 +13312,27 @@ class $$UsersTableTableManager
                                 table,
                                 p0,
                               ).hrvSamplesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.userId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (stressSamplesRefs)
+                        await $_getPrefetchedData<
+                          User,
+                          $UsersTable,
+                          StressSample
+                        >(
+                          currentTable: table,
+                          referencedTable: $$UsersTableReferences
+                              ._stressSamplesRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$UsersTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).stressSamplesRefs,
                           referencedItemsForCurrentItem:
                               (item, referencedItems) => referencedItems.where(
                                 (e) => e.userId == item.id,
@@ -12659,6 +13503,7 @@ typedef $$UsersTableProcessedTableManager =
         bool devicesRefs,
         bool hrSamplesRefs,
         bool hrvSamplesRefs,
+        bool stressSamplesRefs,
         bool spo2SamplesRefs,
         bool bpReadingsRefs,
         bool stepBucketsRefs,
@@ -13238,6 +14083,24 @@ final class $$DevicesTableReferences
     );
   }
 
+  static MultiTypedResultKey<$StressSamplesTable, List<StressSample>>
+  _stressSamplesRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.stressSamples,
+    aliasName: $_aliasNameGenerator(db.devices.id, db.stressSamples.deviceId),
+  );
+
+  $$StressSamplesTableProcessedTableManager get stressSamplesRefs {
+    final manager = $$StressSamplesTableTableManager(
+      $_db,
+      $_db.stressSamples,
+    ).filter((f) => f.deviceId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_stressSamplesRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
   static MultiTypedResultKey<$Spo2SamplesTable, List<Spo2Sample>>
   _spo2SamplesRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
     db.spo2Samples,
@@ -13477,6 +14340,31 @@ class $$DevicesTableFilterComposer
           }) => $$HrvSamplesTableFilterComposer(
             $db: $db,
             $table: $db.hrvSamples,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> stressSamplesRefs(
+    Expression<bool> Function($$StressSamplesTableFilterComposer f) f,
+  ) {
+    final $$StressSamplesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.stressSamples,
+      getReferencedColumn: (t) => t.deviceId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$StressSamplesTableFilterComposer(
+            $db: $db,
+            $table: $db.stressSamples,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -13871,6 +14759,31 @@ class $$DevicesTableAnnotationComposer
     return f(composer);
   }
 
+  Expression<T> stressSamplesRefs<T extends Object>(
+    Expression<T> Function($$StressSamplesTableAnnotationComposer a) f,
+  ) {
+    final $$StressSamplesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.stressSamples,
+      getReferencedColumn: (t) => t.deviceId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$StressSamplesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.stressSamples,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
   Expression<T> spo2SamplesRefs<T extends Object>(
     Expression<T> Function($$Spo2SamplesTableAnnotationComposer a) f,
   ) {
@@ -14014,6 +14927,7 @@ class $$DevicesTableTableManager
             bool userId,
             bool hrSamplesRefs,
             bool hrvSamplesRefs,
+            bool stressSamplesRefs,
             bool spo2SamplesRefs,
             bool bpReadingsRefs,
             bool stepBucketsRefs,
@@ -14121,6 +15035,7 @@ class $$DevicesTableTableManager
                 userId = false,
                 hrSamplesRefs = false,
                 hrvSamplesRefs = false,
+                stressSamplesRefs = false,
                 spo2SamplesRefs = false,
                 bpReadingsRefs = false,
                 stepBucketsRefs = false,
@@ -14132,6 +15047,7 @@ class $$DevicesTableTableManager
                   explicitlyWatchedTables: [
                     if (hrSamplesRefs) db.hrSamples,
                     if (hrvSamplesRefs) db.hrvSamples,
+                    if (stressSamplesRefs) db.stressSamples,
                     if (spo2SamplesRefs) db.spo2Samples,
                     if (bpReadingsRefs) db.bpReadings,
                     if (stepBucketsRefs) db.stepBuckets,
@@ -14208,6 +15124,27 @@ class $$DevicesTableTableManager
                                 table,
                                 p0,
                               ).hrvSamplesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.deviceId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (stressSamplesRefs)
+                        await $_getPrefetchedData<
+                          Device,
+                          $DevicesTable,
+                          StressSample
+                        >(
+                          currentTable: table,
+                          referencedTable: $$DevicesTableReferences
+                              ._stressSamplesRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$DevicesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).stressSamplesRefs,
                           referencedItemsForCurrentItem:
                               (item, referencedItems) => referencedItems.where(
                                 (e) => e.deviceId == item.id,
@@ -14343,6 +15280,7 @@ typedef $$DevicesTableProcessedTableManager =
         bool userId,
         bool hrSamplesRefs,
         bool hrvSamplesRefs,
+        bool stressSamplesRefs,
         bool spo2SamplesRefs,
         bool bpReadingsRefs,
         bool stepBucketsRefs,
@@ -15522,6 +16460,562 @@ typedef $$HrvSamplesTableProcessedTableManager =
       $$HrvSamplesTableUpdateCompanionBuilder,
       (HrvSample, $$HrvSamplesTableReferences),
       HrvSample,
+      PrefetchHooks Function({bool userId, bool deviceId})
+    >;
+typedef $$StressSamplesTableCreateCompanionBuilder =
+    StressSamplesCompanion Function({
+      required String id,
+      required String userId,
+      required String deviceId,
+      required int capturedAtUtc,
+      required int capturedTzOffsetMin,
+      required DataSource source,
+      Value<int?> quality,
+      Value<String?> algorithmVersion,
+      required int createdAtUtc,
+      Value<int?> deletedAtUtc,
+      required int stressScore,
+      required int rangeMin,
+      Value<int> rowid,
+    });
+typedef $$StressSamplesTableUpdateCompanionBuilder =
+    StressSamplesCompanion Function({
+      Value<String> id,
+      Value<String> userId,
+      Value<String> deviceId,
+      Value<int> capturedAtUtc,
+      Value<int> capturedTzOffsetMin,
+      Value<DataSource> source,
+      Value<int?> quality,
+      Value<String?> algorithmVersion,
+      Value<int> createdAtUtc,
+      Value<int?> deletedAtUtc,
+      Value<int> stressScore,
+      Value<int> rangeMin,
+      Value<int> rowid,
+    });
+
+final class $$StressSamplesTableReferences
+    extends BaseReferences<_$AppDatabase, $StressSamplesTable, StressSample> {
+  $$StressSamplesTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $UsersTable _userIdTable(_$AppDatabase db) => db.users.createAlias(
+    $_aliasNameGenerator(db.stressSamples.userId, db.users.id),
+  );
+
+  $$UsersTableProcessedTableManager get userId {
+    final $_column = $_itemColumn<String>('user_id')!;
+
+    final manager = $$UsersTableTableManager(
+      $_db,
+      $_db.users,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_userIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $DevicesTable _deviceIdTable(_$AppDatabase db) =>
+      db.devices.createAlias(
+        $_aliasNameGenerator(db.stressSamples.deviceId, db.devices.id),
+      );
+
+  $$DevicesTableProcessedTableManager get deviceId {
+    final $_column = $_itemColumn<String>('device_id')!;
+
+    final manager = $$DevicesTableTableManager(
+      $_db,
+      $_db.devices,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_deviceIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$StressSamplesTableFilterComposer
+    extends Composer<_$AppDatabase, $StressSamplesTable> {
+  $$StressSamplesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get capturedAtUtc => $composableBuilder(
+    column: $table.capturedAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get capturedTzOffsetMin => $composableBuilder(
+    column: $table.capturedTzOffsetMin,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<DataSource, DataSource, int> get source =>
+      $composableBuilder(
+        column: $table.source,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
+
+  ColumnFilters<int> get quality => $composableBuilder(
+    column: $table.quality,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get algorithmVersion => $composableBuilder(
+    column: $table.algorithmVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get deletedAtUtc => $composableBuilder(
+    column: $table.deletedAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get stressScore => $composableBuilder(
+    column: $table.stressScore,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get rangeMin => $composableBuilder(
+    column: $table.rangeMin,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$UsersTableFilterComposer get userId {
+    final $$UsersTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableFilterComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$DevicesTableFilterComposer get deviceId {
+    final $$DevicesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.deviceId,
+      referencedTable: $db.devices,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DevicesTableFilterComposer(
+            $db: $db,
+            $table: $db.devices,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$StressSamplesTableOrderingComposer
+    extends Composer<_$AppDatabase, $StressSamplesTable> {
+  $$StressSamplesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get capturedAtUtc => $composableBuilder(
+    column: $table.capturedAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get capturedTzOffsetMin => $composableBuilder(
+    column: $table.capturedTzOffsetMin,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get quality => $composableBuilder(
+    column: $table.quality,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get algorithmVersion => $composableBuilder(
+    column: $table.algorithmVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get deletedAtUtc => $composableBuilder(
+    column: $table.deletedAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get stressScore => $composableBuilder(
+    column: $table.stressScore,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get rangeMin => $composableBuilder(
+    column: $table.rangeMin,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$UsersTableOrderingComposer get userId {
+    final $$UsersTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableOrderingComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$DevicesTableOrderingComposer get deviceId {
+    final $$DevicesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.deviceId,
+      referencedTable: $db.devices,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DevicesTableOrderingComposer(
+            $db: $db,
+            $table: $db.devices,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$StressSamplesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $StressSamplesTable> {
+  $$StressSamplesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get capturedAtUtc => $composableBuilder(
+    column: $table.capturedAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get capturedTzOffsetMin => $composableBuilder(
+    column: $table.capturedTzOffsetMin,
+    builder: (column) => column,
+  );
+
+  GeneratedColumnWithTypeConverter<DataSource, int> get source =>
+      $composableBuilder(column: $table.source, builder: (column) => column);
+
+  GeneratedColumn<int> get quality =>
+      $composableBuilder(column: $table.quality, builder: (column) => column);
+
+  GeneratedColumn<String> get algorithmVersion => $composableBuilder(
+    column: $table.algorithmVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get deletedAtUtc => $composableBuilder(
+    column: $table.deletedAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get stressScore => $composableBuilder(
+    column: $table.stressScore,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get rangeMin =>
+      $composableBuilder(column: $table.rangeMin, builder: (column) => column);
+
+  $$UsersTableAnnotationComposer get userId {
+    final $$UsersTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableAnnotationComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$DevicesTableAnnotationComposer get deviceId {
+    final $$DevicesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.deviceId,
+      referencedTable: $db.devices,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DevicesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.devices,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$StressSamplesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $StressSamplesTable,
+          StressSample,
+          $$StressSamplesTableFilterComposer,
+          $$StressSamplesTableOrderingComposer,
+          $$StressSamplesTableAnnotationComposer,
+          $$StressSamplesTableCreateCompanionBuilder,
+          $$StressSamplesTableUpdateCompanionBuilder,
+          (StressSample, $$StressSamplesTableReferences),
+          StressSample,
+          PrefetchHooks Function({bool userId, bool deviceId})
+        > {
+  $$StressSamplesTableTableManager(_$AppDatabase db, $StressSamplesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$StressSamplesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$StressSamplesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$StressSamplesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> userId = const Value.absent(),
+                Value<String> deviceId = const Value.absent(),
+                Value<int> capturedAtUtc = const Value.absent(),
+                Value<int> capturedTzOffsetMin = const Value.absent(),
+                Value<DataSource> source = const Value.absent(),
+                Value<int?> quality = const Value.absent(),
+                Value<String?> algorithmVersion = const Value.absent(),
+                Value<int> createdAtUtc = const Value.absent(),
+                Value<int?> deletedAtUtc = const Value.absent(),
+                Value<int> stressScore = const Value.absent(),
+                Value<int> rangeMin = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StressSamplesCompanion(
+                id: id,
+                userId: userId,
+                deviceId: deviceId,
+                capturedAtUtc: capturedAtUtc,
+                capturedTzOffsetMin: capturedTzOffsetMin,
+                source: source,
+                quality: quality,
+                algorithmVersion: algorithmVersion,
+                createdAtUtc: createdAtUtc,
+                deletedAtUtc: deletedAtUtc,
+                stressScore: stressScore,
+                rangeMin: rangeMin,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String userId,
+                required String deviceId,
+                required int capturedAtUtc,
+                required int capturedTzOffsetMin,
+                required DataSource source,
+                Value<int?> quality = const Value.absent(),
+                Value<String?> algorithmVersion = const Value.absent(),
+                required int createdAtUtc,
+                Value<int?> deletedAtUtc = const Value.absent(),
+                required int stressScore,
+                required int rangeMin,
+                Value<int> rowid = const Value.absent(),
+              }) => StressSamplesCompanion.insert(
+                id: id,
+                userId: userId,
+                deviceId: deviceId,
+                capturedAtUtc: capturedAtUtc,
+                capturedTzOffsetMin: capturedTzOffsetMin,
+                source: source,
+                quality: quality,
+                algorithmVersion: algorithmVersion,
+                createdAtUtc: createdAtUtc,
+                deletedAtUtc: deletedAtUtc,
+                stressScore: stressScore,
+                rangeMin: rangeMin,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$StressSamplesTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({userId = false, deviceId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (userId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.userId,
+                                referencedTable: $$StressSamplesTableReferences
+                                    ._userIdTable(db),
+                                referencedColumn: $$StressSamplesTableReferences
+                                    ._userIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+                    if (deviceId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.deviceId,
+                                referencedTable: $$StressSamplesTableReferences
+                                    ._deviceIdTable(db),
+                                referencedColumn: $$StressSamplesTableReferences
+                                    ._deviceIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$StressSamplesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $StressSamplesTable,
+      StressSample,
+      $$StressSamplesTableFilterComposer,
+      $$StressSamplesTableOrderingComposer,
+      $$StressSamplesTableAnnotationComposer,
+      $$StressSamplesTableCreateCompanionBuilder,
+      $$StressSamplesTableUpdateCompanionBuilder,
+      (StressSample, $$StressSamplesTableReferences),
+      StressSample,
       PrefetchHooks Function({bool userId, bool deviceId})
     >;
 typedef $$Spo2SamplesTableCreateCompanionBuilder =
@@ -20352,6 +21846,8 @@ class $AppDatabaseManager {
       $$HrSamplesTableTableManager(_db, _db.hrSamples);
   $$HrvSamplesTableTableManager get hrvSamples =>
       $$HrvSamplesTableTableManager(_db, _db.hrvSamples);
+  $$StressSamplesTableTableManager get stressSamples =>
+      $$StressSamplesTableTableManager(_db, _db.stressSamples);
   $$Spo2SamplesTableTableManager get spo2Samples =>
       $$Spo2SamplesTableTableManager(_db, _db.spo2Samples);
   $$BpReadingsTableTableManager get bpReadings =>

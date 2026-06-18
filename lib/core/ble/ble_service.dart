@@ -408,6 +408,36 @@ class BleService {
     return Map<String, dynamic>.from(r as Map);
   }
 
+  /// Toggle the band's scheduled stress ("pressure") monitoring on/off.
+  /// The band picks its own cadence (~30 min slot per QWatch behavior).
+  /// Returns `{isEnable: bool}`. H59 ack quirk: trust [getStressScheduled]
+  /// for ground truth.
+  Future<Map<String, dynamic>> setStressScheduled({
+    required bool enabled,
+  }) async {
+    final r = await _channel.invokeMethod('setStressScheduled', {
+      'enabled': enabled,
+    });
+    return Map<String, dynamic>.from(r as Map);
+  }
+
+  /// Read the band's current scheduled stress monitoring state.
+  /// Returns `{isEnable: bool}`.
+  Future<Map<String, dynamic>> getStressScheduled() async {
+    final r = await _channel.invokeMethod('getStressScheduled');
+    return Map<String, dynamic>.from(r as Map);
+  }
+
+  /// Per-day stress sync. Returns
+  /// `{values: List<int> 0-100, intervalMinutes: int, offset: int, rawArray: List<int>}`.
+  /// Shape mirrors HRV — each value is one slot of length `intervalMinutes`.
+  Future<Map<String, dynamic>> getStressDay({int dayOffset = 0}) async {
+    final r = await _channel.invokeMethod('getStressDay', {
+      'dayOffset': dayOffset,
+    });
+    return Map<String, dynamic>.from(r as Map);
+  }
+
   // ──────────────────────────────────────────────────────────────────────
   // History fetch — hlth-ble-platform-channel.md §3.7
   //
@@ -528,6 +558,28 @@ class BleService {
   Future<Map<String, dynamic>> stopOneKeyMeasurement() async {
     final r = await _channel.invokeMethod('stopOneKeyMeasurement');
     return Map<String, dynamic>.from(r as Map);
+  }
+
+  /// One-shot poll of the band's battery level via the SDK's
+  /// `CMD_GET_DEVICE_ELECTRICITY_VALUE` request. The same value is pushed
+  /// to [batteryUpdate] subscribers automatically by the native side, so
+  /// listeners don't need to await this — but awaiting it gives a
+  /// "fetch on screen entry" surface for UIs that want a fresh number
+  /// without waiting for the next bootstrap or periodic tick.
+  ///
+  /// Returns `null` if the band rejected the request (e.g. not bound) or
+  /// the call failed before reaching the band.
+  Future<({int level, bool charging})?> requestBattery() async {
+    try {
+      final r = await _channel.invokeMethod('getBattery');
+      if (r == null) return null;
+      final m = Map<String, dynamic>.from(r as Map);
+      final level = (m['level'] as num?)?.toInt();
+      if (level == null) return null;
+      return (level: level, charging: (m['charging'] as bool?) ?? false);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<Map<String, dynamic>> getSleepHistory({int dayOffset = 0}) async {

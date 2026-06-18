@@ -45,6 +45,15 @@ dependencies:
   # Runtime permissions (BLE scan/connect, location on Android <12)
   permission_handler: ^11.3.1
 
+  # Supabase backend (V1.0 foundation — auth + identity + aggregated rollups
+  # mirror per hlth-backend-architecture.md). Bundles gotrue, postgrest,
+  # realtime, storage; we only use auth + postgrest in this slice.
+  supabase_flutter: ^2.8.0
+
+  # Refresh-token storage backed by Keychain (iOS) / EncryptedSharedPreferences
+  # (Android). Required by `LocalStorage` adapter passed to Supabase.initialize.
+  flutter_secure_storage: ^9.2.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

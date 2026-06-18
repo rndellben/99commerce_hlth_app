@@ -177,10 +177,27 @@ dart run build_runner build --delete-conflicting-outputs
 
 The `build_runner` step generates Drift's `.g.dart` files and freezed's `.freezed.dart` files. Re-run after any schema or model change.
 
+### Environment file (required for Supabase backend)
+
+The app initializes Supabase at startup and needs `SUPABASE_URL` + `SUPABASE_ANON_KEY` injected at compile time:
+
+```bash
+cp hlth.env.example.json hlth.env.json
+# edit hlth.env.json with your project's URL + anon key (Supabase Studio → Settings → API)
+```
+
+`hlth.env.json` is gitignored. Always pass it via `--dart-define-from-file`:
+
+```bash
+flutter run --dart-define-from-file=hlth.env.json
+```
+
+Without this, the app throws a clear `StateError` at startup instead of crashing deep inside the Supabase SDK.
+
 ### Run on Android
 
 ```bash
-flutter run
+flutter run --dart-define-from-file=hlth.env.json
 ```
 
 The build script bundles the QRing SDK (`android/app/libs/qring_sdk_1.0.0.17.aar`) automatically.
@@ -189,7 +206,7 @@ The build script bundles the QRing SDK (`android/app/libs/qring_sdk_1.0.0.17.aar
 
 ```bash
 cd ios && pod install && cd ..
-flutter run
+flutter run --dart-define-from-file=hlth.env.json
 ```
 
 ### Required permissions at runtime

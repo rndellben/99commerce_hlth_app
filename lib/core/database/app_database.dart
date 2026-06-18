@@ -25,6 +25,7 @@ part 'app_database.g.dart';
     Devices,
     HrSamples,
     HrvSamples,
+    StressSamples,
     Spo2Samples,
     BpReadings,
     StepBuckets,
@@ -41,7 +42,7 @@ class AppDatabase extends _$AppDatabase {
   /// Bump on every schema change. Add a migration step in
   /// `migration` below. See hlth-db-schema.md §"Schema versioning".
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -50,7 +51,16 @@ class AppDatabase extends _$AppDatabase {
           await _createIndices();
         },
         onUpgrade: (m, from, to) async {
-          // No migrations yet — first release is v1.
+          // v1 → v2: add stress_samples table (HLT-13, Phase 4)
+          if (from < 2) {
+            await m.createTable(stressSamples);
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_stress_user_time ON stress_samples(user_id, captured_at_utc DESC)',
+            );
+            await customStatement(
+              'CREATE UNIQUE INDEX IF NOT EXISTS idx_stress_dedup ON stress_samples(user_id, device_id, captured_at_utc, source)',
+            );
+          }
         },
       );
 
@@ -68,6 +78,9 @@ class AppDatabase extends _$AppDatabase {
       // hrv_samples
       'CREATE INDEX IF NOT EXISTS idx_hrv_user_time ON hrv_samples(user_id, captured_at_utc DESC)',
       'CREATE UNIQUE INDEX IF NOT EXISTS idx_hrv_dedup ON hrv_samples(user_id, device_id, captured_at_utc, source)',
+      // stress_samples
+      'CREATE INDEX IF NOT EXISTS idx_stress_user_time ON stress_samples(user_id, captured_at_utc DESC)',
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_stress_dedup ON stress_samples(user_id, device_id, captured_at_utc, source)',
       // spo2_samples
       'CREATE INDEX IF NOT EXISTS idx_spo2_user_time ON spo2_samples(user_id, captured_at_utc DESC)',
       'CREATE UNIQUE INDEX IF NOT EXISTS idx_spo2_dedup ON spo2_samples(user_id, device_id, captured_at_utc, source)',
