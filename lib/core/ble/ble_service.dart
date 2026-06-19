@@ -560,6 +560,50 @@ class BleService {
     return Map<String, dynamic>.from(r as Map);
   }
 
+  /// Write the user's personal info + BP/HR baseline to the band.
+  ///
+  /// Wraps the SDK's `TimeFormatReq` "set personal info" call (sdk_ring.pdf
+  /// "Setting Ring user Id" section). The trailing `baselineSbp / baselineDbp
+  /// / hrWarnHigh` values double as the BP-calibration anchor — they become
+  /// the reference points the band's scheduled-BP estimator drifts away
+  /// from based on measured HR. Without this call the band falls back to
+  /// the SDK helper's age-bracket defaults (random SBP in 100-120 + offset),
+  /// which is why uncalibrated BP feels arbitrary.
+  ///
+  /// Returns `true` on success, `false` if the band rejected or the call
+  /// failed before reaching it. Idempotent — safe to write on every
+  /// calibration update; the band overwrites its stored copy.
+  Future<bool> setPersonalInfo({
+    required bool isMale,
+    required int age,
+    required int heightCm,
+    required int weightKg,
+    required int baselineSbp,
+    required int baselineDbp,
+    required int hrWarnHigh,
+    bool is24h = true,
+    bool metric = true,
+  }) async {
+    try {
+      final r = await _channel.invokeMethod('setPersonalInfo', {
+        'is24h': is24h,
+        'metric': metric,
+        'isMale': isMale,
+        'age': age,
+        'heightCm': heightCm,
+        'weightKg': weightKg,
+        'baselineSbp': baselineSbp,
+        'baselineDbp': baselineDbp,
+        'hrWarnHigh': hrWarnHigh,
+      });
+      if (r == null) return false;
+      final m = Map<String, dynamic>.from(r as Map);
+      return (m['set'] as bool?) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// One-shot poll of the band's battery level via the SDK's
   /// `CMD_GET_DEVICE_ELECTRICITY_VALUE` request. The same value is pushed
   /// to [batteryUpdate] subscribers automatically by the native side, so

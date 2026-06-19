@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hlth_app/core/ble/ble_service.dart';
 import 'package:hlth_app/core/services/feature_gate.dart';
+import 'package:hlth_app/features/blood_pressure/bp_calibration_providers.dart';
 import 'package:hlth_app/features/home/home_providers.dart';
 import 'package:hlth_app/ui/theme/app_colors.dart';
 import 'package:hlth_app/ui/widgets/health_metric_card.dart';
@@ -17,7 +18,7 @@ class HomeScreen extends ConsumerWidget {
     final latestHr = ref.watch(latestHrSampleProvider).valueOrNull;
     final latestSpo2 = ref.watch(latestSpo2SampleProvider).valueOrNull;
     final latestHrv = ref.watch(latestHrvSampleProvider).valueOrNull;
-    final latestBp = ref.watch(latestBpReadingProvider).valueOrNull;
+    final latestBpPair = ref.watch(calibratedLatestBpProvider).valueOrNull;
     final latestStress = ref.watch(latestStressSampleProvider).valueOrNull;
     final hrSpark = ref.watch(hrSparklineProvider).valueOrNull ?? const [];
     final spo2Spark =
@@ -111,10 +112,10 @@ class HomeScreen extends ConsumerWidget {
                 ),
                 HealthMetricCard(
                   title: 'Blood Pressure',
-                  value: latestBp == null
+                  value: latestBpPair == null
                       ? '--'
-                      : '${latestBp.systolicMmhg}/${latestBp.diastolicMmhg}',
-                  unit: latestBp == null ? '' : 'mmHg',
+                      : '${latestBpPair.displaySbp}/${latestBpPair.displayDbp}',
+                  unit: latestBpPair == null ? '' : 'mmHg',
                   icon: Icons.monitor_heart_outlined,
                   color: AppColors.bloodPressure,
                   date: todayLabel,

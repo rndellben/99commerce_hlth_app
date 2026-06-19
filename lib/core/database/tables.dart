@@ -318,6 +318,40 @@ class SleepEpochs extends Table {
 
 // ─── Section 6 — Derived ────────────────────────────────────────────────────
 
+/// hlth-db-schema.md §6.2 — user-entered cuff readings used to personalize
+/// BP estimates. Each row is one calibration event; `is_active = 1` flags
+/// the currently-applied calibration. Historical rows are retained so
+/// past `bp_readings.calibrated_against_id` references stay valid.
+class BpCalibrations extends Table {
+  TextColumn get id => text()(); // UUID v4
+  TextColumn get userId => text().references(Users, #id)();
+  IntColumn get capturedAtUtc => integer()();
+  IntColumn get cuffSystolic => integer()(); // 70-200 mmHg
+  IntColumn get cuffDiastolic => integer()(); // 40-130 mmHg
+  // Band's reading at the same moment, if available. Lets us compute the
+  // offset retroactively or evaluate calibration drift.
+  IntColumn get bandSystolic => integer().nullable()();
+  IntColumn get bandDiastolic => integer().nullable()();
+  // HR at the moment the cuff reading was taken — needed to reapply the
+  // band's `cal_sbp(hr, age) → sbp` formula in reverse when computing
+  // future calibrated readings.
+  IntColumn get hrAtCalibration => integer().nullable()();
+  // User's age at calibration time, captured here so the formula stays
+  // stable even if the profile age changes later.
+  IntColumn get ageAtCalibration => integer().nullable()();
+  // Whether this calibration was successfully written to the band via
+  // TimeFormatReq (the SDK's "set personal info" path). False means we
+  // have the row locally but the band still has its old anchor.
+  BoolColumn get bandWriteSucceeded =>
+      boolean().withDefault(const Constant(false))();
+  TextColumn get notes => text().nullable()();
+  BoolColumn get isActive => boolean().withDefault(const Constant(true))();
+  IntColumn get createdAtUtc => integer()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 /// hlth-db-schema.md §6.1 — rolling baselines (14/30/90-day).
 class Baselines extends Table {
   TextColumn get id => text()();

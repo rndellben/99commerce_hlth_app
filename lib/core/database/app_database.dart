@@ -33,6 +33,7 @@ part 'app_database.g.dart';
     SleepSessions,
     SleepEpochs,
     Baselines,
+    BpCalibrations,
     SyncState,
   ],
 )
@@ -42,7 +43,7 @@ class AppDatabase extends _$AppDatabase {
   /// Bump on every schema change. Add a migration step in
   /// `migration` below. See hlth-db-schema.md §"Schema versioning".
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -59,6 +60,16 @@ class AppDatabase extends _$AppDatabase {
             );
             await customStatement(
               'CREATE UNIQUE INDEX IF NOT EXISTS idx_stress_dedup ON stress_samples(user_id, device_id, captured_at_utc, source)',
+            );
+          }
+          // v2 → v3: add bp_calibrations table (HLT-16, Phase 4)
+          if (from < 3) {
+            await m.createTable(bpCalibrations);
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_bpcal_user_time ON bp_calibrations(user_id, captured_at_utc DESC)',
+            );
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_bpcal_user_active ON bp_calibrations(user_id, is_active, captured_at_utc DESC)',
             );
           }
         },
@@ -100,6 +111,9 @@ class AppDatabase extends _$AppDatabase {
       // baselines
       'CREATE INDEX IF NOT EXISTS idx_baseline_user_metric ON baselines(user_id, metric_key, window_days, computed_for_date DESC)',
       'CREATE UNIQUE INDEX IF NOT EXISTS idx_baseline_dedup ON baselines(user_id, metric_key, window_days, computed_for_date)',
+      // bp_calibrations
+      'CREATE INDEX IF NOT EXISTS idx_bpcal_user_time ON bp_calibrations(user_id, captured_at_utc DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_bpcal_user_active ON bp_calibrations(user_id, is_active, captured_at_utc DESC)',
       // sync_state
       'CREATE UNIQUE INDEX IF NOT EXISTS idx_sync_state_unique ON sync_state(device_id, metric_key)',
       // devices

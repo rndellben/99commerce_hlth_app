@@ -3,10 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hlth_app/core/ble/ble_service.dart';
 import 'package:hlth_app/core/bootstrap/active_session.dart';
 import 'package:hlth_app/core/database/enums.dart';
+import 'package:hlth_app/core/models/bp_calibration.dart';
 import 'package:hlth_app/core/models/health_samples.dart';
+import 'package:hlth_app/core/repositories/bp_calibration_repository.dart';
 import 'package:hlth_app/core/repositories/bp_repository.dart';
 import 'package:hlth_app/core/repositories/device_repository.dart';
+import 'package:hlth_app/features/blood_pressure/bp_calibration_providers.dart';
 import 'package:hlth_app/features/home/home_providers.dart';
+import 'package:hlth_app/features/onboarding/onboarding_screen.dart';
 import 'package:hlth_app/ui/theme/app_colors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -240,9 +244,89 @@ class _BloodPressureScreenState extends ConsumerState<BloodPressureScreen> {
     }
   }
 
+  /// Opens the cuff-reading entry sheet. Captures the live HR at submit
+  /// time, writes the calibration to local DB, and pushes the new BP/HR
+  /// baseline to the band via `setPersonalInfo` so the band's own
+  /// scheduled-BP estimator is anchored to this cuff value too.
+  Future<void> _openCalibrate() async {
+    final ble = ref.read(bleServiceProvider);
+    final profile = ref.read(userProfileProvider).valueOrNull;
+    final result = await showModalBottomSheet<({int sbp, int dbp, String? notes})>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.background,
+      builder: (ctx) => _CalibrateSheet(initialHr: ble.realtimeHeartRate),
+    );
+    if (result == null || !mounted) return;
+
+    final age = _ageFrom(profile?.dateOfBirth);
+    final hrNow = _latestHr();
+    final calibrationId = const Uuid().v4();
+    final now = DateTime.now();
+    final calibration = BpCalibration(
+      id: calibrationId,
+      userId: ActiveSession.defaultUserId,
+      capturedAt: now.toUtc(),
+      cuffSystolic: result.sbp,
+      cuffDiastolic: result.dbp,
+      hrAtCalibration: hrNow,
+      ageAtCalibration: age,
+      notes: result.notes,
+      isActive: true,
+      createdAt: now.toUtc(),
+    );
+    await ref
+        .read(bpCalibrationRepositoryProvider)
+        .upsertNewActive(calibration);
+
+    // Push baseline + personal info to the band so QWatch and our app
+    // stay aligned. Non-fatal if disconnected — the local row already
+    // captured the calibration and we'll re-write next reconnect.
+    final isMale = profile?.sexAtBirth == SexAtBirth.male;
+    final ok = await ble.setPersonalInfo(
+      isMale: isMale,
+      age: age,
+      heightCm: profile?.heightCm?.round() ?? 170,
+      weightKg: profile?.weightKg?.round() ?? 70,
+      baselineSbp: result.sbp,
+      baselineDbp: result.dbp,
+      hrWarnHigh: (220 - age).clamp(120, 200),
+    );
+    if (ok) {
+      await ref
+          .read(bpCalibrationRepositoryProvider)
+          .markBandWriteSucceeded(calibrationId);
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok
+            ? 'Calibrated to ${result.sbp}/${result.dbp}'
+            : 'Saved locally — band sync will retry on next connect'),
+      ),
+    );
+  }
+
+  int _ageFrom(DateTime? dob) {
+    if (dob == null) return 30;
+    final now = DateTime.now();
+    var age = now.year - dob.year;
+    if (now.month < dob.month ||
+        (now.month == dob.month && now.day < dob.day)) {
+      age -= 1;
+    }
+    return age.clamp(13, 100);
+  }
+
+  int? _latestHr() {
+    return ref.read(latestHrSampleProvider).valueOrNull?.bpm;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final latestBp = ref.watch(latestBpReadingProvider).valueOrNull;
+    final latestPair = ref.watch(calibratedLatestBpProvider).valueOrNull;
+    final latestBp = latestPair?.reading;
+    final activeCal = ref.watch(activeBpCalibrationProvider).valueOrNull;
     final connectedAsync = ref.watch(bleConnectionStateProvider);
     final connected = connectedAsync.maybeWhen(
       data: (s) => s == BleConnectionState.connected,
@@ -264,9 +348,9 @@ class _BloodPressureScreenState extends ConsumerState<BloodPressureScreen> {
                 color: AppColors.bloodPressure, size: 48),
             const SizedBox(height: 16),
             Text(
-              latestBp == null
+              latestPair == null
                   ? '--'
-                  : '${latestBp.systolicMmhg}/${latestBp.diastolicMmhg}',
+                  : '${latestPair.displaySbp}/${latestPair.displayDbp}',
               style: Theme.of(context)
                   .textTheme
                   .displayLarge
@@ -284,10 +368,18 @@ class _BloodPressureScreenState extends ConsumerState<BloodPressureScreen> {
                   ? (connected
                       ? 'No reading yet — measure or wait for scheduled run'
                       : 'Connect your band to see readings')
-                  : 'Last reading ${_timeAgo(latestBp.capturedAt)}',
+                  : (latestPair!.isCalibrated
+                      ? 'Calibrated · last reading ${_timeAgo(latestBp.capturedAt)} · raw ${latestBp.systolicMmhg}/${latestBp.diastolicMmhg}'
+                      : 'Uncalibrated · last reading ${_timeAgo(latestBp.capturedAt)}'),
               style: Theme.of(context).textTheme.bodyMedium,
+              textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 16),
+            _CalibrationStatusCard(
+              calibration: activeCal,
+              onTap: _openCalibrate,
+            ),
+            const SizedBox(height: 16),
             _ScheduledCard(
               enabled: _bpEnabled,
               intervalLabel: _intervalLabel(_bpIntervalMinutes),
@@ -402,6 +494,248 @@ class _ScheduledCard extends StatelessWidget {
               ),
               onTap: busy ? null : onPickInterval,
             ),
+        ],
+      ),
+    );
+  }
+}
+
+/// "Calibrated 132/85 · 2 days ago" status row — tap opens the Calibrate
+/// sheet. When no active calibration exists, prompts the user to add one.
+class _CalibrationStatusCard extends StatelessWidget {
+  const _CalibrationStatusCard({
+    required this.calibration,
+    required this.onTap,
+  });
+  final BpCalibration? calibration;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cal = calibration;
+    final title = cal == null
+        ? 'Not calibrated'
+        : 'Calibrated to ${cal.cuffSystolic}/${cal.cuffDiastolic}';
+    final subtitle = cal == null
+        ? 'Enter a cuff reading for personalized BP estimates'
+        : 'Set ${_ago(cal.capturedAt)}'
+            '${cal.bandWriteSucceeded ? '' : ' · band sync pending'}';
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: ListTile(
+        leading: Icon(
+          cal == null
+              ? Icons.tune
+              : (cal.bandWriteSucceeded
+                  ? Icons.check_circle_outline
+                  : Icons.sync_problem_outlined),
+          color: cal == null
+              ? AppColors.textSecondary
+              : (cal.bandWriteSucceeded
+                  ? AppColors.success
+                  : AppColors.warning),
+        ),
+        title: Text(title),
+        subtitle: Text(subtitle,
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+        trailing: TextButton(
+          onPressed: onTap,
+          child: Text(cal == null ? 'Calibrate' : 'Re-calibrate'),
+        ),
+        onTap: onTap,
+      ),
+    );
+  }
+
+  String _ago(DateTime t) {
+    final diff = DateTime.now().toUtc().difference(t.toUtc());
+    if (diff.inMinutes < 60) return 'just now';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays == 1) return 'yesterday';
+    return '${diff.inDays} days ago';
+  }
+}
+
+/// Modal sheet that asks the user for their latest cuff reading and an
+/// optional note. Shows the band's live HR so they can see what value
+/// will be paired with the cuff reading as the calibration anchor.
+class _CalibrateSheet extends StatefulWidget {
+  const _CalibrateSheet({required this.initialHr});
+  final Stream<int> initialHr;
+
+  @override
+  State<_CalibrateSheet> createState() => _CalibrateSheetState();
+}
+
+class _CalibrateSheetState extends State<_CalibrateSheet> {
+  final _sbpCtrl = TextEditingController();
+  final _dbpCtrl = TextEditingController();
+  final _notesCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _sbpCtrl.dispose();
+    _dbpCtrl.dispose();
+    _notesCtrl.dispose();
+    super.dispose();
+  }
+
+  String? _validate(String? raw, {required int min, required int max}) {
+    if (raw == null || raw.isEmpty) return 'Required';
+    final v = int.tryParse(raw);
+    if (v == null) return 'Numbers only';
+    if (v < min || v > max) return '$min-$max range';
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final inset = MediaQuery.of(context).viewInsets.bottom;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 24, 20, 24 + inset),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Text(
+              'Enter your cuff reading',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Center(
+            child: Text(
+              'Use a recent reading from a standard arm cuff. The band '
+              'will personalize BP estimates around this anchor.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _sbpCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Systolic',
+                    suffixText: 'mmHg',
+                    hintText: '120',
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  controller: _dbpCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Diastolic',
+                    suffixText: 'mmHg',
+                    hintText: '80',
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _notesCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Notes (optional)',
+              hintText: 'e.g. after lunch, left arm',
+            ),
+          ),
+          const SizedBox(height: 12),
+          StreamBuilder<int>(
+            stream: widget.initialHr,
+            builder: (context, snap) {
+              final hr = snap.data;
+              return Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.favorite,
+                        color: AppColors.heartRate, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        hr == null
+                            ? 'Waiting for HR from band…'
+                            : 'Current HR: $hr bpm — used as the calibration anchor',
+                        style: const TextStyle(
+                            color: AppColors.textSecondary, fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton(
+                  onPressed: () {
+                    final sbpErr = _validate(_sbpCtrl.text,
+                        min: 70, max: 200);
+                    final dbpErr = _validate(_dbpCtrl.text,
+                        min: 40, max: 130);
+                    if (sbpErr != null || dbpErr != null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(sbpErr != null
+                              ? 'Systolic: $sbpErr'
+                              : 'Diastolic: $dbpErr'),
+                        ),
+                      );
+                      return;
+                    }
+                    final sbp = int.parse(_sbpCtrl.text);
+                    final dbp = int.parse(_dbpCtrl.text);
+                    if (sbp <= dbp) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                              'Systolic must be higher than diastolic'),
+                        ),
+                      );
+                      return;
+                    }
+                    Navigator.pop(context, (
+                      sbp: sbp,
+                      dbp: dbp,
+                      notes: _notesCtrl.text.trim().isEmpty
+                          ? null
+                          : _notesCtrl.text.trim(),
+                    ));
+                  },
+                  child: const Text('Save calibration'),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );

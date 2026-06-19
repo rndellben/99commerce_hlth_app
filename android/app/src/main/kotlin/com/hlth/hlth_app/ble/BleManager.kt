@@ -31,6 +31,7 @@ import com.oudmon.ble.base.communication.req.ReadDetailSportDataReq
 import com.oudmon.ble.base.communication.req.ReadHeartRateReq
 import com.oudmon.ble.base.communication.req.SetTimeReq
 import com.oudmon.ble.base.communication.req.SimpleKeyReq
+import com.oudmon.ble.base.communication.req.TimeFormatReq
 import com.oudmon.ble.base.communication.responseImpl.DeviceNotifyListener
 import com.oudmon.ble.base.communication.rsp.BaseRspCmd
 import com.oudmon.ble.base.communication.rsp.BatteryRsp
@@ -251,6 +252,18 @@ class BleManager(
             "connect" -> connect(call.argument<String>("deviceId"), result)
             "disconnect" -> disconnect(result)
             "getBattery" -> getBattery(result)
+            "setPersonalInfo" -> setPersonalInfo(
+                is24h = call.argument<Boolean>("is24h") ?: true,
+                metric = call.argument<Boolean>("metric") ?: true,
+                isMale = call.argument<Boolean>("isMale") ?: true,
+                age = call.argument<Int>("age") ?: 30,
+                heightCm = call.argument<Int>("heightCm") ?: 170,
+                weightKg = call.argument<Int>("weightKg") ?: 70,
+                baselineSbp = call.argument<Int>("baselineSbp") ?: 120,
+                baselineDbp = call.argument<Int>("baselineDbp") ?: 80,
+                hrWarnHigh = call.argument<Int>("hrWarnHigh") ?: 160,
+                result = result,
+            )
 
             // §3.5 Scheduled monitoring config — single first-pair entry point
             // until we split into per-metric setScheduledXxx in step 5+.
@@ -587,6 +600,65 @@ class BleManager(
         } catch (e: Exception) {
             Log.e("HlthBLE", "getBattery failed", e)
             result.error("BATTERY_FAILED", e.message, null)
+        }
+    }
+
+    /**
+     * Write the user's personal info + BP/HR baseline to the band.
+     *
+     * Wraps `TimeFormatReq.getWriteInstance(is24, metric, sex, age, height,
+     * weight, sbp, dbp, rateWarn)` — the SDK's "set personal info" call,
+     * documented under §"Setting Ring user Id" / "设置个人信息" in sdk_ring.pdf.
+     *
+     * The trailing `sbp / dbp / rateWarn` triple acts as the BP-calibration
+     * anchor for the band's internal `CalcBloodPressureByHeart.cal_sbp` —
+     * once written, the band's scheduled-BP path computes values relative
+     * to these reference points instead of falling back to the SDK helper's
+     * age-bracket defaults. This is also the only way QWatch and our app
+     * stay consistent if both connect to the same band.
+     *
+     * Boolean→int mapping for the SDK's int params (decompiled from the
+     * inner class field names: `val$metric: I` and `val$sex: I`):
+     *   metric: false → 0 (metric, kg/cm)        true → 1 (imperial)
+     *   isMale: false → 0 (female)               true → 1 (male)
+     *   is24h:  the Java boolean param directly  (true = 24-hour clock)
+     */
+    private fun setPersonalInfo(
+        is24h: Boolean,
+        metric: Boolean,
+        isMale: Boolean,
+        age: Int,
+        heightCm: Int,
+        weightKg: Int,
+        baselineSbp: Int,
+        baselineDbp: Int,
+        hrWarnHigh: Int,
+        result: MethodChannel.Result,
+    ) {
+        try {
+            Log.i(
+                "HlthBLE",
+                "setPersonalInfo: is24=$is24h metric=$metric male=$isMale " +
+                        "age=$age h=${heightCm}cm w=${weightKg}kg " +
+                        "baseline=$baselineSbp/$baselineDbp hrWarn=$hrWarnHigh"
+            )
+            CommandHandle.getInstance().executeReqCmdNoCallback(
+                TimeFormatReq.getWriteInstance(
+                    is24h,
+                    if (metric) 0 else 1,
+                    if (isMale) 1 else 0,
+                    age,
+                    heightCm,
+                    weightKg,
+                    baselineSbp,
+                    baselineDbp,
+                    hrWarnHigh,
+                )
+            )
+            result.success(mapOf("set" to true))
+        } catch (e: Exception) {
+            Log.e("HlthBLE", "setPersonalInfo failed", e)
+            result.error("PERSONAL_INFO_FAILED", e.message, null)
         }
     }
 

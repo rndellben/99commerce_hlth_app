@@ -11558,6 +11558,815 @@ class BaselinesCompanion extends UpdateCompanion<Baseline> {
   }
 }
 
+class $BpCalibrationsTable extends BpCalibrations
+    with TableInfo<$BpCalibrationsTable, BpCalibration> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $BpCalibrationsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+    'user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES users (id)',
+    ),
+  );
+  static const VerificationMeta _capturedAtUtcMeta = const VerificationMeta(
+    'capturedAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> capturedAtUtc = GeneratedColumn<int>(
+    'captured_at_utc',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _cuffSystolicMeta = const VerificationMeta(
+    'cuffSystolic',
+  );
+  @override
+  late final GeneratedColumn<int> cuffSystolic = GeneratedColumn<int>(
+    'cuff_systolic',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _cuffDiastolicMeta = const VerificationMeta(
+    'cuffDiastolic',
+  );
+  @override
+  late final GeneratedColumn<int> cuffDiastolic = GeneratedColumn<int>(
+    'cuff_diastolic',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bandSystolicMeta = const VerificationMeta(
+    'bandSystolic',
+  );
+  @override
+  late final GeneratedColumn<int> bandSystolic = GeneratedColumn<int>(
+    'band_systolic',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _bandDiastolicMeta = const VerificationMeta(
+    'bandDiastolic',
+  );
+  @override
+  late final GeneratedColumn<int> bandDiastolic = GeneratedColumn<int>(
+    'band_diastolic',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _hrAtCalibrationMeta = const VerificationMeta(
+    'hrAtCalibration',
+  );
+  @override
+  late final GeneratedColumn<int> hrAtCalibration = GeneratedColumn<int>(
+    'hr_at_calibration',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _ageAtCalibrationMeta = const VerificationMeta(
+    'ageAtCalibration',
+  );
+  @override
+  late final GeneratedColumn<int> ageAtCalibration = GeneratedColumn<int>(
+    'age_at_calibration',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _bandWriteSucceededMeta =
+      const VerificationMeta('bandWriteSucceeded');
+  @override
+  late final GeneratedColumn<bool> bandWriteSucceeded = GeneratedColumn<bool>(
+    'band_write_succeeded',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("band_write_succeeded" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _notesMeta = const VerificationMeta('notes');
+  @override
+  late final GeneratedColumn<String> notes = GeneratedColumn<String>(
+    'notes',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isActiveMeta = const VerificationMeta(
+    'isActive',
+  );
+  @override
+  late final GeneratedColumn<bool> isActive = GeneratedColumn<bool>(
+    'is_active',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_active" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _createdAtUtcMeta = const VerificationMeta(
+    'createdAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> createdAtUtc = GeneratedColumn<int>(
+    'created_at_utc',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    userId,
+    capturedAtUtc,
+    cuffSystolic,
+    cuffDiastolic,
+    bandSystolic,
+    bandDiastolic,
+    hrAtCalibration,
+    ageAtCalibration,
+    bandWriteSucceeded,
+    notes,
+    isActive,
+    createdAtUtc,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'bp_calibrations';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<BpCalibration> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('user_id')) {
+      context.handle(
+        _userIdMeta,
+        userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_userIdMeta);
+    }
+    if (data.containsKey('captured_at_utc')) {
+      context.handle(
+        _capturedAtUtcMeta,
+        capturedAtUtc.isAcceptableOrUnknown(
+          data['captured_at_utc']!,
+          _capturedAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_capturedAtUtcMeta);
+    }
+    if (data.containsKey('cuff_systolic')) {
+      context.handle(
+        _cuffSystolicMeta,
+        cuffSystolic.isAcceptableOrUnknown(
+          data['cuff_systolic']!,
+          _cuffSystolicMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_cuffSystolicMeta);
+    }
+    if (data.containsKey('cuff_diastolic')) {
+      context.handle(
+        _cuffDiastolicMeta,
+        cuffDiastolic.isAcceptableOrUnknown(
+          data['cuff_diastolic']!,
+          _cuffDiastolicMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_cuffDiastolicMeta);
+    }
+    if (data.containsKey('band_systolic')) {
+      context.handle(
+        _bandSystolicMeta,
+        bandSystolic.isAcceptableOrUnknown(
+          data['band_systolic']!,
+          _bandSystolicMeta,
+        ),
+      );
+    }
+    if (data.containsKey('band_diastolic')) {
+      context.handle(
+        _bandDiastolicMeta,
+        bandDiastolic.isAcceptableOrUnknown(
+          data['band_diastolic']!,
+          _bandDiastolicMeta,
+        ),
+      );
+    }
+    if (data.containsKey('hr_at_calibration')) {
+      context.handle(
+        _hrAtCalibrationMeta,
+        hrAtCalibration.isAcceptableOrUnknown(
+          data['hr_at_calibration']!,
+          _hrAtCalibrationMeta,
+        ),
+      );
+    }
+    if (data.containsKey('age_at_calibration')) {
+      context.handle(
+        _ageAtCalibrationMeta,
+        ageAtCalibration.isAcceptableOrUnknown(
+          data['age_at_calibration']!,
+          _ageAtCalibrationMeta,
+        ),
+      );
+    }
+    if (data.containsKey('band_write_succeeded')) {
+      context.handle(
+        _bandWriteSucceededMeta,
+        bandWriteSucceeded.isAcceptableOrUnknown(
+          data['band_write_succeeded']!,
+          _bandWriteSucceededMeta,
+        ),
+      );
+    }
+    if (data.containsKey('notes')) {
+      context.handle(
+        _notesMeta,
+        notes.isAcceptableOrUnknown(data['notes']!, _notesMeta),
+      );
+    }
+    if (data.containsKey('is_active')) {
+      context.handle(
+        _isActiveMeta,
+        isActive.isAcceptableOrUnknown(data['is_active']!, _isActiveMeta),
+      );
+    }
+    if (data.containsKey('created_at_utc')) {
+      context.handle(
+        _createdAtUtcMeta,
+        createdAtUtc.isAcceptableOrUnknown(
+          data['created_at_utc']!,
+          _createdAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtUtcMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  BpCalibration map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return BpCalibration(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      userId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}user_id'],
+      )!,
+      capturedAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}captured_at_utc'],
+      )!,
+      cuffSystolic: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}cuff_systolic'],
+      )!,
+      cuffDiastolic: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}cuff_diastolic'],
+      )!,
+      bandSystolic: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}band_systolic'],
+      ),
+      bandDiastolic: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}band_diastolic'],
+      ),
+      hrAtCalibration: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}hr_at_calibration'],
+      ),
+      ageAtCalibration: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}age_at_calibration'],
+      ),
+      bandWriteSucceeded: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}band_write_succeeded'],
+      )!,
+      notes: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}notes'],
+      ),
+      isActive: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_active'],
+      )!,
+      createdAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at_utc'],
+      )!,
+    );
+  }
+
+  @override
+  $BpCalibrationsTable createAlias(String alias) {
+    return $BpCalibrationsTable(attachedDatabase, alias);
+  }
+}
+
+class BpCalibration extends DataClass implements Insertable<BpCalibration> {
+  final String id;
+  final String userId;
+  final int capturedAtUtc;
+  final int cuffSystolic;
+  final int cuffDiastolic;
+  final int? bandSystolic;
+  final int? bandDiastolic;
+  final int? hrAtCalibration;
+  final int? ageAtCalibration;
+  final bool bandWriteSucceeded;
+  final String? notes;
+  final bool isActive;
+  final int createdAtUtc;
+  const BpCalibration({
+    required this.id,
+    required this.userId,
+    required this.capturedAtUtc,
+    required this.cuffSystolic,
+    required this.cuffDiastolic,
+    this.bandSystolic,
+    this.bandDiastolic,
+    this.hrAtCalibration,
+    this.ageAtCalibration,
+    required this.bandWriteSucceeded,
+    this.notes,
+    required this.isActive,
+    required this.createdAtUtc,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['user_id'] = Variable<String>(userId);
+    map['captured_at_utc'] = Variable<int>(capturedAtUtc);
+    map['cuff_systolic'] = Variable<int>(cuffSystolic);
+    map['cuff_diastolic'] = Variable<int>(cuffDiastolic);
+    if (!nullToAbsent || bandSystolic != null) {
+      map['band_systolic'] = Variable<int>(bandSystolic);
+    }
+    if (!nullToAbsent || bandDiastolic != null) {
+      map['band_diastolic'] = Variable<int>(bandDiastolic);
+    }
+    if (!nullToAbsent || hrAtCalibration != null) {
+      map['hr_at_calibration'] = Variable<int>(hrAtCalibration);
+    }
+    if (!nullToAbsent || ageAtCalibration != null) {
+      map['age_at_calibration'] = Variable<int>(ageAtCalibration);
+    }
+    map['band_write_succeeded'] = Variable<bool>(bandWriteSucceeded);
+    if (!nullToAbsent || notes != null) {
+      map['notes'] = Variable<String>(notes);
+    }
+    map['is_active'] = Variable<bool>(isActive);
+    map['created_at_utc'] = Variable<int>(createdAtUtc);
+    return map;
+  }
+
+  BpCalibrationsCompanion toCompanion(bool nullToAbsent) {
+    return BpCalibrationsCompanion(
+      id: Value(id),
+      userId: Value(userId),
+      capturedAtUtc: Value(capturedAtUtc),
+      cuffSystolic: Value(cuffSystolic),
+      cuffDiastolic: Value(cuffDiastolic),
+      bandSystolic: bandSystolic == null && nullToAbsent
+          ? const Value.absent()
+          : Value(bandSystolic),
+      bandDiastolic: bandDiastolic == null && nullToAbsent
+          ? const Value.absent()
+          : Value(bandDiastolic),
+      hrAtCalibration: hrAtCalibration == null && nullToAbsent
+          ? const Value.absent()
+          : Value(hrAtCalibration),
+      ageAtCalibration: ageAtCalibration == null && nullToAbsent
+          ? const Value.absent()
+          : Value(ageAtCalibration),
+      bandWriteSucceeded: Value(bandWriteSucceeded),
+      notes: notes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(notes),
+      isActive: Value(isActive),
+      createdAtUtc: Value(createdAtUtc),
+    );
+  }
+
+  factory BpCalibration.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return BpCalibration(
+      id: serializer.fromJson<String>(json['id']),
+      userId: serializer.fromJson<String>(json['userId']),
+      capturedAtUtc: serializer.fromJson<int>(json['capturedAtUtc']),
+      cuffSystolic: serializer.fromJson<int>(json['cuffSystolic']),
+      cuffDiastolic: serializer.fromJson<int>(json['cuffDiastolic']),
+      bandSystolic: serializer.fromJson<int?>(json['bandSystolic']),
+      bandDiastolic: serializer.fromJson<int?>(json['bandDiastolic']),
+      hrAtCalibration: serializer.fromJson<int?>(json['hrAtCalibration']),
+      ageAtCalibration: serializer.fromJson<int?>(json['ageAtCalibration']),
+      bandWriteSucceeded: serializer.fromJson<bool>(json['bandWriteSucceeded']),
+      notes: serializer.fromJson<String?>(json['notes']),
+      isActive: serializer.fromJson<bool>(json['isActive']),
+      createdAtUtc: serializer.fromJson<int>(json['createdAtUtc']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'userId': serializer.toJson<String>(userId),
+      'capturedAtUtc': serializer.toJson<int>(capturedAtUtc),
+      'cuffSystolic': serializer.toJson<int>(cuffSystolic),
+      'cuffDiastolic': serializer.toJson<int>(cuffDiastolic),
+      'bandSystolic': serializer.toJson<int?>(bandSystolic),
+      'bandDiastolic': serializer.toJson<int?>(bandDiastolic),
+      'hrAtCalibration': serializer.toJson<int?>(hrAtCalibration),
+      'ageAtCalibration': serializer.toJson<int?>(ageAtCalibration),
+      'bandWriteSucceeded': serializer.toJson<bool>(bandWriteSucceeded),
+      'notes': serializer.toJson<String?>(notes),
+      'isActive': serializer.toJson<bool>(isActive),
+      'createdAtUtc': serializer.toJson<int>(createdAtUtc),
+    };
+  }
+
+  BpCalibration copyWith({
+    String? id,
+    String? userId,
+    int? capturedAtUtc,
+    int? cuffSystolic,
+    int? cuffDiastolic,
+    Value<int?> bandSystolic = const Value.absent(),
+    Value<int?> bandDiastolic = const Value.absent(),
+    Value<int?> hrAtCalibration = const Value.absent(),
+    Value<int?> ageAtCalibration = const Value.absent(),
+    bool? bandWriteSucceeded,
+    Value<String?> notes = const Value.absent(),
+    bool? isActive,
+    int? createdAtUtc,
+  }) => BpCalibration(
+    id: id ?? this.id,
+    userId: userId ?? this.userId,
+    capturedAtUtc: capturedAtUtc ?? this.capturedAtUtc,
+    cuffSystolic: cuffSystolic ?? this.cuffSystolic,
+    cuffDiastolic: cuffDiastolic ?? this.cuffDiastolic,
+    bandSystolic: bandSystolic.present ? bandSystolic.value : this.bandSystolic,
+    bandDiastolic: bandDiastolic.present
+        ? bandDiastolic.value
+        : this.bandDiastolic,
+    hrAtCalibration: hrAtCalibration.present
+        ? hrAtCalibration.value
+        : this.hrAtCalibration,
+    ageAtCalibration: ageAtCalibration.present
+        ? ageAtCalibration.value
+        : this.ageAtCalibration,
+    bandWriteSucceeded: bandWriteSucceeded ?? this.bandWriteSucceeded,
+    notes: notes.present ? notes.value : this.notes,
+    isActive: isActive ?? this.isActive,
+    createdAtUtc: createdAtUtc ?? this.createdAtUtc,
+  );
+  BpCalibration copyWithCompanion(BpCalibrationsCompanion data) {
+    return BpCalibration(
+      id: data.id.present ? data.id.value : this.id,
+      userId: data.userId.present ? data.userId.value : this.userId,
+      capturedAtUtc: data.capturedAtUtc.present
+          ? data.capturedAtUtc.value
+          : this.capturedAtUtc,
+      cuffSystolic: data.cuffSystolic.present
+          ? data.cuffSystolic.value
+          : this.cuffSystolic,
+      cuffDiastolic: data.cuffDiastolic.present
+          ? data.cuffDiastolic.value
+          : this.cuffDiastolic,
+      bandSystolic: data.bandSystolic.present
+          ? data.bandSystolic.value
+          : this.bandSystolic,
+      bandDiastolic: data.bandDiastolic.present
+          ? data.bandDiastolic.value
+          : this.bandDiastolic,
+      hrAtCalibration: data.hrAtCalibration.present
+          ? data.hrAtCalibration.value
+          : this.hrAtCalibration,
+      ageAtCalibration: data.ageAtCalibration.present
+          ? data.ageAtCalibration.value
+          : this.ageAtCalibration,
+      bandWriteSucceeded: data.bandWriteSucceeded.present
+          ? data.bandWriteSucceeded.value
+          : this.bandWriteSucceeded,
+      notes: data.notes.present ? data.notes.value : this.notes,
+      isActive: data.isActive.present ? data.isActive.value : this.isActive,
+      createdAtUtc: data.createdAtUtc.present
+          ? data.createdAtUtc.value
+          : this.createdAtUtc,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BpCalibration(')
+          ..write('id: $id, ')
+          ..write('userId: $userId, ')
+          ..write('capturedAtUtc: $capturedAtUtc, ')
+          ..write('cuffSystolic: $cuffSystolic, ')
+          ..write('cuffDiastolic: $cuffDiastolic, ')
+          ..write('bandSystolic: $bandSystolic, ')
+          ..write('bandDiastolic: $bandDiastolic, ')
+          ..write('hrAtCalibration: $hrAtCalibration, ')
+          ..write('ageAtCalibration: $ageAtCalibration, ')
+          ..write('bandWriteSucceeded: $bandWriteSucceeded, ')
+          ..write('notes: $notes, ')
+          ..write('isActive: $isActive, ')
+          ..write('createdAtUtc: $createdAtUtc')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    userId,
+    capturedAtUtc,
+    cuffSystolic,
+    cuffDiastolic,
+    bandSystolic,
+    bandDiastolic,
+    hrAtCalibration,
+    ageAtCalibration,
+    bandWriteSucceeded,
+    notes,
+    isActive,
+    createdAtUtc,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is BpCalibration &&
+          other.id == this.id &&
+          other.userId == this.userId &&
+          other.capturedAtUtc == this.capturedAtUtc &&
+          other.cuffSystolic == this.cuffSystolic &&
+          other.cuffDiastolic == this.cuffDiastolic &&
+          other.bandSystolic == this.bandSystolic &&
+          other.bandDiastolic == this.bandDiastolic &&
+          other.hrAtCalibration == this.hrAtCalibration &&
+          other.ageAtCalibration == this.ageAtCalibration &&
+          other.bandWriteSucceeded == this.bandWriteSucceeded &&
+          other.notes == this.notes &&
+          other.isActive == this.isActive &&
+          other.createdAtUtc == this.createdAtUtc);
+}
+
+class BpCalibrationsCompanion extends UpdateCompanion<BpCalibration> {
+  final Value<String> id;
+  final Value<String> userId;
+  final Value<int> capturedAtUtc;
+  final Value<int> cuffSystolic;
+  final Value<int> cuffDiastolic;
+  final Value<int?> bandSystolic;
+  final Value<int?> bandDiastolic;
+  final Value<int?> hrAtCalibration;
+  final Value<int?> ageAtCalibration;
+  final Value<bool> bandWriteSucceeded;
+  final Value<String?> notes;
+  final Value<bool> isActive;
+  final Value<int> createdAtUtc;
+  final Value<int> rowid;
+  const BpCalibrationsCompanion({
+    this.id = const Value.absent(),
+    this.userId = const Value.absent(),
+    this.capturedAtUtc = const Value.absent(),
+    this.cuffSystolic = const Value.absent(),
+    this.cuffDiastolic = const Value.absent(),
+    this.bandSystolic = const Value.absent(),
+    this.bandDiastolic = const Value.absent(),
+    this.hrAtCalibration = const Value.absent(),
+    this.ageAtCalibration = const Value.absent(),
+    this.bandWriteSucceeded = const Value.absent(),
+    this.notes = const Value.absent(),
+    this.isActive = const Value.absent(),
+    this.createdAtUtc = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  BpCalibrationsCompanion.insert({
+    required String id,
+    required String userId,
+    required int capturedAtUtc,
+    required int cuffSystolic,
+    required int cuffDiastolic,
+    this.bandSystolic = const Value.absent(),
+    this.bandDiastolic = const Value.absent(),
+    this.hrAtCalibration = const Value.absent(),
+    this.ageAtCalibration = const Value.absent(),
+    this.bandWriteSucceeded = const Value.absent(),
+    this.notes = const Value.absent(),
+    this.isActive = const Value.absent(),
+    required int createdAtUtc,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       userId = Value(userId),
+       capturedAtUtc = Value(capturedAtUtc),
+       cuffSystolic = Value(cuffSystolic),
+       cuffDiastolic = Value(cuffDiastolic),
+       createdAtUtc = Value(createdAtUtc);
+  static Insertable<BpCalibration> custom({
+    Expression<String>? id,
+    Expression<String>? userId,
+    Expression<int>? capturedAtUtc,
+    Expression<int>? cuffSystolic,
+    Expression<int>? cuffDiastolic,
+    Expression<int>? bandSystolic,
+    Expression<int>? bandDiastolic,
+    Expression<int>? hrAtCalibration,
+    Expression<int>? ageAtCalibration,
+    Expression<bool>? bandWriteSucceeded,
+    Expression<String>? notes,
+    Expression<bool>? isActive,
+    Expression<int>? createdAtUtc,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (userId != null) 'user_id': userId,
+      if (capturedAtUtc != null) 'captured_at_utc': capturedAtUtc,
+      if (cuffSystolic != null) 'cuff_systolic': cuffSystolic,
+      if (cuffDiastolic != null) 'cuff_diastolic': cuffDiastolic,
+      if (bandSystolic != null) 'band_systolic': bandSystolic,
+      if (bandDiastolic != null) 'band_diastolic': bandDiastolic,
+      if (hrAtCalibration != null) 'hr_at_calibration': hrAtCalibration,
+      if (ageAtCalibration != null) 'age_at_calibration': ageAtCalibration,
+      if (bandWriteSucceeded != null)
+        'band_write_succeeded': bandWriteSucceeded,
+      if (notes != null) 'notes': notes,
+      if (isActive != null) 'is_active': isActive,
+      if (createdAtUtc != null) 'created_at_utc': createdAtUtc,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  BpCalibrationsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? userId,
+    Value<int>? capturedAtUtc,
+    Value<int>? cuffSystolic,
+    Value<int>? cuffDiastolic,
+    Value<int?>? bandSystolic,
+    Value<int?>? bandDiastolic,
+    Value<int?>? hrAtCalibration,
+    Value<int?>? ageAtCalibration,
+    Value<bool>? bandWriteSucceeded,
+    Value<String?>? notes,
+    Value<bool>? isActive,
+    Value<int>? createdAtUtc,
+    Value<int>? rowid,
+  }) {
+    return BpCalibrationsCompanion(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      capturedAtUtc: capturedAtUtc ?? this.capturedAtUtc,
+      cuffSystolic: cuffSystolic ?? this.cuffSystolic,
+      cuffDiastolic: cuffDiastolic ?? this.cuffDiastolic,
+      bandSystolic: bandSystolic ?? this.bandSystolic,
+      bandDiastolic: bandDiastolic ?? this.bandDiastolic,
+      hrAtCalibration: hrAtCalibration ?? this.hrAtCalibration,
+      ageAtCalibration: ageAtCalibration ?? this.ageAtCalibration,
+      bandWriteSucceeded: bandWriteSucceeded ?? this.bandWriteSucceeded,
+      notes: notes ?? this.notes,
+      isActive: isActive ?? this.isActive,
+      createdAtUtc: createdAtUtc ?? this.createdAtUtc,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
+    }
+    if (capturedAtUtc.present) {
+      map['captured_at_utc'] = Variable<int>(capturedAtUtc.value);
+    }
+    if (cuffSystolic.present) {
+      map['cuff_systolic'] = Variable<int>(cuffSystolic.value);
+    }
+    if (cuffDiastolic.present) {
+      map['cuff_diastolic'] = Variable<int>(cuffDiastolic.value);
+    }
+    if (bandSystolic.present) {
+      map['band_systolic'] = Variable<int>(bandSystolic.value);
+    }
+    if (bandDiastolic.present) {
+      map['band_diastolic'] = Variable<int>(bandDiastolic.value);
+    }
+    if (hrAtCalibration.present) {
+      map['hr_at_calibration'] = Variable<int>(hrAtCalibration.value);
+    }
+    if (ageAtCalibration.present) {
+      map['age_at_calibration'] = Variable<int>(ageAtCalibration.value);
+    }
+    if (bandWriteSucceeded.present) {
+      map['band_write_succeeded'] = Variable<bool>(bandWriteSucceeded.value);
+    }
+    if (notes.present) {
+      map['notes'] = Variable<String>(notes.value);
+    }
+    if (isActive.present) {
+      map['is_active'] = Variable<bool>(isActive.value);
+    }
+    if (createdAtUtc.present) {
+      map['created_at_utc'] = Variable<int>(createdAtUtc.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BpCalibrationsCompanion(')
+          ..write('id: $id, ')
+          ..write('userId: $userId, ')
+          ..write('capturedAtUtc: $capturedAtUtc, ')
+          ..write('cuffSystolic: $cuffSystolic, ')
+          ..write('cuffDiastolic: $cuffDiastolic, ')
+          ..write('bandSystolic: $bandSystolic, ')
+          ..write('bandDiastolic: $bandDiastolic, ')
+          ..write('hrAtCalibration: $hrAtCalibration, ')
+          ..write('ageAtCalibration: $ageAtCalibration, ')
+          ..write('bandWriteSucceeded: $bandWriteSucceeded, ')
+          ..write('notes: $notes, ')
+          ..write('isActive: $isActive, ')
+          ..write('createdAtUtc: $createdAtUtc, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $SyncStateTable extends SyncState
     with TableInfo<$SyncStateTable, SyncStateData> {
   @override
@@ -12135,6 +12944,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $SleepSessionsTable sleepSessions = $SleepSessionsTable(this);
   late final $SleepEpochsTable sleepEpochs = $SleepEpochsTable(this);
   late final $BaselinesTable baselines = $BaselinesTable(this);
+  late final $BpCalibrationsTable bpCalibrations = $BpCalibrationsTable(this);
   late final $SyncStateTable syncState = $SyncStateTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
@@ -12154,6 +12964,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     sleepSessions,
     sleepEpochs,
     baselines,
+    bpCalibrations,
     syncState,
   ];
 }
@@ -12397,6 +13208,24 @@ final class $$UsersTableReferences
     ).filter((f) => f.userId.id.sqlEquals($_itemColumn<String>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_baselinesRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$BpCalibrationsTable, List<BpCalibration>>
+  _bpCalibrationsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.bpCalibrations,
+    aliasName: $_aliasNameGenerator(db.users.id, db.bpCalibrations.userId),
+  );
+
+  $$BpCalibrationsTableProcessedTableManager get bpCalibrationsRefs {
+    final manager = $$BpCalibrationsTableTableManager(
+      $_db,
+      $_db.bpCalibrations,
+    ).filter((f) => f.userId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_bpCalibrationsRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -12737,6 +13566,31 @@ class $$UsersTableFilterComposer extends Composer<_$AppDatabase, $UsersTable> {
           }) => $$BaselinesTableFilterComposer(
             $db: $db,
             $table: $db.baselines,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> bpCalibrationsRefs(
+    Expression<bool> Function($$BpCalibrationsTableFilterComposer f) f,
+  ) {
+    final $$BpCalibrationsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.bpCalibrations,
+      getReferencedColumn: (t) => t.userId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$BpCalibrationsTableFilterComposer(
+            $db: $db,
+            $table: $db.bpCalibrations,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -13129,6 +13983,31 @@ class $$UsersTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> bpCalibrationsRefs<T extends Object>(
+    Expression<T> Function($$BpCalibrationsTableAnnotationComposer a) f,
+  ) {
+    final $$BpCalibrationsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.bpCalibrations,
+      getReferencedColumn: (t) => t.userId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$BpCalibrationsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.bpCalibrations,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$UsersTableTableManager
@@ -13157,6 +14036,7 @@ class $$UsersTableTableManager
             bool sleepSessionsRefs,
             bool sleepEpochsRefs,
             bool baselinesRefs,
+            bool bpCalibrationsRefs,
           })
         > {
   $$UsersTableTableManager(_$AppDatabase db, $UsersTable table)
@@ -13230,6 +14110,7 @@ class $$UsersTableTableManager
                 sleepSessionsRefs = false,
                 sleepEpochsRefs = false,
                 baselinesRefs = false,
+                bpCalibrationsRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -13246,6 +14127,7 @@ class $$UsersTableTableManager
                     if (sleepSessionsRefs) db.sleepSessions,
                     if (sleepEpochsRefs) db.sleepEpochs,
                     if (baselinesRefs) db.baselines,
+                    if (bpCalibrationsRefs) db.bpCalibrations,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
@@ -13478,6 +14360,27 @@ class $$UsersTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (bpCalibrationsRefs)
+                        await $_getPrefetchedData<
+                          User,
+                          $UsersTable,
+                          BpCalibration
+                        >(
+                          currentTable: table,
+                          referencedTable: $$UsersTableReferences
+                              ._bpCalibrationsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$UsersTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).bpCalibrationsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.userId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -13511,6 +14414,7 @@ typedef $$UsersTableProcessedTableManager =
         bool sleepSessionsRefs,
         bool sleepEpochsRefs,
         bool baselinesRefs,
+        bool bpCalibrationsRefs,
       })
     >;
 typedef $$UserProfilesTableCreateCompanionBuilder =
@@ -21448,6 +22352,501 @@ typedef $$BaselinesTableProcessedTableManager =
       Baseline,
       PrefetchHooks Function({bool userId})
     >;
+typedef $$BpCalibrationsTableCreateCompanionBuilder =
+    BpCalibrationsCompanion Function({
+      required String id,
+      required String userId,
+      required int capturedAtUtc,
+      required int cuffSystolic,
+      required int cuffDiastolic,
+      Value<int?> bandSystolic,
+      Value<int?> bandDiastolic,
+      Value<int?> hrAtCalibration,
+      Value<int?> ageAtCalibration,
+      Value<bool> bandWriteSucceeded,
+      Value<String?> notes,
+      Value<bool> isActive,
+      required int createdAtUtc,
+      Value<int> rowid,
+    });
+typedef $$BpCalibrationsTableUpdateCompanionBuilder =
+    BpCalibrationsCompanion Function({
+      Value<String> id,
+      Value<String> userId,
+      Value<int> capturedAtUtc,
+      Value<int> cuffSystolic,
+      Value<int> cuffDiastolic,
+      Value<int?> bandSystolic,
+      Value<int?> bandDiastolic,
+      Value<int?> hrAtCalibration,
+      Value<int?> ageAtCalibration,
+      Value<bool> bandWriteSucceeded,
+      Value<String?> notes,
+      Value<bool> isActive,
+      Value<int> createdAtUtc,
+      Value<int> rowid,
+    });
+
+final class $$BpCalibrationsTableReferences
+    extends BaseReferences<_$AppDatabase, $BpCalibrationsTable, BpCalibration> {
+  $$BpCalibrationsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $UsersTable _userIdTable(_$AppDatabase db) => db.users.createAlias(
+    $_aliasNameGenerator(db.bpCalibrations.userId, db.users.id),
+  );
+
+  $$UsersTableProcessedTableManager get userId {
+    final $_column = $_itemColumn<String>('user_id')!;
+
+    final manager = $$UsersTableTableManager(
+      $_db,
+      $_db.users,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_userIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$BpCalibrationsTableFilterComposer
+    extends Composer<_$AppDatabase, $BpCalibrationsTable> {
+  $$BpCalibrationsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get capturedAtUtc => $composableBuilder(
+    column: $table.capturedAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get cuffSystolic => $composableBuilder(
+    column: $table.cuffSystolic,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get cuffDiastolic => $composableBuilder(
+    column: $table.cuffDiastolic,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get bandSystolic => $composableBuilder(
+    column: $table.bandSystolic,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get bandDiastolic => $composableBuilder(
+    column: $table.bandDiastolic,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get hrAtCalibration => $composableBuilder(
+    column: $table.hrAtCalibration,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get ageAtCalibration => $composableBuilder(
+    column: $table.ageAtCalibration,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get bandWriteSucceeded => $composableBuilder(
+    column: $table.bandWriteSucceeded,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get notes => $composableBuilder(
+    column: $table.notes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isActive => $composableBuilder(
+    column: $table.isActive,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$UsersTableFilterComposer get userId {
+    final $$UsersTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableFilterComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$BpCalibrationsTableOrderingComposer
+    extends Composer<_$AppDatabase, $BpCalibrationsTable> {
+  $$BpCalibrationsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get capturedAtUtc => $composableBuilder(
+    column: $table.capturedAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get cuffSystolic => $composableBuilder(
+    column: $table.cuffSystolic,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get cuffDiastolic => $composableBuilder(
+    column: $table.cuffDiastolic,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get bandSystolic => $composableBuilder(
+    column: $table.bandSystolic,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get bandDiastolic => $composableBuilder(
+    column: $table.bandDiastolic,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get hrAtCalibration => $composableBuilder(
+    column: $table.hrAtCalibration,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get ageAtCalibration => $composableBuilder(
+    column: $table.ageAtCalibration,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get bandWriteSucceeded => $composableBuilder(
+    column: $table.bandWriteSucceeded,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get notes => $composableBuilder(
+    column: $table.notes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isActive => $composableBuilder(
+    column: $table.isActive,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$UsersTableOrderingComposer get userId {
+    final $$UsersTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableOrderingComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$BpCalibrationsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $BpCalibrationsTable> {
+  $$BpCalibrationsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get capturedAtUtc => $composableBuilder(
+    column: $table.capturedAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get cuffSystolic => $composableBuilder(
+    column: $table.cuffSystolic,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get cuffDiastolic => $composableBuilder(
+    column: $table.cuffDiastolic,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get bandSystolic => $composableBuilder(
+    column: $table.bandSystolic,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get bandDiastolic => $composableBuilder(
+    column: $table.bandDiastolic,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get hrAtCalibration => $composableBuilder(
+    column: $table.hrAtCalibration,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get ageAtCalibration => $composableBuilder(
+    column: $table.ageAtCalibration,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get bandWriteSucceeded => $composableBuilder(
+    column: $table.bandWriteSucceeded,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get notes =>
+      $composableBuilder(column: $table.notes, builder: (column) => column);
+
+  GeneratedColumn<bool> get isActive =>
+      $composableBuilder(column: $table.isActive, builder: (column) => column);
+
+  GeneratedColumn<int> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => column,
+  );
+
+  $$UsersTableAnnotationComposer get userId {
+    final $$UsersTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableAnnotationComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$BpCalibrationsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $BpCalibrationsTable,
+          BpCalibration,
+          $$BpCalibrationsTableFilterComposer,
+          $$BpCalibrationsTableOrderingComposer,
+          $$BpCalibrationsTableAnnotationComposer,
+          $$BpCalibrationsTableCreateCompanionBuilder,
+          $$BpCalibrationsTableUpdateCompanionBuilder,
+          (BpCalibration, $$BpCalibrationsTableReferences),
+          BpCalibration,
+          PrefetchHooks Function({bool userId})
+        > {
+  $$BpCalibrationsTableTableManager(
+    _$AppDatabase db,
+    $BpCalibrationsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$BpCalibrationsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$BpCalibrationsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$BpCalibrationsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> userId = const Value.absent(),
+                Value<int> capturedAtUtc = const Value.absent(),
+                Value<int> cuffSystolic = const Value.absent(),
+                Value<int> cuffDiastolic = const Value.absent(),
+                Value<int?> bandSystolic = const Value.absent(),
+                Value<int?> bandDiastolic = const Value.absent(),
+                Value<int?> hrAtCalibration = const Value.absent(),
+                Value<int?> ageAtCalibration = const Value.absent(),
+                Value<bool> bandWriteSucceeded = const Value.absent(),
+                Value<String?> notes = const Value.absent(),
+                Value<bool> isActive = const Value.absent(),
+                Value<int> createdAtUtc = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => BpCalibrationsCompanion(
+                id: id,
+                userId: userId,
+                capturedAtUtc: capturedAtUtc,
+                cuffSystolic: cuffSystolic,
+                cuffDiastolic: cuffDiastolic,
+                bandSystolic: bandSystolic,
+                bandDiastolic: bandDiastolic,
+                hrAtCalibration: hrAtCalibration,
+                ageAtCalibration: ageAtCalibration,
+                bandWriteSucceeded: bandWriteSucceeded,
+                notes: notes,
+                isActive: isActive,
+                createdAtUtc: createdAtUtc,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String userId,
+                required int capturedAtUtc,
+                required int cuffSystolic,
+                required int cuffDiastolic,
+                Value<int?> bandSystolic = const Value.absent(),
+                Value<int?> bandDiastolic = const Value.absent(),
+                Value<int?> hrAtCalibration = const Value.absent(),
+                Value<int?> ageAtCalibration = const Value.absent(),
+                Value<bool> bandWriteSucceeded = const Value.absent(),
+                Value<String?> notes = const Value.absent(),
+                Value<bool> isActive = const Value.absent(),
+                required int createdAtUtc,
+                Value<int> rowid = const Value.absent(),
+              }) => BpCalibrationsCompanion.insert(
+                id: id,
+                userId: userId,
+                capturedAtUtc: capturedAtUtc,
+                cuffSystolic: cuffSystolic,
+                cuffDiastolic: cuffDiastolic,
+                bandSystolic: bandSystolic,
+                bandDiastolic: bandDiastolic,
+                hrAtCalibration: hrAtCalibration,
+                ageAtCalibration: ageAtCalibration,
+                bandWriteSucceeded: bandWriteSucceeded,
+                notes: notes,
+                isActive: isActive,
+                createdAtUtc: createdAtUtc,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$BpCalibrationsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({userId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (userId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.userId,
+                                referencedTable: $$BpCalibrationsTableReferences
+                                    ._userIdTable(db),
+                                referencedColumn:
+                                    $$BpCalibrationsTableReferences
+                                        ._userIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$BpCalibrationsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $BpCalibrationsTable,
+      BpCalibration,
+      $$BpCalibrationsTableFilterComposer,
+      $$BpCalibrationsTableOrderingComposer,
+      $$BpCalibrationsTableAnnotationComposer,
+      $$BpCalibrationsTableCreateCompanionBuilder,
+      $$BpCalibrationsTableUpdateCompanionBuilder,
+      (BpCalibration, $$BpCalibrationsTableReferences),
+      BpCalibration,
+      PrefetchHooks Function({bool userId})
+    >;
 typedef $$SyncStateTableCreateCompanionBuilder =
     SyncStateCompanion Function({
       required String id,
@@ -21862,6 +23261,8 @@ class $AppDatabaseManager {
       $$SleepEpochsTableTableManager(_db, _db.sleepEpochs);
   $$BaselinesTableTableManager get baselines =>
       $$BaselinesTableTableManager(_db, _db.baselines);
+  $$BpCalibrationsTableTableManager get bpCalibrations =>
+      $$BpCalibrationsTableTableManager(_db, _db.bpCalibrations);
   $$SyncStateTableTableManager get syncState =>
       $$SyncStateTableTableManager(_db, _db.syncState);
 }
