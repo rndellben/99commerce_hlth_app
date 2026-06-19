@@ -371,6 +371,21 @@ class Baselines extends Table {
 
 // ─── Section 8 — Operational ────────────────────────────────────────────────
 
+/// Cloud sync outbox — queued upserts waiting to be pushed to Supabase.
+/// Processed FIFO by CloudSyncService; deleted on successful push.
+class CloudSyncOutbox extends Table {
+  TextColumn get id => text()(); // UUID v4
+  TextColumn get targetTable => text()(); // 'daily_metrics', 'baselines', etc.
+  TextColumn get recordId => text()(); // PK of the record to push
+  IntColumn get createdAtUtc => integer()();
+  IntColumn get attempts => integer().withDefault(const Constant(0))();
+  IntColumn get lastAttemptAtUtc => integer().nullable()();
+  TextColumn get lastError => text().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 /// hlth-db-schema.md §8.1 — per-device per-metric sync watermark.
 class SyncState extends Table {
   TextColumn get id => text()();

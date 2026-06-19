@@ -2,7 +2,13 @@
   "permissions": {
     "allow": [
       "Bash(git config *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(command -v flutter)",
+      "Bash(echo \"flutter: $\\(command -v flutter\\)\")",
+      "Bash(command -v dart)",
+      "Bash(echo \"dart: $\\(command -v dart\\)\")",
+      "Bash(dart run *)",
+      "Bash(flutter analyze *)"
     ]
   }
 }

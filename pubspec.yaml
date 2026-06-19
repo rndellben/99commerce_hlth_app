@@ -54,6 +54,9 @@ dependencies:
   # (Android). Required by `LocalStorage` adapter passed to Supabase.initialize.
   flutter_secure_storage: ^9.2.2
 
+  # Network reachability monitoring for offline-first cloud sync.
+  connectivity_plus: ^6.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

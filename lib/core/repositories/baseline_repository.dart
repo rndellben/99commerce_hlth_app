@@ -5,6 +5,8 @@ import 'package:hlth_app/core/models/baseline.dart';
 
 /// hlth-repository-api.md §4.9
 abstract class BaselineRepository {
+  Future<Baseline?> getById(String id);
+
   Future<Baseline?> getCurrent({
     required String userId,
     required String metricKey,
@@ -69,6 +71,14 @@ class BaselineRepositoryImpl implements BaselineRepository {
         computedAtUtc: _toSec(b.computedAt),
         algorithmVersion: b.algorithmVersion,
       );
+
+  @override
+  Future<Baseline?> getById(String id) async {
+    final row = await (_db.select(_db.baselines)
+          ..where((t) => t.id.equals(id)))
+        .getSingleOrNull();
+    return row == null ? null : _rowToDomain(row);
+  }
 
   @override
   Future<Baseline?> getCurrent({

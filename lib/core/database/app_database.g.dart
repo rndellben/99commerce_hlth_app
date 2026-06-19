@@ -12928,6 +12928,488 @@ class SyncStateCompanion extends UpdateCompanion<SyncStateData> {
   }
 }
 
+class $CloudSyncOutboxTable extends CloudSyncOutbox
+    with TableInfo<$CloudSyncOutboxTable, CloudSyncOutboxData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CloudSyncOutboxTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _targetTableMeta = const VerificationMeta(
+    'targetTable',
+  );
+  @override
+  late final GeneratedColumn<String> targetTable = GeneratedColumn<String>(
+    'target_table',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _recordIdMeta = const VerificationMeta(
+    'recordId',
+  );
+  @override
+  late final GeneratedColumn<String> recordId = GeneratedColumn<String>(
+    'record_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtUtcMeta = const VerificationMeta(
+    'createdAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> createdAtUtc = GeneratedColumn<int>(
+    'created_at_utc',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _attemptsMeta = const VerificationMeta(
+    'attempts',
+  );
+  @override
+  late final GeneratedColumn<int> attempts = GeneratedColumn<int>(
+    'attempts',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _lastAttemptAtUtcMeta = const VerificationMeta(
+    'lastAttemptAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> lastAttemptAtUtc = GeneratedColumn<int>(
+    'last_attempt_at_utc',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lastErrorMeta = const VerificationMeta(
+    'lastError',
+  );
+  @override
+  late final GeneratedColumn<String> lastError = GeneratedColumn<String>(
+    'last_error',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    targetTable,
+    recordId,
+    createdAtUtc,
+    attempts,
+    lastAttemptAtUtc,
+    lastError,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'cloud_sync_outbox';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CloudSyncOutboxData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('target_table')) {
+      context.handle(
+        _targetTableMeta,
+        targetTable.isAcceptableOrUnknown(
+          data['target_table']!,
+          _targetTableMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_targetTableMeta);
+    }
+    if (data.containsKey('record_id')) {
+      context.handle(
+        _recordIdMeta,
+        recordId.isAcceptableOrUnknown(data['record_id']!, _recordIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_recordIdMeta);
+    }
+    if (data.containsKey('created_at_utc')) {
+      context.handle(
+        _createdAtUtcMeta,
+        createdAtUtc.isAcceptableOrUnknown(
+          data['created_at_utc']!,
+          _createdAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtUtcMeta);
+    }
+    if (data.containsKey('attempts')) {
+      context.handle(
+        _attemptsMeta,
+        attempts.isAcceptableOrUnknown(data['attempts']!, _attemptsMeta),
+      );
+    }
+    if (data.containsKey('last_attempt_at_utc')) {
+      context.handle(
+        _lastAttemptAtUtcMeta,
+        lastAttemptAtUtc.isAcceptableOrUnknown(
+          data['last_attempt_at_utc']!,
+          _lastAttemptAtUtcMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_error')) {
+      context.handle(
+        _lastErrorMeta,
+        lastError.isAcceptableOrUnknown(data['last_error']!, _lastErrorMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  CloudSyncOutboxData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CloudSyncOutboxData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      targetTable: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}target_table'],
+      )!,
+      recordId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}record_id'],
+      )!,
+      createdAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at_utc'],
+      )!,
+      attempts: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}attempts'],
+      )!,
+      lastAttemptAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}last_attempt_at_utc'],
+      ),
+      lastError: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_error'],
+      ),
+    );
+  }
+
+  @override
+  $CloudSyncOutboxTable createAlias(String alias) {
+    return $CloudSyncOutboxTable(attachedDatabase, alias);
+  }
+}
+
+class CloudSyncOutboxData extends DataClass
+    implements Insertable<CloudSyncOutboxData> {
+  final String id;
+  final String targetTable;
+  final String recordId;
+  final int createdAtUtc;
+  final int attempts;
+  final int? lastAttemptAtUtc;
+  final String? lastError;
+  const CloudSyncOutboxData({
+    required this.id,
+    required this.targetTable,
+    required this.recordId,
+    required this.createdAtUtc,
+    required this.attempts,
+    this.lastAttemptAtUtc,
+    this.lastError,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['target_table'] = Variable<String>(targetTable);
+    map['record_id'] = Variable<String>(recordId);
+    map['created_at_utc'] = Variable<int>(createdAtUtc);
+    map['attempts'] = Variable<int>(attempts);
+    if (!nullToAbsent || lastAttemptAtUtc != null) {
+      map['last_attempt_at_utc'] = Variable<int>(lastAttemptAtUtc);
+    }
+    if (!nullToAbsent || lastError != null) {
+      map['last_error'] = Variable<String>(lastError);
+    }
+    return map;
+  }
+
+  CloudSyncOutboxCompanion toCompanion(bool nullToAbsent) {
+    return CloudSyncOutboxCompanion(
+      id: Value(id),
+      targetTable: Value(targetTable),
+      recordId: Value(recordId),
+      createdAtUtc: Value(createdAtUtc),
+      attempts: Value(attempts),
+      lastAttemptAtUtc: lastAttemptAtUtc == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastAttemptAtUtc),
+      lastError: lastError == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastError),
+    );
+  }
+
+  factory CloudSyncOutboxData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CloudSyncOutboxData(
+      id: serializer.fromJson<String>(json['id']),
+      targetTable: serializer.fromJson<String>(json['targetTable']),
+      recordId: serializer.fromJson<String>(json['recordId']),
+      createdAtUtc: serializer.fromJson<int>(json['createdAtUtc']),
+      attempts: serializer.fromJson<int>(json['attempts']),
+      lastAttemptAtUtc: serializer.fromJson<int?>(json['lastAttemptAtUtc']),
+      lastError: serializer.fromJson<String?>(json['lastError']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'targetTable': serializer.toJson<String>(targetTable),
+      'recordId': serializer.toJson<String>(recordId),
+      'createdAtUtc': serializer.toJson<int>(createdAtUtc),
+      'attempts': serializer.toJson<int>(attempts),
+      'lastAttemptAtUtc': serializer.toJson<int?>(lastAttemptAtUtc),
+      'lastError': serializer.toJson<String?>(lastError),
+    };
+  }
+
+  CloudSyncOutboxData copyWith({
+    String? id,
+    String? targetTable,
+    String? recordId,
+    int? createdAtUtc,
+    int? attempts,
+    Value<int?> lastAttemptAtUtc = const Value.absent(),
+    Value<String?> lastError = const Value.absent(),
+  }) => CloudSyncOutboxData(
+    id: id ?? this.id,
+    targetTable: targetTable ?? this.targetTable,
+    recordId: recordId ?? this.recordId,
+    createdAtUtc: createdAtUtc ?? this.createdAtUtc,
+    attempts: attempts ?? this.attempts,
+    lastAttemptAtUtc: lastAttemptAtUtc.present
+        ? lastAttemptAtUtc.value
+        : this.lastAttemptAtUtc,
+    lastError: lastError.present ? lastError.value : this.lastError,
+  );
+  CloudSyncOutboxData copyWithCompanion(CloudSyncOutboxCompanion data) {
+    return CloudSyncOutboxData(
+      id: data.id.present ? data.id.value : this.id,
+      targetTable: data.targetTable.present
+          ? data.targetTable.value
+          : this.targetTable,
+      recordId: data.recordId.present ? data.recordId.value : this.recordId,
+      createdAtUtc: data.createdAtUtc.present
+          ? data.createdAtUtc.value
+          : this.createdAtUtc,
+      attempts: data.attempts.present ? data.attempts.value : this.attempts,
+      lastAttemptAtUtc: data.lastAttemptAtUtc.present
+          ? data.lastAttemptAtUtc.value
+          : this.lastAttemptAtUtc,
+      lastError: data.lastError.present ? data.lastError.value : this.lastError,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CloudSyncOutboxData(')
+          ..write('id: $id, ')
+          ..write('targetTable: $targetTable, ')
+          ..write('recordId: $recordId, ')
+          ..write('createdAtUtc: $createdAtUtc, ')
+          ..write('attempts: $attempts, ')
+          ..write('lastAttemptAtUtc: $lastAttemptAtUtc, ')
+          ..write('lastError: $lastError')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    targetTable,
+    recordId,
+    createdAtUtc,
+    attempts,
+    lastAttemptAtUtc,
+    lastError,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CloudSyncOutboxData &&
+          other.id == this.id &&
+          other.targetTable == this.targetTable &&
+          other.recordId == this.recordId &&
+          other.createdAtUtc == this.createdAtUtc &&
+          other.attempts == this.attempts &&
+          other.lastAttemptAtUtc == this.lastAttemptAtUtc &&
+          other.lastError == this.lastError);
+}
+
+class CloudSyncOutboxCompanion extends UpdateCompanion<CloudSyncOutboxData> {
+  final Value<String> id;
+  final Value<String> targetTable;
+  final Value<String> recordId;
+  final Value<int> createdAtUtc;
+  final Value<int> attempts;
+  final Value<int?> lastAttemptAtUtc;
+  final Value<String?> lastError;
+  final Value<int> rowid;
+  const CloudSyncOutboxCompanion({
+    this.id = const Value.absent(),
+    this.targetTable = const Value.absent(),
+    this.recordId = const Value.absent(),
+    this.createdAtUtc = const Value.absent(),
+    this.attempts = const Value.absent(),
+    this.lastAttemptAtUtc = const Value.absent(),
+    this.lastError = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CloudSyncOutboxCompanion.insert({
+    required String id,
+    required String targetTable,
+    required String recordId,
+    required int createdAtUtc,
+    this.attempts = const Value.absent(),
+    this.lastAttemptAtUtc = const Value.absent(),
+    this.lastError = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       targetTable = Value(targetTable),
+       recordId = Value(recordId),
+       createdAtUtc = Value(createdAtUtc);
+  static Insertable<CloudSyncOutboxData> custom({
+    Expression<String>? id,
+    Expression<String>? targetTable,
+    Expression<String>? recordId,
+    Expression<int>? createdAtUtc,
+    Expression<int>? attempts,
+    Expression<int>? lastAttemptAtUtc,
+    Expression<String>? lastError,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (targetTable != null) 'target_table': targetTable,
+      if (recordId != null) 'record_id': recordId,
+      if (createdAtUtc != null) 'created_at_utc': createdAtUtc,
+      if (attempts != null) 'attempts': attempts,
+      if (lastAttemptAtUtc != null) 'last_attempt_at_utc': lastAttemptAtUtc,
+      if (lastError != null) 'last_error': lastError,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CloudSyncOutboxCompanion copyWith({
+    Value<String>? id,
+    Value<String>? targetTable,
+    Value<String>? recordId,
+    Value<int>? createdAtUtc,
+    Value<int>? attempts,
+    Value<int?>? lastAttemptAtUtc,
+    Value<String?>? lastError,
+    Value<int>? rowid,
+  }) {
+    return CloudSyncOutboxCompanion(
+      id: id ?? this.id,
+      targetTable: targetTable ?? this.targetTable,
+      recordId: recordId ?? this.recordId,
+      createdAtUtc: createdAtUtc ?? this.createdAtUtc,
+      attempts: attempts ?? this.attempts,
+      lastAttemptAtUtc: lastAttemptAtUtc ?? this.lastAttemptAtUtc,
+      lastError: lastError ?? this.lastError,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (targetTable.present) {
+      map['target_table'] = Variable<String>(targetTable.value);
+    }
+    if (recordId.present) {
+      map['record_id'] = Variable<String>(recordId.value);
+    }
+    if (createdAtUtc.present) {
+      map['created_at_utc'] = Variable<int>(createdAtUtc.value);
+    }
+    if (attempts.present) {
+      map['attempts'] = Variable<int>(attempts.value);
+    }
+    if (lastAttemptAtUtc.present) {
+      map['last_attempt_at_utc'] = Variable<int>(lastAttemptAtUtc.value);
+    }
+    if (lastError.present) {
+      map['last_error'] = Variable<String>(lastError.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CloudSyncOutboxCompanion(')
+          ..write('id: $id, ')
+          ..write('targetTable: $targetTable, ')
+          ..write('recordId: $recordId, ')
+          ..write('createdAtUtc: $createdAtUtc, ')
+          ..write('attempts: $attempts, ')
+          ..write('lastAttemptAtUtc: $lastAttemptAtUtc, ')
+          ..write('lastError: $lastError, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -12946,6 +13428,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $BaselinesTable baselines = $BaselinesTable(this);
   late final $BpCalibrationsTable bpCalibrations = $BpCalibrationsTable(this);
   late final $SyncStateTable syncState = $SyncStateTable(this);
+  late final $CloudSyncOutboxTable cloudSyncOutbox = $CloudSyncOutboxTable(
+    this,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -12966,6 +13451,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     baselines,
     bpCalibrations,
     syncState,
+    cloudSyncOutbox,
   ];
 }
 
@@ -23231,6 +23717,260 @@ typedef $$SyncStateTableProcessedTableManager =
       SyncStateData,
       PrefetchHooks Function({bool deviceId})
     >;
+typedef $$CloudSyncOutboxTableCreateCompanionBuilder =
+    CloudSyncOutboxCompanion Function({
+      required String id,
+      required String targetTable,
+      required String recordId,
+      required int createdAtUtc,
+      Value<int> attempts,
+      Value<int?> lastAttemptAtUtc,
+      Value<String?> lastError,
+      Value<int> rowid,
+    });
+typedef $$CloudSyncOutboxTableUpdateCompanionBuilder =
+    CloudSyncOutboxCompanion Function({
+      Value<String> id,
+      Value<String> targetTable,
+      Value<String> recordId,
+      Value<int> createdAtUtc,
+      Value<int> attempts,
+      Value<int?> lastAttemptAtUtc,
+      Value<String?> lastError,
+      Value<int> rowid,
+    });
+
+class $$CloudSyncOutboxTableFilterComposer
+    extends Composer<_$AppDatabase, $CloudSyncOutboxTable> {
+  $$CloudSyncOutboxTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get targetTable => $composableBuilder(
+    column: $table.targetTable,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get recordId => $composableBuilder(
+    column: $table.recordId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get attempts => $composableBuilder(
+    column: $table.attempts,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lastAttemptAtUtc => $composableBuilder(
+    column: $table.lastAttemptAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastError => $composableBuilder(
+    column: $table.lastError,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$CloudSyncOutboxTableOrderingComposer
+    extends Composer<_$AppDatabase, $CloudSyncOutboxTable> {
+  $$CloudSyncOutboxTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get targetTable => $composableBuilder(
+    column: $table.targetTable,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get recordId => $composableBuilder(
+    column: $table.recordId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get attempts => $composableBuilder(
+    column: $table.attempts,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lastAttemptAtUtc => $composableBuilder(
+    column: $table.lastAttemptAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastError => $composableBuilder(
+    column: $table.lastError,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CloudSyncOutboxTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CloudSyncOutboxTable> {
+  $$CloudSyncOutboxTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get targetTable => $composableBuilder(
+    column: $table.targetTable,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get recordId =>
+      $composableBuilder(column: $table.recordId, builder: (column) => column);
+
+  GeneratedColumn<int> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get attempts =>
+      $composableBuilder(column: $table.attempts, builder: (column) => column);
+
+  GeneratedColumn<int> get lastAttemptAtUtc => $composableBuilder(
+    column: $table.lastAttemptAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lastError =>
+      $composableBuilder(column: $table.lastError, builder: (column) => column);
+}
+
+class $$CloudSyncOutboxTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CloudSyncOutboxTable,
+          CloudSyncOutboxData,
+          $$CloudSyncOutboxTableFilterComposer,
+          $$CloudSyncOutboxTableOrderingComposer,
+          $$CloudSyncOutboxTableAnnotationComposer,
+          $$CloudSyncOutboxTableCreateCompanionBuilder,
+          $$CloudSyncOutboxTableUpdateCompanionBuilder,
+          (
+            CloudSyncOutboxData,
+            BaseReferences<
+              _$AppDatabase,
+              $CloudSyncOutboxTable,
+              CloudSyncOutboxData
+            >,
+          ),
+          CloudSyncOutboxData,
+          PrefetchHooks Function()
+        > {
+  $$CloudSyncOutboxTableTableManager(
+    _$AppDatabase db,
+    $CloudSyncOutboxTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CloudSyncOutboxTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CloudSyncOutboxTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CloudSyncOutboxTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> targetTable = const Value.absent(),
+                Value<String> recordId = const Value.absent(),
+                Value<int> createdAtUtc = const Value.absent(),
+                Value<int> attempts = const Value.absent(),
+                Value<int?> lastAttemptAtUtc = const Value.absent(),
+                Value<String?> lastError = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CloudSyncOutboxCompanion(
+                id: id,
+                targetTable: targetTable,
+                recordId: recordId,
+                createdAtUtc: createdAtUtc,
+                attempts: attempts,
+                lastAttemptAtUtc: lastAttemptAtUtc,
+                lastError: lastError,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String targetTable,
+                required String recordId,
+                required int createdAtUtc,
+                Value<int> attempts = const Value.absent(),
+                Value<int?> lastAttemptAtUtc = const Value.absent(),
+                Value<String?> lastError = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CloudSyncOutboxCompanion.insert(
+                id: id,
+                targetTable: targetTable,
+                recordId: recordId,
+                createdAtUtc: createdAtUtc,
+                attempts: attempts,
+                lastAttemptAtUtc: lastAttemptAtUtc,
+                lastError: lastError,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$CloudSyncOutboxTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CloudSyncOutboxTable,
+      CloudSyncOutboxData,
+      $$CloudSyncOutboxTableFilterComposer,
+      $$CloudSyncOutboxTableOrderingComposer,
+      $$CloudSyncOutboxTableAnnotationComposer,
+      $$CloudSyncOutboxTableCreateCompanionBuilder,
+      $$CloudSyncOutboxTableUpdateCompanionBuilder,
+      (
+        CloudSyncOutboxData,
+        BaseReferences<
+          _$AppDatabase,
+          $CloudSyncOutboxTable,
+          CloudSyncOutboxData
+        >,
+      ),
+      CloudSyncOutboxData,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -23265,4 +24005,6 @@ class $AppDatabaseManager {
       $$BpCalibrationsTableTableManager(_db, _db.bpCalibrations);
   $$SyncStateTableTableManager get syncState =>
       $$SyncStateTableTableManager(_db, _db.syncState);
+  $$CloudSyncOutboxTableTableManager get cloudSyncOutbox =>
+      $$CloudSyncOutboxTableTableManager(_db, _db.cloudSyncOutbox);
 }

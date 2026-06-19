@@ -6,6 +6,7 @@ import 'package:hlth_app/core/services/feature_gate.dart';
 import 'package:hlth_app/features/blood_pressure/bp_calibration_providers.dart';
 import 'package:hlth_app/features/home/home_providers.dart';
 import 'package:hlth_app/ui/theme/app_colors.dart';
+import 'package:hlth_app/ui/widgets/connection_indicator.dart';
 import 'package:hlth_app/ui/widgets/health_metric_card.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -60,7 +61,14 @@ class HomeScreen extends ConsumerWidget {
                       ),
                     ],
                   ),
-                  const _ConnectionChip(),
+                  const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ConnectionIndicator(),
+                      SizedBox(width: 10),
+                      _ConnectionChip(),
+                    ],
+                  ),
                 ],
               ),
             ),

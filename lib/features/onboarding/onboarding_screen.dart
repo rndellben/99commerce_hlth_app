@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hlth_app/core/bootstrap/active_session.dart';
+import 'package:hlth_app/core/config/geo_config.dart';
+import 'package:hlth_app/core/config/region_detector.dart';
 import 'package:hlth_app/core/database/enums.dart';
 import 'package:hlth_app/core/models/user.dart';
 import 'package:hlth_app/core/repositories/user_repository.dart';
+import 'package:hlth_app/core/services/consent_service.dart';
 import 'package:hlth_app/ui/theme/app_colors.dart';
 
 /// Day-0 setup per hlth-onboarding-timeline.md §"Day 0: Setup".
@@ -35,6 +38,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   DateTime? _lastPeriodStart;
   final _cycleLengthController = TextEditingController(text: '28');
   bool _disclaimerAccepted = false;
+  bool _dataProcessingConsent = false;
+  bool _healthDataConsent = false;
 
   @override
   void dispose() {
@@ -45,17 +50,29 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     super.dispose();
   }
 
-  // Pages: Welcome, Profile, (Cycle if female), Disclaimer
-  int get _pageCount => _sex == SexAtBirth.female ? 4 : 3;
+  GeoConfig get _geoConfig => ref.read(geoConfigProvider);
+
+  // Pages: Welcome, Profile, (Cycle if female), (Consent if geo requires), Disclaimer
+  bool get _needsConsentPage => _geoConfig.requiresExplicitConsent;
+  int get _pageCount {
+    var count = 3; // Welcome, Profile, Disclaimer
+    if (_sex == SexAtBirth.female) count++;
+    if (_needsConsentPage) count++;
+    return count;
+  }
 
   // Disclaimer is the last page index regardless of female/not.
   int get _disclaimerIndex => _pageCount - 1;
+  int get _consentIndex => _disclaimerIndex - (_needsConsentPage ? 1 : 999);
 
   bool _canAdvanceFrom(int page) {
     if (page == 1) return _dob != null && _sex != null;
     if (page == 2 && _sex == SexAtBirth.female) {
       if (!_cycleTrackingEnabled) return true;
       return _lastPeriodStart != null;
+    }
+    if (_needsConsentPage && page == _consentIndex) {
+      return _dataProcessingConsent && _healthDataConsent;
     }
     if (page == _disclaimerIndex) return _disclaimerAccepted;
     return true;
@@ -100,6 +117,27 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               updatedAt: DateTime.now().toUtc(),
             ),
           );
+      // Record geo-aware consent if required.
+      if (_needsConsentPage) {
+        final consentSvc = ref.read(consentServiceProvider);
+        final region = _geoConfig.region;
+        if (_dataProcessingConsent) {
+          await consentSvc.recordConsent(
+            type: 'data_processing',
+            granted: true,
+            region: region,
+          );
+        }
+        if (_healthDataConsent) {
+          await consentSvc.recordConsent(
+            type: 'health_data',
+            granted: true,
+            region: region,
+          );
+        }
+        ref.invalidate(hasRequiredConsentProvider);
+      }
+
       // Invalidate the profile guard so the router lets us in.
       ref.invalidate(userProfileProvider);
       if (mounted) context.go('/');
@@ -145,6 +183,16 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           cycleLengthController: _cycleLengthController,
           onToggle: (v) => setState(() => _cycleTrackingEnabled = v),
           onPickLmp: _pickLmp,
+        ),
+      if (_needsConsentPage)
+        _ConsentPage(
+          geoConfig: _geoConfig,
+          dataProcessingConsent: _dataProcessingConsent,
+          healthDataConsent: _healthDataConsent,
+          onDataProcessingChanged: (v) =>
+              setState(() => _dataProcessingConsent = v),
+          onHealthDataChanged: (v) =>
+              setState(() => _healthDataConsent = v),
         ),
       _DisclaimerPage(
         accepted: _disclaimerAccepted,
@@ -567,6 +615,77 @@ class _DisclaimerPage extends StatelessWidget {
             subtitle: const Text(
                 'HLTH gives me wellness signals, not medical advice.'),
             contentPadding: EdgeInsets.zero,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Geo-aware consent page shown in regions requiring explicit opt-in
+/// (GDPR, PDPA, PIPL). Consent is recorded with the policy version and
+/// region for audit trail compliance.
+class _ConsentPage extends StatelessWidget {
+  final GeoConfig geoConfig;
+  final bool dataProcessingConsent;
+  final bool healthDataConsent;
+  final ValueChanged<bool> onDataProcessingChanged;
+  final ValueChanged<bool> onHealthDataChanged;
+
+  const _ConsentPage({
+    required this.geoConfig,
+    required this.dataProcessingConsent,
+    required this.healthDataConsent,
+    required this.onDataProcessingChanged,
+    required this.onHealthDataChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Data & Privacy',
+              style: Theme.of(context).textTheme.headlineMedium),
+          const SizedBox(height: 8),
+          Text(
+            'Under ${geoConfig.regulatoryLabel} regulations, we need your '
+            'explicit consent to process your health data. Your data is stored '
+            'in ${geoConfig.dataResidencyRegion}.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 24),
+          CheckboxListTile(
+            value: dataProcessingConsent,
+            onChanged: (v) => onDataProcessingChanged(v ?? false),
+            title: const Text('Data processing consent'),
+            subtitle: const Text(
+              'I consent to HLTH processing my personal data to provide '
+              'wellness insights and improve the service.',
+            ),
+            contentPadding: EdgeInsets.zero,
+          ),
+          const SizedBox(height: 12),
+          CheckboxListTile(
+            value: healthDataConsent,
+            onChanged: (v) => onHealthDataChanged(v ?? false),
+            title: const Text('Health data consent'),
+            subtitle: const Text(
+              'I consent to HLTH collecting and processing my health '
+              'metrics (heart rate, sleep, activity, etc.) from my '
+              'connected band.',
+            ),
+            contentPadding: EdgeInsets.zero,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'You can withdraw consent at any time in Settings. '
+            '${geoConfig.supportsRightToDelete ? 'You have the right to request deletion of all your data.' : ''}',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppColors.textTertiary,
+                ),
           ),
         ],
       ),

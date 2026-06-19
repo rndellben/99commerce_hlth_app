@@ -35,6 +35,7 @@ part 'app_database.g.dart';
     Baselines,
     BpCalibrations,
     SyncState,
+    CloudSyncOutbox,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -63,6 +64,7 @@ class AppDatabase extends _$AppDatabase {
             );
           }
           // v2 → v3: add bp_calibrations table (HLT-16, Phase 4)
+          //          and cloud_sync_outbox table for Supabase sync
           if (from < 3) {
             await m.createTable(bpCalibrations);
             await customStatement(
@@ -71,6 +73,7 @@ class AppDatabase extends _$AppDatabase {
             await customStatement(
               'CREATE INDEX IF NOT EXISTS idx_bpcal_user_active ON bp_calibrations(user_id, is_active, captured_at_utc DESC)',
             );
+            await m.createTable(cloudSyncOutbox);
           }
         },
       );
