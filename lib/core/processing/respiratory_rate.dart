@@ -1,40 +1,57 @@
-import 'dart:typed_data';
-import 'package:hlth_app/core/processing/signal_processor.dart';
+import 'package:hlth_app/core/processing/respiratory_lombscargle.dart';
 
-/// Respiratory rate extraction from PPG signal.
-/// Uses bandpass filtering at 0.1-0.5 Hz (6-30 breaths/min).
+/// Respiratory rate extraction.
+///
+/// Method: respiratory sinus arrhythmia (RSA). Breathing modulates the
+/// beat-to-beat timing of the heart, so the breathing rhythm shows up as a
+/// peak in the R-R interval series. We read that peak with a Lomb-Scargle
+/// periodogram — no PPG morphology, so it's sensor-agnostic and unaffected by
+/// the pending sensor swap.
+///
+/// Lomb-Scargle runs directly on the IRREGULARLY-spaced real beats, so it never
+/// resamples the R-R series onto a uniform grid. That matters: the earlier
+/// FFT/Welch-on-resampled path had to interpolate synthetic points across BLE
+/// gaps, and interpolation has its own periodicity that manufactured spurious
+/// peaks (the 22 and 9.4 bpm artifacts on lossy captures). This path uses real
+/// beats only, rejects the packet-loss cadence, and refuses — returning `null`
+/// — rather than emit a false-precise number when no respiratory peak
+/// dominates. See [RespiratoryRateCalculator.estimate] for the full verdict
+/// (confidence + reason).
 class RespiratoryRateCalculator {
-  final SignalProcessor _processor;
+  /// Full Lomb-Scargle estimate, including confidence and the refuse-reason.
+  ///
+  ///   [rrIntervalsMs] R-R intervals (ms), time-ordered. Pass the raw refined
+  ///                   series — Lomb-Scargle does its own gap handling and wants
+  ///                   real beats, not the interpolated/corrected series.
+  ///   [validMask]     optional per-interval validity (true = between two real
+  ///                   beats). Pass the adaptive cleaner's gap labels when you
+  ///                   have them; omit to let it infer gaps from interval length.
+  ///   [lossCadenceBpm] optional known packet-loss cadence (br/min) to reject.
+  RespResult estimate(
+    List<double> rrIntervalsMs, {
+    List<bool>? validMask,
+    double? lossCadenceBpm,
+  }) {
+    return estimateRespiratoryRate(
+      rrIntervalsMs,
+      rrValidMask: validMask,
+      lossCadenceBpm: lossCadenceBpm,
+    );
+  }
 
-  RespiratoryRateCalculator({int samplingRate = 75})
-      : _processor = SignalProcessor(samplingRate: samplingRate);
-
-  /// Calculate respiratory rate in breaths per minute.
-  /// Requires at least 30 seconds of PPG data.
-  double? calculate(Float64List rawPpg) {
-    if (rawPpg.length < _processor.samplingRate * 30) return null;
-
-    // Bandpass filter for respiratory band: 0.1-0.5 Hz
-    final respiratory = _processor.bandpassFilter(rawPpg, 0.1, 0.5);
-
-    // Find respiratory peaks
-    final peaks = _processor.detectPeaks(respiratory);
-
-    if (peaks.length < 2) return null;
-
-    // Calculate breaths per minute from peak intervals
-    final intervals = <double>[];
-    for (int i = 1; i < peaks.length; i++) {
-      intervals.add(
-          (peaks[i] - peaks[i - 1]) / _processor.samplingRate);
-    }
-
-    final meanInterval =
-        intervals.reduce((a, b) => a + b) / intervals.length;
-    final breathsPerMin = 60.0 / meanInterval;
-
-    // Sanity check: 4-40 breaths/min
-    if (breathsPerMin < 4 || breathsPerMin > 40) return null;
-    return double.parse(breathsPerMin.toStringAsFixed(1));
+  /// Respiratory rate in breaths/min, or `null` when the estimator refuses
+  /// (too few valid beats, span too short, or no dominant respiratory peak).
+  /// Thin wrapper over [estimate] for callers that only need the number.
+  double? fromRrIntervals(
+    List<double> rrIntervalsMs, {
+    List<bool>? validMask,
+    double? lossCadenceBpm,
+  }) {
+    final res = estimate(
+      rrIntervalsMs,
+      validMask: validMask,
+      lossCadenceBpm: lossCadenceBpm,
+    );
+    return res.ok ? res.respBpm : null;
   }
 }

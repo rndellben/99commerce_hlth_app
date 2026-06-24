@@ -281,7 +281,7 @@ class _DaySessionContent extends ConsumerWidget {
               ),
             ),
             MetricTile(
-              label: 'Percentage of light sleep',
+              label: 'Percentage of core sleep',
               reference: 'Reference: 50%',
               value: lightPct.toStringAsFixed(0),
               valueUnit: '%',
@@ -297,7 +297,7 @@ class _DaySessionContent extends ConsumerWidget {
               value: _hmDuration(session.deepMin),
             ),
             MetricTile(
-              label: 'Total light sleep duration',
+              label: 'Total core sleep duration',
               reference: '',
               value: _hmDuration(session.lightMin),
             ),
@@ -384,7 +384,7 @@ class _HypnogramCard extends StatelessWidget {
             runSpacing: 6,
             children: const [
               _LegendDot(color: _StageColors.deep, label: 'Deep sleep'),
-              _LegendDot(color: _StageColors.light, label: 'Light sleep'),
+              _LegendDot(color: _StageColors.light, label: 'Core sleep'),
               _LegendDot(color: _StageColors.rem, label: 'Rapid Eye Movement'),
               _LegendDot(color: _StageColors.awake, label: 'Awake'),
             ],
@@ -439,7 +439,7 @@ class _HypnogramCard extends StatelessWidget {
 
   (String, int) _dominant(SleepSession s) {
     final stages = <String, int>{
-      'Light sleep': s.lightMin,
+      'Core sleep': s.lightMin,
       'Deep sleep': s.deepMin,
       'Rapid Eye Movement': s.remMin,
       'Awake': s.awakeMin,
@@ -707,7 +707,7 @@ class _RangeContent extends StatelessWidget {
                 : statusFor(value: avgDeepPct, ok: const MetricRange(20, 60)),
           ),
           MetricTile(
-            label: 'Average light sleep percentage',
+            label: 'Average core sleep percentage',
             reference: 'Reference: 50%',
             value: avgLightPct == null ? '--' : avgLightPct.toStringAsFixed(0),
             valueUnit: '%',
@@ -758,7 +758,7 @@ class _RangeBarChart extends StatelessWidget {
             runSpacing: 6,
             children: const [
               _LegendDot(color: _StageColors.deep, label: 'Deep sleep'),
-              _LegendDot(color: _StageColors.light, label: 'Light sleep'),
+              _LegendDot(color: _StageColors.light, label: 'Core sleep'),
               _LegendDot(color: _StageColors.rem, label: 'Rapid Eye Movement'),
               _LegendDot(color: _StageColors.awake, label: 'Awake'),
             ],

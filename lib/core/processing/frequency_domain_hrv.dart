@@ -26,6 +26,23 @@ class FrequencyDomainHrv {
   static const double hfLowHz = 0.15;
   static const double hfHighHz = 0.40;
 
+  /// Respiratory-rate search band. Breathing modulates beat-to-beat timing
+  /// (respiratory sinus arrhythmia), so resting respiration shows up as a
+  /// spectral peak inside the HF band. 0.15-0.40 Hz = 9-24 breaths/min,
+  /// which spans the resting-adult range (12-20) with headroom. The lower
+  /// bound stays at 0.15 Hz on purpose — going below risks locking onto the
+  /// ~0.1 Hz Mayer wave (a blood-pressure oscillation, not breathing).
+  static const double respLowHz = 0.15;
+  static const double respHighHz = 0.40;
+
+  /// The respiratory peak must carry at least this multiple of the search
+  /// band's mean PSD to count as a real peak. A genuine respiratory peak
+  /// runs several times the band mean; a flat or LF-bleed spectrum sits
+  /// near 1×. Guards against reporting noise as breathing when RSA is weak
+  /// (e.g. elevated HR), which otherwise produced sub-physiological reads
+  /// pinned to the 0.15 Hz band edge.
+  static const double _respPeakProminenceFactor = 2.0;
+
   /// Compute LF, HF and LF/HF ratio from cleaned R-R intervals in ms.
   ///
   /// Returns `null` if the input is too short to give a meaningful
@@ -101,13 +118,64 @@ class FrequencyDomainHrv {
     final hf = _bandPower(freqs, psd, hfLowHz, hfHighHz);
     if (lf <= 0 || hf <= 0) return null;
 
+    final respHz = _peakFrequency(freqs, psd, respLowHz, respHighHz);
+
     return FrequencyDomainMetrics(
       lfPowerMs2: lf,
       hfPowerMs2: hf,
       lfHfRatio: lf / hf,
       tachogramDurationS: durationS,
       resampledSamples: n,
+      respiratoryRateBpm: respHz == null
+          ? null
+          : double.parse((respHz * 60).toStringAsFixed(1)),
     );
+  }
+
+  /// Frequency (Hz) of the respiratory peak in `[fLow, fHigh)`, or null when
+  /// no trustworthy peak exists.
+  ///
+  /// The in-band argmax alone is not enough: when RSA is weak (elevated HR)
+  /// the strongest in-band bin is often just the descending tail of an
+  /// out-of-band LF peak bleeding over the lower edge, which reads as a
+  /// bogus sub-physiological rate. So the winning bin must additionally be
+  ///   1. a strict local maximum — higher than the bins on *both* sides,
+  ///      checked against the full spectrum so a bin riding an LF slope
+  ///      (no left-side turnover) is rejected; and
+  ///   2. prominent — at least [_respPeakProminenceFactor]× the band mean,
+  ///      so a flat/noisy spectrum with no real peak yields null.
+  double? _peakFrequency(
+    Float64List freqs,
+    Float64List psd,
+    double fLow,
+    double fHigh,
+  ) {
+    int peakIdx = -1;
+    double peakPower = 0;
+    double bandSum = 0;
+    int bandCount = 0;
+    for (int i = 0; i < freqs.length; i++) {
+      if (freqs[i] < fLow || freqs[i] >= fHigh) continue;
+      bandSum += psd[i];
+      bandCount++;
+      if (psd[i] > peakPower) {
+        peakPower = psd[i];
+        peakIdx = i;
+      }
+    }
+    if (peakIdx < 0 || bandCount == 0 || peakPower <= 0) return null;
+
+    // Strict local maximum (rejects LF bleed sitting on a descending edge).
+    if (peakIdx > 0 && psd[peakIdx] <= psd[peakIdx - 1]) return null;
+    if (peakIdx < psd.length - 1 && psd[peakIdx] <= psd[peakIdx + 1]) {
+      return null;
+    }
+
+    // Prominence over the band mean (rejects flat/no-peak spectra).
+    final bandMean = bandSum / bandCount;
+    if (peakPower < _respPeakProminenceFactor * bandMean) return null;
+
+    return freqs[peakIdx];
   }
 
   /// Natural cubic spline interpolation onto a regular grid at [fs] Hz,
@@ -267,11 +335,18 @@ class FrequencyDomainMetrics {
     required this.lfHfRatio,
     required this.tachogramDurationS,
     required this.resampledSamples,
+    this.respiratoryRateBpm,
   });
 
   final double lfPowerMs2;
   final double hfPowerMs2;
   final double lfHfRatio;
+
+  /// Respiratory rate in breaths/min, read from the HF-band peak of the
+  /// R-R tachogram (respiratory sinus arrhythmia). Null when no peak is
+  /// resolvable in 0.15-0.40 Hz — e.g. a tachogram too short for the FFT
+  /// to place a bin in the band.
+  final double? respiratoryRateBpm;
 
   /// Duration of the input tachogram in seconds. Useful for callers
   /// that want to flag stability — anything under ~60 s is unstable

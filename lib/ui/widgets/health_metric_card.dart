@@ -21,6 +21,13 @@ class HealthMetricCard extends StatelessWidget {
   final String? date;
   final List<double>? sparkline;
 
+  /// When true, the value/unit row is replaced by a small spinner + label
+  /// (e.g. "Measuring…"). Used by metrics derived from an active capture
+  /// while that capture is in flight. Optional — defaults off, so existing
+  /// cards are unaffected.
+  final bool busy;
+  final String? busyLabel;
+
   const HealthMetricCard({
     super.key,
     required this.title,
@@ -33,6 +40,8 @@ class HealthMetricCard extends StatelessWidget {
     this.lockedMessage,
     this.date,
     this.sparkline,
+    this.busy = false,
+    this.busyLabel,
   });
 
   @override
@@ -95,26 +104,49 @@ class HealthMetricCard extends StatelessWidget {
           const SizedBox(height: 4),
         ] else
           const Spacer(),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              value,
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineLarge
-                  ?.copyWith(color: color),
-            ),
-            const SizedBox(width: 4),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Text(
-                unit,
-                style: Theme.of(context).textTheme.labelMedium,
+        if (busy)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2, color: color),
               ),
-            ),
-          ],
-        ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  busyLabel ?? 'Measuring…',
+                  style: Theme.of(context)
+                      .textTheme
+                      .labelMedium
+                      ?.copyWith(color: AppColors.textTertiary),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          )
+        else
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                value,
+                style: Theme.of(context)
+                    .textTheme
+                    .headlineLarge
+                    ?.copyWith(color: color),
+              ),
+              const SizedBox(width: 4),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  unit,
+                  style: Theme.of(context).textTheme.labelMedium,
+                ),
+              ),
+            ],
+          ),
       ],
     );
   }

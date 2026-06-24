@@ -73,11 +73,11 @@ class BleService {
   //   1=HR, 2=BP, 3=SpO2, 4=steps, 5=temp, 7=exercise record, 0x0c=charging
   final _deviceNotify =
       StreamController<({int dataType, List<int> loadData})>.broadcast();
-  // HLT-11: native scheduler fires this every 30 min while connected. A
-  // top-level coordinator listens and triggers SyncService.syncAll(...).
-  // Kept as a broadcast stream so debug screens can also subscribe to log
-  // when each tick fires.
-  final _periodicSyncTick = StreamController<void>.broadcast();
+  // HLT-11: native scheduler fires this every [syncIntervalMinutes] while
+  // connected. A top-level coordinator listens and triggers
+  // SyncService.syncAll(...). Each event carries the cadence in minutes so
+  // telemetry can attribute drain to a specific interval setting.
+  final _periodicSyncTick = StreamController<int>.broadcast();
 
   // Realtime manualMode* measurement streams. Each tick emits an
   // intermediate value during the band-side active measurement (~30s).
@@ -142,10 +142,11 @@ class BleService {
   Stream<List<Map<String, dynamic>>> get rawPpgEvent => _rawPpgEvent.stream;
   Stream<({int dataType, List<int> loadData})> get deviceNotify =>
       _deviceNotify.stream;
-  /// HLT-11: native scheduler ticks. One event ~every 30 min while
-  /// connected. Subscribers should be idempotent and skip if a sync is
-  /// already running.
-  Stream<void> get periodicSyncTick => _periodicSyncTick.stream;
+  /// HLT-11: native scheduler ticks. One event each cadence interval while
+  /// connected. Payload is the active interval in minutes (default 30, can
+  /// be 10/15 during battery-drain testing). Subscribers should be
+  /// idempotent and skip if a sync is already running.
+  Stream<int> get periodicSyncTick => _periodicSyncTick.stream;
 
   BleService() {
     _setupEventChannels();
@@ -223,7 +224,9 @@ class BleService {
           ));
           break;
         case 'onPeriodicSyncTick':
-          _periodicSyncTick.add(null);
+          final m = args as Map?;
+          final intervalMin = (m?['intervalMin'] as int?) ?? 30;
+          _periodicSyncTick.add(intervalMin);
           break;
         case 'onHeartStream':
           _hrStream.add((args as Map)['hr'] as int);
@@ -349,6 +352,22 @@ class BleService {
     await _channel.invokeMethod('stopMeasure', {'type': type});
   }
 
+  /// Starts a blood-oxygen raw measurement. Same per-packet stream as
+  /// [startMeasureHrRaw] (on `hlth/realtime_stream`), but this mode drives
+  /// the red + IR LEDs, so `red`/`infrared` should carry data (the HR raw
+  /// mode is green-only). Used to test whether the H59 firmware actually
+  /// delivers red/IR for morphology work.
+  Future<Map<String, dynamic>> startMeasureSpo2Raw({int durationSec = 30}) async {
+    final r = await _channel
+        .invokeMethod('startMeasureSpo2Raw', {'duration_sec': durationSec});
+    return r is Map ? Map<String, dynamic>.from(r) : const {};
+  }
+
+  /// Stops the blood-oxygen raw measurement started by [startMeasureSpo2Raw].
+  Future<void> stopMeasureSpo2Raw() async {
+    await _channel.invokeMethod('stopMeasureSpo2Raw');
+  }
+
   // ──────────────────────────────────────────────────────────────────────
   // Scheduled monitoring config — hlth-ble-platform-channel.md §3.5
   //
@@ -471,6 +490,41 @@ class BleService {
     );
     if (r is! List) return const [];
     return r.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  /// SpO2 per-minute interval samples for a day (probe for whether the H59
+  /// exposes the fine-grained stream a breathing-disruption alert needs).
+  /// Returns `{samples, total, nonZero, min, max, timedOut}`; `timedOut`
+  /// true means the band never answered — i.e. interval SpO2 isn't supported.
+  Future<Map<String, dynamic>> getSpO2Interval({int dayOffset = 0}) async {
+    final r = await _channel
+        .invokeMethod('getSpO2Interval', {'dayOffset': dayOffset});
+    return Map<String, dynamic>.from(r as Map);
+  }
+
+  /// Read the device capability bitmap. The authoritative answer to whether
+  /// the firmware supports per-minute interval SpO2 (separate from the
+  /// SetTimeRsp bitmap read at bootstrap). Returns
+  /// `{ok, supportIntervalBloodOxygen, supportIntervalHeartRate,
+  /// supportIntervalTemperature, timedOut}`.
+  Future<Map<String, dynamic>> getSpO2Capability() async {
+    final r = await _channel.invokeMethod('getSpO2Capability');
+    return Map<String, dynamic>.from(r as Map);
+  }
+
+  /// Enable (or disable) periodic interval SpO2 monitoring at
+  /// [intervalMinutes] cadence (1 = per-minute, the resolution a breathing-
+  /// disruption alert needs). Returns the read-back `{ok, isEnable, interval,
+  /// timedOut}` — ground truth on H59, whose write-ack is unreliable.
+  Future<Map<String, dynamic>> enableSpO2Interval({
+    bool enable = true,
+    int intervalMinutes = 1,
+  }) async {
+    final r = await _channel.invokeMethod('enableSpO2Interval', {
+      'enable': enable,
+      'intervalMinutes': intervalMinutes,
+    });
+    return Map<String, dynamic>.from(r as Map);
   }
 
   Future<Map<String, dynamic>> getHrvHistory({int dayOffset = 0}) async {
@@ -626,6 +680,118 @@ class BleService {
     }
   }
 
+  /// Set the periodic-sync cadence at runtime. Native side clamps to
+  /// 5..60 min; returns the actually-applied cadence (and whether the
+  /// request was clamped). Used by the BLE Debug "Battery Drain Test"
+  /// panel to A/B 10 / 15 / 30 min intervals.
+  Future<({int minutes, bool clamped})?> setSyncIntervalMinutes(int minutes) async {
+    try {
+      final r = await _channel.invokeMethod(
+        'setSyncIntervalMinutes',
+        {'minutes': minutes},
+      );
+      if (r == null) return null;
+      final m = Map<String, dynamic>.from(r as Map);
+      return (
+        minutes: (m['minutes'] as num).toInt(),
+        clamped: (m['clamped'] as bool?) ?? false,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Sport mode (sdk_ring.pdf §2.3.10 "APP opens exercise type")
+  //
+  // The band has a dedicated workout state machine. While in sport mode
+  // the band records HR much more densely than the scheduled-HR floor
+  // (5 min) — readings are pushed via the existing DeviceNotifyListener
+  // dataType=1 channel. After end, a summary is synced back via
+  // SportPlusHandle.
+  // ──────────────────────────────────────────────────────────────────────
+
+  /// SDK byte values for the 8 curated exercise types per Ryan's
+  /// 2026-06-17 call ("eight things people actually do"). Mapping comes
+  /// from sdk_ring.pdf §2.3.10 / OdmSportPlusExerciseModelType.
+  static const sportTypeRunning = 7;
+  static const sportTypeWalking = 4;
+  static const sportTypeCycling = 9;
+  static const sportTypeHiking = 8;
+  static const sportTypeRowing = 27;
+  static const sportTypeElliptical = 26;
+  static const sportTypeYoga = 22;
+  static const sportTypeStrength = 88; // Indoor sports - strength training
+
+  /// Start a band-side sport session. Returns `null` if the band rejected
+  /// the request (e.g. not connected). On success, the band begins
+  /// recording HR + distance + calories for this session, and emits HR
+  /// change notifications via the existing `deviceNotify` stream
+  /// (dataType=1) at firmware-driven cadence.
+  Future<SportSessionAck?> startSportMode({required int sportType}) async {
+    return _sendSportStatus('startSportMode', sportType);
+  }
+
+  Future<SportSessionAck?> pauseSportMode({required int sportType}) async {
+    return _sendSportStatus('pauseSportMode', sportType);
+  }
+
+  Future<SportSessionAck?> resumeSportMode({required int sportType}) async {
+    return _sendSportStatus('resumeSportMode', sportType);
+  }
+
+  /// End the active sport session. Caller should follow up with
+  /// [syncSportSessions] to retrieve the workout summary.
+  Future<SportSessionAck?> endSportMode({required int sportType}) async {
+    return _sendSportStatus('endSportMode', sportType);
+  }
+
+  Future<SportSessionAck?> _sendSportStatus(String method, int sportType) async {
+    try {
+      final r = await _channel.invokeMethod(method, {'sportType': sportType});
+      if (r == null) return null;
+      final m = Map<String, dynamic>.from(r as Map);
+      return SportSessionAck(
+        status: (m['status'] as num).toInt(),
+        sportType: (m['sportType'] as num).toInt(),
+        gpsStatus: (m['gpsStatus'] as num?)?.toInt() ?? 0,
+        timestamp: (m['timestamp'] as num?)?.toInt() ?? 0,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Pull the most recent ~10 sport sessions the band has stored. Returns
+  /// empty list on failure. The band evicts its oldest session each time
+  /// a new one is recorded beyond the 10-session cap, so this should be
+  /// called shortly after each workout ends.
+  Future<List<SportSessionSummary>> syncSportSessions() async {
+    try {
+      final r = await _channel.invokeMethod('syncSportSessions');
+      if (r == null) return const [];
+      final m = Map<String, dynamic>.from(r as Map);
+      final raw = (m['sessions'] as List?) ?? const [];
+      return raw
+          .map((e) => SportSessionSummary.fromMap(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Read the currently-active periodic-sync cadence (minutes).
+  Future<int?> getSyncIntervalMinutes() async {
+    try {
+      final r = await _channel.invokeMethod('getSyncIntervalMinutes');
+      if (r == null) return null;
+      final m = Map<String, dynamic>.from(r as Map);
+      return (m['minutes'] as num?)?.toInt();
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<Map<String, dynamic>> getSleepHistory({int dayOffset = 0}) async {
     final r = await _channel
         .invokeMethod('getSleepHistory', {'dayOffset': dayOffset});
@@ -682,6 +848,91 @@ class BleException implements Exception {
 
   @override
   String toString() => 'BleException: $message';
+}
+
+/// Native ack for a `PhoneSportReq.getSportStatus(...)` call. The band
+/// returns its current GPS status (0=closed, 6=ready, etc.) and the
+/// timestamp it actually applied — useful for reconciling drift between
+/// the phone's clock and the band's.
+class SportSessionAck {
+  const SportSessionAck({
+    required this.status,
+    required this.sportType,
+    required this.gpsStatus,
+    required this.timestamp,
+  });
+
+  /// 1=Start, 2=Pause, 3=Continue, 4=End — echo of the request status.
+  final int status;
+  final int sportType;
+  final int gpsStatus;
+  final int timestamp;
+}
+
+/// Workout summary returned by `SportPlusHandle.syncSportPlus(...)`.
+/// Field semantics from sdk_ring.pdf "Synchronous training records" —
+/// distance is meters, speed is cm/s, calories are "small calories" (the
+/// SDK's term; treat as kcal for display, divide by 1000 if values look
+/// inflated on real hardware).
+class SportSessionSummary {
+  const SportSessionSummary({
+    required this.sportType,
+    required this.startTimeUnixSec,
+    required this.trainingStartTime,
+    required this.durationSec,
+    required this.distanceM,
+    required this.calories,
+    required this.avgSpeedCmS,
+    required this.maxSpeedCmS,
+    required this.avgHr,
+    required this.minHr,
+    required this.maxHr,
+    required this.elevationCm,
+    required this.uphillCm,
+    required this.downhillCm,
+    required this.stepRate,
+    required this.steps,
+    required this.locationCount,
+  });
+
+  factory SportSessionSummary.fromMap(Map<String, dynamic> m) =>
+      SportSessionSummary(
+        sportType: (m['sportType'] as num).toInt(),
+        startTimeUnixSec: (m['startTime'] as num).toInt(),
+        trainingStartTime: m['trainingStartTime'] as String? ?? '',
+        durationSec: (m['duration'] as num).toInt(),
+        distanceM: (m['distance'] as num).toInt(),
+        calories: (m['calories'] as num).toDouble(),
+        avgSpeedCmS: (m['speedAvg'] as num).toInt(),
+        maxSpeedCmS: (m['speedMax'] as num).toInt(),
+        avgHr: (m['rateAvg'] as num).toInt(),
+        minHr: (m['rateMin'] as num).toInt(),
+        maxHr: (m['rateMax'] as num).toInt(),
+        elevationCm: (m['elevation'] as num).toInt(),
+        uphillCm: (m['uphill'] as num).toInt(),
+        downhillCm: (m['downhill'] as num).toInt(),
+        stepRate: (m['stepRate'] as num).toInt(),
+        steps: (m['steps'] as num).toInt(),
+        locationCount: (m['locationCount'] as num).toInt(),
+      );
+
+  final int sportType;
+  final int startTimeUnixSec;
+  final String trainingStartTime;
+  final int durationSec;
+  final int distanceM;
+  final double calories;
+  final int avgSpeedCmS;
+  final int maxSpeedCmS;
+  final int avgHr;
+  final int minHr;
+  final int maxHr;
+  final int elevationCm;
+  final int uphillCm;
+  final int downhillCm;
+  final int stepRate;
+  final int steps;
+  final int locationCount;
 }
 
 // --- Riverpod Providers ---

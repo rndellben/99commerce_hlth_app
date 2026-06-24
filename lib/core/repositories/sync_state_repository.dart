@@ -30,6 +30,11 @@ abstract class SyncStateRepository {
     required String deviceId,
     required Duration staleness,
   });
+
+  /// Most recent successful sync across *all* metrics for a device, or null
+  /// if the device has never synced anything. Used by the retention alert
+  /// to decide whether the band has gone quiet.
+  Future<DateTime?> latestSuccessfulSync({required String deviceId});
 }
 
 class SyncStateRepositoryImpl implements SyncStateRepository {
@@ -132,6 +137,17 @@ class SyncStateRepositoryImpl implements SyncStateRepository {
                   t.lastSuccessfulSyncUtc.isSmallerThanValue(cutoff))))
         .get();
     return rows.map(_rowToDomain).toList();
+  }
+
+  @override
+  Future<DateTime?> latestSuccessfulSync({required String deviceId}) async {
+    final maxCol = _db.syncState.lastSuccessfulSyncUtc.max();
+    final query = _db.selectOnly(_db.syncState)
+      ..addColumns([maxCol])
+      ..where(_db.syncState.deviceId.equals(deviceId));
+    final row = await query.getSingleOrNull();
+    final sec = row?.read(maxCol);
+    return sec == null ? null : _toDt(sec);
   }
 }
 

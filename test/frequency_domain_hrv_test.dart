@@ -66,6 +66,52 @@ void main() {
           reason: 'LF=${m.lfPowerMs2} HF=${m.hfPowerMs2} ratio=${m.lfHfRatio}');
     });
 
+    test('respiratory rate reads the HF modulation frequency', () {
+      // 0.25 Hz RSA modulation = 15 breaths/min.
+      final rr = _modulatedRr(
+        baseRrMs: 800,
+        amplitudeMs: 50,
+        modulationHz: 0.25,
+        durationS: 120,
+      );
+      final m = fd.calculate(rr)!;
+      expect(m.respiratoryRateBpm, isNotNull);
+      expect(m.respiratoryRateBpm!, closeTo(15.0, 1.5),
+          reason: 'got ${m.respiratoryRateBpm} bpm');
+    });
+
+    test('respiratory rate tracks a different breathing frequency', () {
+      // 0.3 Hz = 18 breaths/min — confirms the value is not fixed.
+      final rr = _modulatedRr(
+        baseRrMs: 850,
+        amplitudeMs: 45,
+        modulationHz: 0.30,
+        durationS: 120,
+      );
+      final m = fd.calculate(rr)!;
+      expect(m.respiratoryRateBpm!, closeTo(18.0, 1.5),
+          reason: 'got ${m.respiratoryRateBpm} bpm');
+    });
+
+    test('slow drift (no breathing peak) yields no respiratory rate', () {
+      // A monotonic R-R drift has a 1/f-style spectrum — energy piled at
+      // very low frequency with only a descending tail in the HF band, so
+      // the in-band max sits on the 0.15 Hz edge. This is the real 9.4-bpm
+      // failure mode; the hardened picker must reject it as LF bleed
+      // (max not a strict local maximum) rather than report it.
+      final rr = <double>[];
+      double base = 700;
+      double t = 0;
+      while (t < 120000) {
+        base += 0.5; // slow upward drift, no oscillation
+        rr.add(base);
+        t += base;
+      }
+      final m = fd.calculate(rr)!;
+      expect(m.respiratoryRateBpm, isNull,
+          reason: 'got ${m.respiratoryRateBpm} bpm — should reject edge bleed');
+    });
+
     test('tachogram duration is reported correctly', () {
       final rr = _modulatedRr(
         baseRrMs: 800,

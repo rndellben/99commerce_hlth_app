@@ -52,7 +52,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     final controller = ref.read(authControllerProvider);
     final email = _emailCtl.text;
     final password = _passwordCtl.text;
-    final failure = _mode == _Mode.signUp
+    final wasSignUp = _mode == _Mode.signUp;
+    final failure = wasSignUp
         ? await controller.signUp(email: email, password: password)
         : await controller.signIn(email: email, password: password);
     if (!mounted) return;
@@ -60,7 +61,25 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       _busy = false;
       _error = failure?.userMessage;
     });
-    // Success → router redirect takes over via authStateProvider stream.
+    if (failure != null) return;
+
+    // Auth is opt-in (not a router redirect gate), so AuthScreen owns
+    // the post-success navigation itself.
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          wasSignUp
+              ? 'Account created. Welcome to HLTH.'
+              : 'Signed in as $email.',
+        ),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/');
+    }
   }
 
   void _setMode(_Mode m) {

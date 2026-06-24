@@ -7312,6 +7312,29 @@ class $DailyMetricsTable extends DailyMetrics
         type: DriftSqlType.double,
         requiredDuringInsert: false,
       );
+  static const VerificationMeta _rrIrregularityPctMeta = const VerificationMeta(
+    'rrIrregularityPct',
+  );
+  @override
+  late final GeneratedColumn<double> rrIrregularityPct =
+      GeneratedColumn<double>(
+        'rr_irregularity_pct',
+        aliasedName,
+        true,
+        type: DriftSqlType.double,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _ectopicBeatPctMeta = const VerificationMeta(
+    'ectopicBeatPct',
+  );
+  @override
+  late final GeneratedColumn<double> ectopicBeatPct = GeneratedColumn<double>(
+    'ectopic_beat_pct',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _spo2OvernightAvgMeta = const VerificationMeta(
     'spo2OvernightAvg',
   );
@@ -7606,6 +7629,8 @@ class $DailyMetricsTable extends DailyMetrics
     hrvRmssdMs,
     hrvSdnnMs,
     restingRespRateBpm,
+    rrIrregularityPct,
+    ectopicBeatPct,
     spo2OvernightAvg,
     spo2OvernightMin,
     systolicMmhg,
@@ -7707,6 +7732,24 @@ class $DailyMetricsTable extends DailyMetrics
         restingRespRateBpm.isAcceptableOrUnknown(
           data['resting_resp_rate_bpm']!,
           _restingRespRateBpmMeta,
+        ),
+      );
+    }
+    if (data.containsKey('rr_irregularity_pct')) {
+      context.handle(
+        _rrIrregularityPctMeta,
+        rrIrregularityPct.isAcceptableOrUnknown(
+          data['rr_irregularity_pct']!,
+          _rrIrregularityPctMeta,
+        ),
+      );
+    }
+    if (data.containsKey('ectopic_beat_pct')) {
+      context.handle(
+        _ectopicBeatPctMeta,
+        ectopicBeatPct.isAcceptableOrUnknown(
+          data['ectopic_beat_pct']!,
+          _ectopicBeatPctMeta,
         ),
       );
     }
@@ -7965,6 +8008,14 @@ class $DailyMetricsTable extends DailyMetrics
         DriftSqlType.double,
         data['${effectivePrefix}resting_resp_rate_bpm'],
       ),
+      rrIrregularityPct: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}rr_irregularity_pct'],
+      ),
+      ectopicBeatPct: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}ectopic_beat_pct'],
+      ),
       spo2OvernightAvg: attachedDatabase.typeMapping.read(
         DriftSqlType.double,
         data['${effectivePrefix}spo2_overnight_avg'],
@@ -8092,6 +8143,8 @@ class DailyMetric extends DataClass implements Insertable<DailyMetric> {
   final double? hrvRmssdMs;
   final double? hrvSdnnMs;
   final double? restingRespRateBpm;
+  final double? rrIrregularityPct;
+  final double? ectopicBeatPct;
   final double? spo2OvernightAvg;
   final int? spo2OvernightMin;
   final int? systolicMmhg;
@@ -8127,6 +8180,8 @@ class DailyMetric extends DataClass implements Insertable<DailyMetric> {
     this.hrvRmssdMs,
     this.hrvSdnnMs,
     this.restingRespRateBpm,
+    this.rrIrregularityPct,
+    this.ectopicBeatPct,
     this.spo2OvernightAvg,
     this.spo2OvernightMin,
     this.systolicMmhg,
@@ -8172,6 +8227,12 @@ class DailyMetric extends DataClass implements Insertable<DailyMetric> {
     }
     if (!nullToAbsent || restingRespRateBpm != null) {
       map['resting_resp_rate_bpm'] = Variable<double>(restingRespRateBpm);
+    }
+    if (!nullToAbsent || rrIrregularityPct != null) {
+      map['rr_irregularity_pct'] = Variable<double>(rrIrregularityPct);
+    }
+    if (!nullToAbsent || ectopicBeatPct != null) {
+      map['ectopic_beat_pct'] = Variable<double>(ectopicBeatPct);
     }
     if (!nullToAbsent || spo2OvernightAvg != null) {
       map['spo2_overnight_avg'] = Variable<double>(spo2OvernightAvg);
@@ -8272,6 +8333,12 @@ class DailyMetric extends DataClass implements Insertable<DailyMetric> {
       restingRespRateBpm: restingRespRateBpm == null && nullToAbsent
           ? const Value.absent()
           : Value(restingRespRateBpm),
+      rrIrregularityPct: rrIrregularityPct == null && nullToAbsent
+          ? const Value.absent()
+          : Value(rrIrregularityPct),
+      ectopicBeatPct: ectopicBeatPct == null && nullToAbsent
+          ? const Value.absent()
+          : Value(ectopicBeatPct),
       spo2OvernightAvg: spo2OvernightAvg == null && nullToAbsent
           ? const Value.absent()
           : Value(spo2OvernightAvg),
@@ -8363,6 +8430,10 @@ class DailyMetric extends DataClass implements Insertable<DailyMetric> {
       restingRespRateBpm: serializer.fromJson<double?>(
         json['restingRespRateBpm'],
       ),
+      rrIrregularityPct: serializer.fromJson<double?>(
+        json['rrIrregularityPct'],
+      ),
+      ectopicBeatPct: serializer.fromJson<double?>(json['ectopicBeatPct']),
       spo2OvernightAvg: serializer.fromJson<double?>(json['spo2OvernightAvg']),
       spo2OvernightMin: serializer.fromJson<int?>(json['spo2OvernightMin']),
       systolicMmhg: serializer.fromJson<int?>(json['systolicMmhg']),
@@ -8413,6 +8484,8 @@ class DailyMetric extends DataClass implements Insertable<DailyMetric> {
       'hrvRmssdMs': serializer.toJson<double?>(hrvRmssdMs),
       'hrvSdnnMs': serializer.toJson<double?>(hrvSdnnMs),
       'restingRespRateBpm': serializer.toJson<double?>(restingRespRateBpm),
+      'rrIrregularityPct': serializer.toJson<double?>(rrIrregularityPct),
+      'ectopicBeatPct': serializer.toJson<double?>(ectopicBeatPct),
       'spo2OvernightAvg': serializer.toJson<double?>(spo2OvernightAvg),
       'spo2OvernightMin': serializer.toJson<int?>(spo2OvernightMin),
       'systolicMmhg': serializer.toJson<int?>(systolicMmhg),
@@ -8455,6 +8528,8 @@ class DailyMetric extends DataClass implements Insertable<DailyMetric> {
     Value<double?> hrvRmssdMs = const Value.absent(),
     Value<double?> hrvSdnnMs = const Value.absent(),
     Value<double?> restingRespRateBpm = const Value.absent(),
+    Value<double?> rrIrregularityPct = const Value.absent(),
+    Value<double?> ectopicBeatPct = const Value.absent(),
     Value<double?> spo2OvernightAvg = const Value.absent(),
     Value<int?> spo2OvernightMin = const Value.absent(),
     Value<int?> systolicMmhg = const Value.absent(),
@@ -8492,6 +8567,12 @@ class DailyMetric extends DataClass implements Insertable<DailyMetric> {
     restingRespRateBpm: restingRespRateBpm.present
         ? restingRespRateBpm.value
         : this.restingRespRateBpm,
+    rrIrregularityPct: rrIrregularityPct.present
+        ? rrIrregularityPct.value
+        : this.rrIrregularityPct,
+    ectopicBeatPct: ectopicBeatPct.present
+        ? ectopicBeatPct.value
+        : this.ectopicBeatPct,
     spo2OvernightAvg: spo2OvernightAvg.present
         ? spo2OvernightAvg.value
         : this.spo2OvernightAvg,
@@ -8563,6 +8644,12 @@ class DailyMetric extends DataClass implements Insertable<DailyMetric> {
       restingRespRateBpm: data.restingRespRateBpm.present
           ? data.restingRespRateBpm.value
           : this.restingRespRateBpm,
+      rrIrregularityPct: data.rrIrregularityPct.present
+          ? data.rrIrregularityPct.value
+          : this.rrIrregularityPct,
+      ectopicBeatPct: data.ectopicBeatPct.present
+          ? data.ectopicBeatPct.value
+          : this.ectopicBeatPct,
       spo2OvernightAvg: data.spo2OvernightAvg.present
           ? data.spo2OvernightAvg.value
           : this.spo2OvernightAvg,
@@ -8647,6 +8734,8 @@ class DailyMetric extends DataClass implements Insertable<DailyMetric> {
           ..write('hrvRmssdMs: $hrvRmssdMs, ')
           ..write('hrvSdnnMs: $hrvSdnnMs, ')
           ..write('restingRespRateBpm: $restingRespRateBpm, ')
+          ..write('rrIrregularityPct: $rrIrregularityPct, ')
+          ..write('ectopicBeatPct: $ectopicBeatPct, ')
           ..write('spo2OvernightAvg: $spo2OvernightAvg, ')
           ..write('spo2OvernightMin: $spo2OvernightMin, ')
           ..write('systolicMmhg: $systolicMmhg, ')
@@ -8687,6 +8776,8 @@ class DailyMetric extends DataClass implements Insertable<DailyMetric> {
     hrvRmssdMs,
     hrvSdnnMs,
     restingRespRateBpm,
+    rrIrregularityPct,
+    ectopicBeatPct,
     spo2OvernightAvg,
     spo2OvernightMin,
     systolicMmhg,
@@ -8726,6 +8817,8 @@ class DailyMetric extends DataClass implements Insertable<DailyMetric> {
           other.hrvRmssdMs == this.hrvRmssdMs &&
           other.hrvSdnnMs == this.hrvSdnnMs &&
           other.restingRespRateBpm == this.restingRespRateBpm &&
+          other.rrIrregularityPct == this.rrIrregularityPct &&
+          other.ectopicBeatPct == this.ectopicBeatPct &&
           other.spo2OvernightAvg == this.spo2OvernightAvg &&
           other.spo2OvernightMin == this.spo2OvernightMin &&
           other.systolicMmhg == this.systolicMmhg &&
@@ -8763,6 +8856,8 @@ class DailyMetricsCompanion extends UpdateCompanion<DailyMetric> {
   final Value<double?> hrvRmssdMs;
   final Value<double?> hrvSdnnMs;
   final Value<double?> restingRespRateBpm;
+  final Value<double?> rrIrregularityPct;
+  final Value<double?> ectopicBeatPct;
   final Value<double?> spo2OvernightAvg;
   final Value<int?> spo2OvernightMin;
   final Value<int?> systolicMmhg;
@@ -8799,6 +8894,8 @@ class DailyMetricsCompanion extends UpdateCompanion<DailyMetric> {
     this.hrvRmssdMs = const Value.absent(),
     this.hrvSdnnMs = const Value.absent(),
     this.restingRespRateBpm = const Value.absent(),
+    this.rrIrregularityPct = const Value.absent(),
+    this.ectopicBeatPct = const Value.absent(),
     this.spo2OvernightAvg = const Value.absent(),
     this.spo2OvernightMin = const Value.absent(),
     this.systolicMmhg = const Value.absent(),
@@ -8836,6 +8933,8 @@ class DailyMetricsCompanion extends UpdateCompanion<DailyMetric> {
     this.hrvRmssdMs = const Value.absent(),
     this.hrvSdnnMs = const Value.absent(),
     this.restingRespRateBpm = const Value.absent(),
+    this.rrIrregularityPct = const Value.absent(),
+    this.ectopicBeatPct = const Value.absent(),
     this.spo2OvernightAvg = const Value.absent(),
     this.spo2OvernightMin = const Value.absent(),
     this.systolicMmhg = const Value.absent(),
@@ -8879,6 +8978,8 @@ class DailyMetricsCompanion extends UpdateCompanion<DailyMetric> {
     Expression<double>? hrvRmssdMs,
     Expression<double>? hrvSdnnMs,
     Expression<double>? restingRespRateBpm,
+    Expression<double>? rrIrregularityPct,
+    Expression<double>? ectopicBeatPct,
     Expression<double>? spo2OvernightAvg,
     Expression<int>? spo2OvernightMin,
     Expression<int>? systolicMmhg,
@@ -8917,6 +9018,8 @@ class DailyMetricsCompanion extends UpdateCompanion<DailyMetric> {
       if (hrvSdnnMs != null) 'hrv_sdnn_ms': hrvSdnnMs,
       if (restingRespRateBpm != null)
         'resting_resp_rate_bpm': restingRespRateBpm,
+      if (rrIrregularityPct != null) 'rr_irregularity_pct': rrIrregularityPct,
+      if (ectopicBeatPct != null) 'ectopic_beat_pct': ectopicBeatPct,
       if (spo2OvernightAvg != null) 'spo2_overnight_avg': spo2OvernightAvg,
       if (spo2OvernightMin != null) 'spo2_overnight_min': spo2OvernightMin,
       if (systolicMmhg != null) 'systolic_mmhg': systolicMmhg,
@@ -8958,6 +9061,8 @@ class DailyMetricsCompanion extends UpdateCompanion<DailyMetric> {
     Value<double?>? hrvRmssdMs,
     Value<double?>? hrvSdnnMs,
     Value<double?>? restingRespRateBpm,
+    Value<double?>? rrIrregularityPct,
+    Value<double?>? ectopicBeatPct,
     Value<double?>? spo2OvernightAvg,
     Value<int?>? spo2OvernightMin,
     Value<int?>? systolicMmhg,
@@ -8995,6 +9100,8 @@ class DailyMetricsCompanion extends UpdateCompanion<DailyMetric> {
       hrvRmssdMs: hrvRmssdMs ?? this.hrvRmssdMs,
       hrvSdnnMs: hrvSdnnMs ?? this.hrvSdnnMs,
       restingRespRateBpm: restingRespRateBpm ?? this.restingRespRateBpm,
+      rrIrregularityPct: rrIrregularityPct ?? this.rrIrregularityPct,
+      ectopicBeatPct: ectopicBeatPct ?? this.ectopicBeatPct,
       spo2OvernightAvg: spo2OvernightAvg ?? this.spo2OvernightAvg,
       spo2OvernightMin: spo2OvernightMin ?? this.spo2OvernightMin,
       systolicMmhg: systolicMmhg ?? this.systolicMmhg,
@@ -9052,6 +9159,12 @@ class DailyMetricsCompanion extends UpdateCompanion<DailyMetric> {
     }
     if (restingRespRateBpm.present) {
       map['resting_resp_rate_bpm'] = Variable<double>(restingRespRateBpm.value);
+    }
+    if (rrIrregularityPct.present) {
+      map['rr_irregularity_pct'] = Variable<double>(rrIrregularityPct.value);
+    }
+    if (ectopicBeatPct.present) {
+      map['ectopic_beat_pct'] = Variable<double>(ectopicBeatPct.value);
     }
     if (spo2OvernightAvg.present) {
       map['spo2_overnight_avg'] = Variable<double>(spo2OvernightAvg.value);
@@ -9152,6 +9265,8 @@ class DailyMetricsCompanion extends UpdateCompanion<DailyMetric> {
           ..write('hrvRmssdMs: $hrvRmssdMs, ')
           ..write('hrvSdnnMs: $hrvSdnnMs, ')
           ..write('restingRespRateBpm: $restingRespRateBpm, ')
+          ..write('rrIrregularityPct: $rrIrregularityPct, ')
+          ..write('ectopicBeatPct: $ectopicBeatPct, ')
           ..write('spo2OvernightAvg: $spo2OvernightAvg, ')
           ..write('spo2OvernightMin: $spo2OvernightMin, ')
           ..write('systolicMmhg: $systolicMmhg, ')
@@ -12367,6 +12482,1691 @@ class BpCalibrationsCompanion extends UpdateCompanion<BpCalibration> {
   }
 }
 
+class $BatteryTelemetryTable extends BatteryTelemetry
+    with TableInfo<$BatteryTelemetryTable, BatteryTelemetryData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $BatteryTelemetryTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _capturedAtUtcMeta = const VerificationMeta(
+    'capturedAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> capturedAtUtc = GeneratedColumn<int>(
+    'captured_at_utc',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bandBatteryPercentMeta =
+      const VerificationMeta('bandBatteryPercent');
+  @override
+  late final GeneratedColumn<int> bandBatteryPercent = GeneratedColumn<int>(
+    'band_battery_percent',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _bandChargingMeta = const VerificationMeta(
+    'bandCharging',
+  );
+  @override
+  late final GeneratedColumn<bool> bandCharging = GeneratedColumn<bool>(
+    'band_charging',
+    aliasedName,
+    true,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("band_charging" IN (0, 1))',
+    ),
+  );
+  static const VerificationMeta _syncIntervalMinMeta = const VerificationMeta(
+    'syncIntervalMin',
+  );
+  @override
+  late final GeneratedColumn<int> syncIntervalMin = GeneratedColumn<int>(
+    'sync_interval_min',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _eventTypeMeta = const VerificationMeta(
+    'eventType',
+  );
+  @override
+  late final GeneratedColumn<String> eventType = GeneratedColumn<String>(
+    'event_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    capturedAtUtc,
+    bandBatteryPercent,
+    bandCharging,
+    syncIntervalMin,
+    eventType,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'battery_telemetry';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<BatteryTelemetryData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('captured_at_utc')) {
+      context.handle(
+        _capturedAtUtcMeta,
+        capturedAtUtc.isAcceptableOrUnknown(
+          data['captured_at_utc']!,
+          _capturedAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_capturedAtUtcMeta);
+    }
+    if (data.containsKey('band_battery_percent')) {
+      context.handle(
+        _bandBatteryPercentMeta,
+        bandBatteryPercent.isAcceptableOrUnknown(
+          data['band_battery_percent']!,
+          _bandBatteryPercentMeta,
+        ),
+      );
+    }
+    if (data.containsKey('band_charging')) {
+      context.handle(
+        _bandChargingMeta,
+        bandCharging.isAcceptableOrUnknown(
+          data['band_charging']!,
+          _bandChargingMeta,
+        ),
+      );
+    }
+    if (data.containsKey('sync_interval_min')) {
+      context.handle(
+        _syncIntervalMinMeta,
+        syncIntervalMin.isAcceptableOrUnknown(
+          data['sync_interval_min']!,
+          _syncIntervalMinMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_syncIntervalMinMeta);
+    }
+    if (data.containsKey('event_type')) {
+      context.handle(
+        _eventTypeMeta,
+        eventType.isAcceptableOrUnknown(data['event_type']!, _eventTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_eventTypeMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  BatteryTelemetryData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return BatteryTelemetryData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      capturedAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}captured_at_utc'],
+      )!,
+      bandBatteryPercent: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}band_battery_percent'],
+      ),
+      bandCharging: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}band_charging'],
+      ),
+      syncIntervalMin: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sync_interval_min'],
+      )!,
+      eventType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}event_type'],
+      )!,
+    );
+  }
+
+  @override
+  $BatteryTelemetryTable createAlias(String alias) {
+    return $BatteryTelemetryTable(attachedDatabase, alias);
+  }
+}
+
+class BatteryTelemetryData extends DataClass
+    implements Insertable<BatteryTelemetryData> {
+  final String id;
+  final int capturedAtUtc;
+  final int? bandBatteryPercent;
+  final bool? bandCharging;
+  final int syncIntervalMin;
+  final String eventType;
+  const BatteryTelemetryData({
+    required this.id,
+    required this.capturedAtUtc,
+    this.bandBatteryPercent,
+    this.bandCharging,
+    required this.syncIntervalMin,
+    required this.eventType,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['captured_at_utc'] = Variable<int>(capturedAtUtc);
+    if (!nullToAbsent || bandBatteryPercent != null) {
+      map['band_battery_percent'] = Variable<int>(bandBatteryPercent);
+    }
+    if (!nullToAbsent || bandCharging != null) {
+      map['band_charging'] = Variable<bool>(bandCharging);
+    }
+    map['sync_interval_min'] = Variable<int>(syncIntervalMin);
+    map['event_type'] = Variable<String>(eventType);
+    return map;
+  }
+
+  BatteryTelemetryCompanion toCompanion(bool nullToAbsent) {
+    return BatteryTelemetryCompanion(
+      id: Value(id),
+      capturedAtUtc: Value(capturedAtUtc),
+      bandBatteryPercent: bandBatteryPercent == null && nullToAbsent
+          ? const Value.absent()
+          : Value(bandBatteryPercent),
+      bandCharging: bandCharging == null && nullToAbsent
+          ? const Value.absent()
+          : Value(bandCharging),
+      syncIntervalMin: Value(syncIntervalMin),
+      eventType: Value(eventType),
+    );
+  }
+
+  factory BatteryTelemetryData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return BatteryTelemetryData(
+      id: serializer.fromJson<String>(json['id']),
+      capturedAtUtc: serializer.fromJson<int>(json['capturedAtUtc']),
+      bandBatteryPercent: serializer.fromJson<int?>(json['bandBatteryPercent']),
+      bandCharging: serializer.fromJson<bool?>(json['bandCharging']),
+      syncIntervalMin: serializer.fromJson<int>(json['syncIntervalMin']),
+      eventType: serializer.fromJson<String>(json['eventType']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'capturedAtUtc': serializer.toJson<int>(capturedAtUtc),
+      'bandBatteryPercent': serializer.toJson<int?>(bandBatteryPercent),
+      'bandCharging': serializer.toJson<bool?>(bandCharging),
+      'syncIntervalMin': serializer.toJson<int>(syncIntervalMin),
+      'eventType': serializer.toJson<String>(eventType),
+    };
+  }
+
+  BatteryTelemetryData copyWith({
+    String? id,
+    int? capturedAtUtc,
+    Value<int?> bandBatteryPercent = const Value.absent(),
+    Value<bool?> bandCharging = const Value.absent(),
+    int? syncIntervalMin,
+    String? eventType,
+  }) => BatteryTelemetryData(
+    id: id ?? this.id,
+    capturedAtUtc: capturedAtUtc ?? this.capturedAtUtc,
+    bandBatteryPercent: bandBatteryPercent.present
+        ? bandBatteryPercent.value
+        : this.bandBatteryPercent,
+    bandCharging: bandCharging.present ? bandCharging.value : this.bandCharging,
+    syncIntervalMin: syncIntervalMin ?? this.syncIntervalMin,
+    eventType: eventType ?? this.eventType,
+  );
+  BatteryTelemetryData copyWithCompanion(BatteryTelemetryCompanion data) {
+    return BatteryTelemetryData(
+      id: data.id.present ? data.id.value : this.id,
+      capturedAtUtc: data.capturedAtUtc.present
+          ? data.capturedAtUtc.value
+          : this.capturedAtUtc,
+      bandBatteryPercent: data.bandBatteryPercent.present
+          ? data.bandBatteryPercent.value
+          : this.bandBatteryPercent,
+      bandCharging: data.bandCharging.present
+          ? data.bandCharging.value
+          : this.bandCharging,
+      syncIntervalMin: data.syncIntervalMin.present
+          ? data.syncIntervalMin.value
+          : this.syncIntervalMin,
+      eventType: data.eventType.present ? data.eventType.value : this.eventType,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BatteryTelemetryData(')
+          ..write('id: $id, ')
+          ..write('capturedAtUtc: $capturedAtUtc, ')
+          ..write('bandBatteryPercent: $bandBatteryPercent, ')
+          ..write('bandCharging: $bandCharging, ')
+          ..write('syncIntervalMin: $syncIntervalMin, ')
+          ..write('eventType: $eventType')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    capturedAtUtc,
+    bandBatteryPercent,
+    bandCharging,
+    syncIntervalMin,
+    eventType,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is BatteryTelemetryData &&
+          other.id == this.id &&
+          other.capturedAtUtc == this.capturedAtUtc &&
+          other.bandBatteryPercent == this.bandBatteryPercent &&
+          other.bandCharging == this.bandCharging &&
+          other.syncIntervalMin == this.syncIntervalMin &&
+          other.eventType == this.eventType);
+}
+
+class BatteryTelemetryCompanion extends UpdateCompanion<BatteryTelemetryData> {
+  final Value<String> id;
+  final Value<int> capturedAtUtc;
+  final Value<int?> bandBatteryPercent;
+  final Value<bool?> bandCharging;
+  final Value<int> syncIntervalMin;
+  final Value<String> eventType;
+  final Value<int> rowid;
+  const BatteryTelemetryCompanion({
+    this.id = const Value.absent(),
+    this.capturedAtUtc = const Value.absent(),
+    this.bandBatteryPercent = const Value.absent(),
+    this.bandCharging = const Value.absent(),
+    this.syncIntervalMin = const Value.absent(),
+    this.eventType = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  BatteryTelemetryCompanion.insert({
+    required String id,
+    required int capturedAtUtc,
+    this.bandBatteryPercent = const Value.absent(),
+    this.bandCharging = const Value.absent(),
+    required int syncIntervalMin,
+    required String eventType,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       capturedAtUtc = Value(capturedAtUtc),
+       syncIntervalMin = Value(syncIntervalMin),
+       eventType = Value(eventType);
+  static Insertable<BatteryTelemetryData> custom({
+    Expression<String>? id,
+    Expression<int>? capturedAtUtc,
+    Expression<int>? bandBatteryPercent,
+    Expression<bool>? bandCharging,
+    Expression<int>? syncIntervalMin,
+    Expression<String>? eventType,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (capturedAtUtc != null) 'captured_at_utc': capturedAtUtc,
+      if (bandBatteryPercent != null)
+        'band_battery_percent': bandBatteryPercent,
+      if (bandCharging != null) 'band_charging': bandCharging,
+      if (syncIntervalMin != null) 'sync_interval_min': syncIntervalMin,
+      if (eventType != null) 'event_type': eventType,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  BatteryTelemetryCompanion copyWith({
+    Value<String>? id,
+    Value<int>? capturedAtUtc,
+    Value<int?>? bandBatteryPercent,
+    Value<bool?>? bandCharging,
+    Value<int>? syncIntervalMin,
+    Value<String>? eventType,
+    Value<int>? rowid,
+  }) {
+    return BatteryTelemetryCompanion(
+      id: id ?? this.id,
+      capturedAtUtc: capturedAtUtc ?? this.capturedAtUtc,
+      bandBatteryPercent: bandBatteryPercent ?? this.bandBatteryPercent,
+      bandCharging: bandCharging ?? this.bandCharging,
+      syncIntervalMin: syncIntervalMin ?? this.syncIntervalMin,
+      eventType: eventType ?? this.eventType,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (capturedAtUtc.present) {
+      map['captured_at_utc'] = Variable<int>(capturedAtUtc.value);
+    }
+    if (bandBatteryPercent.present) {
+      map['band_battery_percent'] = Variable<int>(bandBatteryPercent.value);
+    }
+    if (bandCharging.present) {
+      map['band_charging'] = Variable<bool>(bandCharging.value);
+    }
+    if (syncIntervalMin.present) {
+      map['sync_interval_min'] = Variable<int>(syncIntervalMin.value);
+    }
+    if (eventType.present) {
+      map['event_type'] = Variable<String>(eventType.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BatteryTelemetryCompanion(')
+          ..write('id: $id, ')
+          ..write('capturedAtUtc: $capturedAtUtc, ')
+          ..write('bandBatteryPercent: $bandBatteryPercent, ')
+          ..write('bandCharging: $bandCharging, ')
+          ..write('syncIntervalMin: $syncIntervalMin, ')
+          ..write('eventType: $eventType, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ExerciseSessionsTable extends ExerciseSessions
+    with TableInfo<$ExerciseSessionsTable, ExerciseSession> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ExerciseSessionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+    'user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES users (id)',
+    ),
+  );
+  static const VerificationMeta _deviceIdMeta = const VerificationMeta(
+    'deviceId',
+  );
+  @override
+  late final GeneratedColumn<String> deviceId = GeneratedColumn<String>(
+    'device_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES devices (id)',
+    ),
+  );
+  static const VerificationMeta _sportTypeMeta = const VerificationMeta(
+    'sportType',
+  );
+  @override
+  late final GeneratedColumn<int> sportType = GeneratedColumn<int>(
+    'sport_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _startedAtUtcMeta = const VerificationMeta(
+    'startedAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> startedAtUtc = GeneratedColumn<int>(
+    'started_at_utc',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _endedAtUtcMeta = const VerificationMeta(
+    'endedAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> endedAtUtc = GeneratedColumn<int>(
+    'ended_at_utc',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _durationSecMeta = const VerificationMeta(
+    'durationSec',
+  );
+  @override
+  late final GeneratedColumn<int> durationSec = GeneratedColumn<int>(
+    'duration_sec',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _distanceMMeta = const VerificationMeta(
+    'distanceM',
+  );
+  @override
+  late final GeneratedColumn<int> distanceM = GeneratedColumn<int>(
+    'distance_m',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _caloriesMeta = const VerificationMeta(
+    'calories',
+  );
+  @override
+  late final GeneratedColumn<double> calories = GeneratedColumn<double>(
+    'calories',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _avgSpeedCmSMeta = const VerificationMeta(
+    'avgSpeedCmS',
+  );
+  @override
+  late final GeneratedColumn<int> avgSpeedCmS = GeneratedColumn<int>(
+    'avg_speed_cm_s',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _maxSpeedCmSMeta = const VerificationMeta(
+    'maxSpeedCmS',
+  );
+  @override
+  late final GeneratedColumn<int> maxSpeedCmS = GeneratedColumn<int>(
+    'max_speed_cm_s',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _avgHrBpmMeta = const VerificationMeta(
+    'avgHrBpm',
+  );
+  @override
+  late final GeneratedColumn<int> avgHrBpm = GeneratedColumn<int>(
+    'avg_hr_bpm',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _minHrBpmMeta = const VerificationMeta(
+    'minHrBpm',
+  );
+  @override
+  late final GeneratedColumn<int> minHrBpm = GeneratedColumn<int>(
+    'min_hr_bpm',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _maxHrBpmMeta = const VerificationMeta(
+    'maxHrBpm',
+  );
+  @override
+  late final GeneratedColumn<int> maxHrBpm = GeneratedColumn<int>(
+    'max_hr_bpm',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _stepsMeta = const VerificationMeta('steps');
+  @override
+  late final GeneratedColumn<int> steps = GeneratedColumn<int>(
+    'steps',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _stepRateMeta = const VerificationMeta(
+    'stepRate',
+  );
+  @override
+  late final GeneratedColumn<int> stepRate = GeneratedColumn<int>(
+    'step_rate',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _elevationCmMeta = const VerificationMeta(
+    'elevationCm',
+  );
+  @override
+  late final GeneratedColumn<int> elevationCm = GeneratedColumn<int>(
+    'elevation_cm',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _uphillCmMeta = const VerificationMeta(
+    'uphillCm',
+  );
+  @override
+  late final GeneratedColumn<int> uphillCm = GeneratedColumn<int>(
+    'uphill_cm',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _downhillCmMeta = const VerificationMeta(
+    'downhillCm',
+  );
+  @override
+  late final GeneratedColumn<int> downhillCm = GeneratedColumn<int>(
+    'downhill_cm',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<DataSource, int> source =
+      GeneratedColumn<int>(
+        'source',
+        aliasedName,
+        false,
+        type: DriftSqlType.int,
+        requiredDuringInsert: true,
+      ).withConverter<DataSource>($ExerciseSessionsTable.$convertersource);
+  static const VerificationMeta _createdAtUtcMeta = const VerificationMeta(
+    'createdAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> createdAtUtc = GeneratedColumn<int>(
+    'created_at_utc',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtUtcMeta = const VerificationMeta(
+    'deletedAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> deletedAtUtc = GeneratedColumn<int>(
+    'deleted_at_utc',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    userId,
+    deviceId,
+    sportType,
+    startedAtUtc,
+    endedAtUtc,
+    durationSec,
+    distanceM,
+    calories,
+    avgSpeedCmS,
+    maxSpeedCmS,
+    avgHrBpm,
+    minHrBpm,
+    maxHrBpm,
+    steps,
+    stepRate,
+    elevationCm,
+    uphillCm,
+    downhillCm,
+    source,
+    createdAtUtc,
+    deletedAtUtc,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'exercise_sessions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ExerciseSession> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('user_id')) {
+      context.handle(
+        _userIdMeta,
+        userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_userIdMeta);
+    }
+    if (data.containsKey('device_id')) {
+      context.handle(
+        _deviceIdMeta,
+        deviceId.isAcceptableOrUnknown(data['device_id']!, _deviceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_deviceIdMeta);
+    }
+    if (data.containsKey('sport_type')) {
+      context.handle(
+        _sportTypeMeta,
+        sportType.isAcceptableOrUnknown(data['sport_type']!, _sportTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sportTypeMeta);
+    }
+    if (data.containsKey('started_at_utc')) {
+      context.handle(
+        _startedAtUtcMeta,
+        startedAtUtc.isAcceptableOrUnknown(
+          data['started_at_utc']!,
+          _startedAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_startedAtUtcMeta);
+    }
+    if (data.containsKey('ended_at_utc')) {
+      context.handle(
+        _endedAtUtcMeta,
+        endedAtUtc.isAcceptableOrUnknown(
+          data['ended_at_utc']!,
+          _endedAtUtcMeta,
+        ),
+      );
+    }
+    if (data.containsKey('duration_sec')) {
+      context.handle(
+        _durationSecMeta,
+        durationSec.isAcceptableOrUnknown(
+          data['duration_sec']!,
+          _durationSecMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_durationSecMeta);
+    }
+    if (data.containsKey('distance_m')) {
+      context.handle(
+        _distanceMMeta,
+        distanceM.isAcceptableOrUnknown(data['distance_m']!, _distanceMMeta),
+      );
+    }
+    if (data.containsKey('calories')) {
+      context.handle(
+        _caloriesMeta,
+        calories.isAcceptableOrUnknown(data['calories']!, _caloriesMeta),
+      );
+    }
+    if (data.containsKey('avg_speed_cm_s')) {
+      context.handle(
+        _avgSpeedCmSMeta,
+        avgSpeedCmS.isAcceptableOrUnknown(
+          data['avg_speed_cm_s']!,
+          _avgSpeedCmSMeta,
+        ),
+      );
+    }
+    if (data.containsKey('max_speed_cm_s')) {
+      context.handle(
+        _maxSpeedCmSMeta,
+        maxSpeedCmS.isAcceptableOrUnknown(
+          data['max_speed_cm_s']!,
+          _maxSpeedCmSMeta,
+        ),
+      );
+    }
+    if (data.containsKey('avg_hr_bpm')) {
+      context.handle(
+        _avgHrBpmMeta,
+        avgHrBpm.isAcceptableOrUnknown(data['avg_hr_bpm']!, _avgHrBpmMeta),
+      );
+    }
+    if (data.containsKey('min_hr_bpm')) {
+      context.handle(
+        _minHrBpmMeta,
+        minHrBpm.isAcceptableOrUnknown(data['min_hr_bpm']!, _minHrBpmMeta),
+      );
+    }
+    if (data.containsKey('max_hr_bpm')) {
+      context.handle(
+        _maxHrBpmMeta,
+        maxHrBpm.isAcceptableOrUnknown(data['max_hr_bpm']!, _maxHrBpmMeta),
+      );
+    }
+    if (data.containsKey('steps')) {
+      context.handle(
+        _stepsMeta,
+        steps.isAcceptableOrUnknown(data['steps']!, _stepsMeta),
+      );
+    }
+    if (data.containsKey('step_rate')) {
+      context.handle(
+        _stepRateMeta,
+        stepRate.isAcceptableOrUnknown(data['step_rate']!, _stepRateMeta),
+      );
+    }
+    if (data.containsKey('elevation_cm')) {
+      context.handle(
+        _elevationCmMeta,
+        elevationCm.isAcceptableOrUnknown(
+          data['elevation_cm']!,
+          _elevationCmMeta,
+        ),
+      );
+    }
+    if (data.containsKey('uphill_cm')) {
+      context.handle(
+        _uphillCmMeta,
+        uphillCm.isAcceptableOrUnknown(data['uphill_cm']!, _uphillCmMeta),
+      );
+    }
+    if (data.containsKey('downhill_cm')) {
+      context.handle(
+        _downhillCmMeta,
+        downhillCm.isAcceptableOrUnknown(data['downhill_cm']!, _downhillCmMeta),
+      );
+    }
+    if (data.containsKey('created_at_utc')) {
+      context.handle(
+        _createdAtUtcMeta,
+        createdAtUtc.isAcceptableOrUnknown(
+          data['created_at_utc']!,
+          _createdAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtUtcMeta);
+    }
+    if (data.containsKey('deleted_at_utc')) {
+      context.handle(
+        _deletedAtUtcMeta,
+        deletedAtUtc.isAcceptableOrUnknown(
+          data['deleted_at_utc']!,
+          _deletedAtUtcMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ExerciseSession map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ExerciseSession(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      userId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}user_id'],
+      )!,
+      deviceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}device_id'],
+      )!,
+      sportType: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sport_type'],
+      )!,
+      startedAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}started_at_utc'],
+      )!,
+      endedAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}ended_at_utc'],
+      ),
+      durationSec: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}duration_sec'],
+      )!,
+      distanceM: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}distance_m'],
+      )!,
+      calories: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}calories'],
+      )!,
+      avgSpeedCmS: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}avg_speed_cm_s'],
+      ),
+      maxSpeedCmS: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}max_speed_cm_s'],
+      ),
+      avgHrBpm: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}avg_hr_bpm'],
+      ),
+      minHrBpm: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}min_hr_bpm'],
+      ),
+      maxHrBpm: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}max_hr_bpm'],
+      ),
+      steps: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}steps'],
+      ),
+      stepRate: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}step_rate'],
+      ),
+      elevationCm: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}elevation_cm'],
+      ),
+      uphillCm: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}uphill_cm'],
+      ),
+      downhillCm: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}downhill_cm'],
+      ),
+      source: $ExerciseSessionsTable.$convertersource.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.int,
+          data['${effectivePrefix}source'],
+        )!,
+      ),
+      createdAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at_utc'],
+      )!,
+      deletedAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}deleted_at_utc'],
+      ),
+    );
+  }
+
+  @override
+  $ExerciseSessionsTable createAlias(String alias) {
+    return $ExerciseSessionsTable(attachedDatabase, alias);
+  }
+
+  static JsonTypeConverter2<DataSource, int, int> $convertersource =
+      const EnumIndexConverter<DataSource>(DataSource.values);
+}
+
+class ExerciseSession extends DataClass implements Insertable<ExerciseSession> {
+  final String id;
+  final String userId;
+  final String deviceId;
+  final int sportType;
+  final int startedAtUtc;
+  final int? endedAtUtc;
+  final int durationSec;
+  final int distanceM;
+  final double calories;
+  final int? avgSpeedCmS;
+  final int? maxSpeedCmS;
+  final int? avgHrBpm;
+  final int? minHrBpm;
+  final int? maxHrBpm;
+  final int? steps;
+  final int? stepRate;
+  final int? elevationCm;
+  final int? uphillCm;
+  final int? downhillCm;
+  final DataSource source;
+  final int createdAtUtc;
+  final int? deletedAtUtc;
+  const ExerciseSession({
+    required this.id,
+    required this.userId,
+    required this.deviceId,
+    required this.sportType,
+    required this.startedAtUtc,
+    this.endedAtUtc,
+    required this.durationSec,
+    required this.distanceM,
+    required this.calories,
+    this.avgSpeedCmS,
+    this.maxSpeedCmS,
+    this.avgHrBpm,
+    this.minHrBpm,
+    this.maxHrBpm,
+    this.steps,
+    this.stepRate,
+    this.elevationCm,
+    this.uphillCm,
+    this.downhillCm,
+    required this.source,
+    required this.createdAtUtc,
+    this.deletedAtUtc,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['user_id'] = Variable<String>(userId);
+    map['device_id'] = Variable<String>(deviceId);
+    map['sport_type'] = Variable<int>(sportType);
+    map['started_at_utc'] = Variable<int>(startedAtUtc);
+    if (!nullToAbsent || endedAtUtc != null) {
+      map['ended_at_utc'] = Variable<int>(endedAtUtc);
+    }
+    map['duration_sec'] = Variable<int>(durationSec);
+    map['distance_m'] = Variable<int>(distanceM);
+    map['calories'] = Variable<double>(calories);
+    if (!nullToAbsent || avgSpeedCmS != null) {
+      map['avg_speed_cm_s'] = Variable<int>(avgSpeedCmS);
+    }
+    if (!nullToAbsent || maxSpeedCmS != null) {
+      map['max_speed_cm_s'] = Variable<int>(maxSpeedCmS);
+    }
+    if (!nullToAbsent || avgHrBpm != null) {
+      map['avg_hr_bpm'] = Variable<int>(avgHrBpm);
+    }
+    if (!nullToAbsent || minHrBpm != null) {
+      map['min_hr_bpm'] = Variable<int>(minHrBpm);
+    }
+    if (!nullToAbsent || maxHrBpm != null) {
+      map['max_hr_bpm'] = Variable<int>(maxHrBpm);
+    }
+    if (!nullToAbsent || steps != null) {
+      map['steps'] = Variable<int>(steps);
+    }
+    if (!nullToAbsent || stepRate != null) {
+      map['step_rate'] = Variable<int>(stepRate);
+    }
+    if (!nullToAbsent || elevationCm != null) {
+      map['elevation_cm'] = Variable<int>(elevationCm);
+    }
+    if (!nullToAbsent || uphillCm != null) {
+      map['uphill_cm'] = Variable<int>(uphillCm);
+    }
+    if (!nullToAbsent || downhillCm != null) {
+      map['downhill_cm'] = Variable<int>(downhillCm);
+    }
+    {
+      map['source'] = Variable<int>(
+        $ExerciseSessionsTable.$convertersource.toSql(source),
+      );
+    }
+    map['created_at_utc'] = Variable<int>(createdAtUtc);
+    if (!nullToAbsent || deletedAtUtc != null) {
+      map['deleted_at_utc'] = Variable<int>(deletedAtUtc);
+    }
+    return map;
+  }
+
+  ExerciseSessionsCompanion toCompanion(bool nullToAbsent) {
+    return ExerciseSessionsCompanion(
+      id: Value(id),
+      userId: Value(userId),
+      deviceId: Value(deviceId),
+      sportType: Value(sportType),
+      startedAtUtc: Value(startedAtUtc),
+      endedAtUtc: endedAtUtc == null && nullToAbsent
+          ? const Value.absent()
+          : Value(endedAtUtc),
+      durationSec: Value(durationSec),
+      distanceM: Value(distanceM),
+      calories: Value(calories),
+      avgSpeedCmS: avgSpeedCmS == null && nullToAbsent
+          ? const Value.absent()
+          : Value(avgSpeedCmS),
+      maxSpeedCmS: maxSpeedCmS == null && nullToAbsent
+          ? const Value.absent()
+          : Value(maxSpeedCmS),
+      avgHrBpm: avgHrBpm == null && nullToAbsent
+          ? const Value.absent()
+          : Value(avgHrBpm),
+      minHrBpm: minHrBpm == null && nullToAbsent
+          ? const Value.absent()
+          : Value(minHrBpm),
+      maxHrBpm: maxHrBpm == null && nullToAbsent
+          ? const Value.absent()
+          : Value(maxHrBpm),
+      steps: steps == null && nullToAbsent
+          ? const Value.absent()
+          : Value(steps),
+      stepRate: stepRate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(stepRate),
+      elevationCm: elevationCm == null && nullToAbsent
+          ? const Value.absent()
+          : Value(elevationCm),
+      uphillCm: uphillCm == null && nullToAbsent
+          ? const Value.absent()
+          : Value(uphillCm),
+      downhillCm: downhillCm == null && nullToAbsent
+          ? const Value.absent()
+          : Value(downhillCm),
+      source: Value(source),
+      createdAtUtc: Value(createdAtUtc),
+      deletedAtUtc: deletedAtUtc == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAtUtc),
+    );
+  }
+
+  factory ExerciseSession.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ExerciseSession(
+      id: serializer.fromJson<String>(json['id']),
+      userId: serializer.fromJson<String>(json['userId']),
+      deviceId: serializer.fromJson<String>(json['deviceId']),
+      sportType: serializer.fromJson<int>(json['sportType']),
+      startedAtUtc: serializer.fromJson<int>(json['startedAtUtc']),
+      endedAtUtc: serializer.fromJson<int?>(json['endedAtUtc']),
+      durationSec: serializer.fromJson<int>(json['durationSec']),
+      distanceM: serializer.fromJson<int>(json['distanceM']),
+      calories: serializer.fromJson<double>(json['calories']),
+      avgSpeedCmS: serializer.fromJson<int?>(json['avgSpeedCmS']),
+      maxSpeedCmS: serializer.fromJson<int?>(json['maxSpeedCmS']),
+      avgHrBpm: serializer.fromJson<int?>(json['avgHrBpm']),
+      minHrBpm: serializer.fromJson<int?>(json['minHrBpm']),
+      maxHrBpm: serializer.fromJson<int?>(json['maxHrBpm']),
+      steps: serializer.fromJson<int?>(json['steps']),
+      stepRate: serializer.fromJson<int?>(json['stepRate']),
+      elevationCm: serializer.fromJson<int?>(json['elevationCm']),
+      uphillCm: serializer.fromJson<int?>(json['uphillCm']),
+      downhillCm: serializer.fromJson<int?>(json['downhillCm']),
+      source: $ExerciseSessionsTable.$convertersource.fromJson(
+        serializer.fromJson<int>(json['source']),
+      ),
+      createdAtUtc: serializer.fromJson<int>(json['createdAtUtc']),
+      deletedAtUtc: serializer.fromJson<int?>(json['deletedAtUtc']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'userId': serializer.toJson<String>(userId),
+      'deviceId': serializer.toJson<String>(deviceId),
+      'sportType': serializer.toJson<int>(sportType),
+      'startedAtUtc': serializer.toJson<int>(startedAtUtc),
+      'endedAtUtc': serializer.toJson<int?>(endedAtUtc),
+      'durationSec': serializer.toJson<int>(durationSec),
+      'distanceM': serializer.toJson<int>(distanceM),
+      'calories': serializer.toJson<double>(calories),
+      'avgSpeedCmS': serializer.toJson<int?>(avgSpeedCmS),
+      'maxSpeedCmS': serializer.toJson<int?>(maxSpeedCmS),
+      'avgHrBpm': serializer.toJson<int?>(avgHrBpm),
+      'minHrBpm': serializer.toJson<int?>(minHrBpm),
+      'maxHrBpm': serializer.toJson<int?>(maxHrBpm),
+      'steps': serializer.toJson<int?>(steps),
+      'stepRate': serializer.toJson<int?>(stepRate),
+      'elevationCm': serializer.toJson<int?>(elevationCm),
+      'uphillCm': serializer.toJson<int?>(uphillCm),
+      'downhillCm': serializer.toJson<int?>(downhillCm),
+      'source': serializer.toJson<int>(
+        $ExerciseSessionsTable.$convertersource.toJson(source),
+      ),
+      'createdAtUtc': serializer.toJson<int>(createdAtUtc),
+      'deletedAtUtc': serializer.toJson<int?>(deletedAtUtc),
+    };
+  }
+
+  ExerciseSession copyWith({
+    String? id,
+    String? userId,
+    String? deviceId,
+    int? sportType,
+    int? startedAtUtc,
+    Value<int?> endedAtUtc = const Value.absent(),
+    int? durationSec,
+    int? distanceM,
+    double? calories,
+    Value<int?> avgSpeedCmS = const Value.absent(),
+    Value<int?> maxSpeedCmS = const Value.absent(),
+    Value<int?> avgHrBpm = const Value.absent(),
+    Value<int?> minHrBpm = const Value.absent(),
+    Value<int?> maxHrBpm = const Value.absent(),
+    Value<int?> steps = const Value.absent(),
+    Value<int?> stepRate = const Value.absent(),
+    Value<int?> elevationCm = const Value.absent(),
+    Value<int?> uphillCm = const Value.absent(),
+    Value<int?> downhillCm = const Value.absent(),
+    DataSource? source,
+    int? createdAtUtc,
+    Value<int?> deletedAtUtc = const Value.absent(),
+  }) => ExerciseSession(
+    id: id ?? this.id,
+    userId: userId ?? this.userId,
+    deviceId: deviceId ?? this.deviceId,
+    sportType: sportType ?? this.sportType,
+    startedAtUtc: startedAtUtc ?? this.startedAtUtc,
+    endedAtUtc: endedAtUtc.present ? endedAtUtc.value : this.endedAtUtc,
+    durationSec: durationSec ?? this.durationSec,
+    distanceM: distanceM ?? this.distanceM,
+    calories: calories ?? this.calories,
+    avgSpeedCmS: avgSpeedCmS.present ? avgSpeedCmS.value : this.avgSpeedCmS,
+    maxSpeedCmS: maxSpeedCmS.present ? maxSpeedCmS.value : this.maxSpeedCmS,
+    avgHrBpm: avgHrBpm.present ? avgHrBpm.value : this.avgHrBpm,
+    minHrBpm: minHrBpm.present ? minHrBpm.value : this.minHrBpm,
+    maxHrBpm: maxHrBpm.present ? maxHrBpm.value : this.maxHrBpm,
+    steps: steps.present ? steps.value : this.steps,
+    stepRate: stepRate.present ? stepRate.value : this.stepRate,
+    elevationCm: elevationCm.present ? elevationCm.value : this.elevationCm,
+    uphillCm: uphillCm.present ? uphillCm.value : this.uphillCm,
+    downhillCm: downhillCm.present ? downhillCm.value : this.downhillCm,
+    source: source ?? this.source,
+    createdAtUtc: createdAtUtc ?? this.createdAtUtc,
+    deletedAtUtc: deletedAtUtc.present ? deletedAtUtc.value : this.deletedAtUtc,
+  );
+  ExerciseSession copyWithCompanion(ExerciseSessionsCompanion data) {
+    return ExerciseSession(
+      id: data.id.present ? data.id.value : this.id,
+      userId: data.userId.present ? data.userId.value : this.userId,
+      deviceId: data.deviceId.present ? data.deviceId.value : this.deviceId,
+      sportType: data.sportType.present ? data.sportType.value : this.sportType,
+      startedAtUtc: data.startedAtUtc.present
+          ? data.startedAtUtc.value
+          : this.startedAtUtc,
+      endedAtUtc: data.endedAtUtc.present
+          ? data.endedAtUtc.value
+          : this.endedAtUtc,
+      durationSec: data.durationSec.present
+          ? data.durationSec.value
+          : this.durationSec,
+      distanceM: data.distanceM.present ? data.distanceM.value : this.distanceM,
+      calories: data.calories.present ? data.calories.value : this.calories,
+      avgSpeedCmS: data.avgSpeedCmS.present
+          ? data.avgSpeedCmS.value
+          : this.avgSpeedCmS,
+      maxSpeedCmS: data.maxSpeedCmS.present
+          ? data.maxSpeedCmS.value
+          : this.maxSpeedCmS,
+      avgHrBpm: data.avgHrBpm.present ? data.avgHrBpm.value : this.avgHrBpm,
+      minHrBpm: data.minHrBpm.present ? data.minHrBpm.value : this.minHrBpm,
+      maxHrBpm: data.maxHrBpm.present ? data.maxHrBpm.value : this.maxHrBpm,
+      steps: data.steps.present ? data.steps.value : this.steps,
+      stepRate: data.stepRate.present ? data.stepRate.value : this.stepRate,
+      elevationCm: data.elevationCm.present
+          ? data.elevationCm.value
+          : this.elevationCm,
+      uphillCm: data.uphillCm.present ? data.uphillCm.value : this.uphillCm,
+      downhillCm: data.downhillCm.present
+          ? data.downhillCm.value
+          : this.downhillCm,
+      source: data.source.present ? data.source.value : this.source,
+      createdAtUtc: data.createdAtUtc.present
+          ? data.createdAtUtc.value
+          : this.createdAtUtc,
+      deletedAtUtc: data.deletedAtUtc.present
+          ? data.deletedAtUtc.value
+          : this.deletedAtUtc,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ExerciseSession(')
+          ..write('id: $id, ')
+          ..write('userId: $userId, ')
+          ..write('deviceId: $deviceId, ')
+          ..write('sportType: $sportType, ')
+          ..write('startedAtUtc: $startedAtUtc, ')
+          ..write('endedAtUtc: $endedAtUtc, ')
+          ..write('durationSec: $durationSec, ')
+          ..write('distanceM: $distanceM, ')
+          ..write('calories: $calories, ')
+          ..write('avgSpeedCmS: $avgSpeedCmS, ')
+          ..write('maxSpeedCmS: $maxSpeedCmS, ')
+          ..write('avgHrBpm: $avgHrBpm, ')
+          ..write('minHrBpm: $minHrBpm, ')
+          ..write('maxHrBpm: $maxHrBpm, ')
+          ..write('steps: $steps, ')
+          ..write('stepRate: $stepRate, ')
+          ..write('elevationCm: $elevationCm, ')
+          ..write('uphillCm: $uphillCm, ')
+          ..write('downhillCm: $downhillCm, ')
+          ..write('source: $source, ')
+          ..write('createdAtUtc: $createdAtUtc, ')
+          ..write('deletedAtUtc: $deletedAtUtc')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hashAll([
+    id,
+    userId,
+    deviceId,
+    sportType,
+    startedAtUtc,
+    endedAtUtc,
+    durationSec,
+    distanceM,
+    calories,
+    avgSpeedCmS,
+    maxSpeedCmS,
+    avgHrBpm,
+    minHrBpm,
+    maxHrBpm,
+    steps,
+    stepRate,
+    elevationCm,
+    uphillCm,
+    downhillCm,
+    source,
+    createdAtUtc,
+    deletedAtUtc,
+  ]);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ExerciseSession &&
+          other.id == this.id &&
+          other.userId == this.userId &&
+          other.deviceId == this.deviceId &&
+          other.sportType == this.sportType &&
+          other.startedAtUtc == this.startedAtUtc &&
+          other.endedAtUtc == this.endedAtUtc &&
+          other.durationSec == this.durationSec &&
+          other.distanceM == this.distanceM &&
+          other.calories == this.calories &&
+          other.avgSpeedCmS == this.avgSpeedCmS &&
+          other.maxSpeedCmS == this.maxSpeedCmS &&
+          other.avgHrBpm == this.avgHrBpm &&
+          other.minHrBpm == this.minHrBpm &&
+          other.maxHrBpm == this.maxHrBpm &&
+          other.steps == this.steps &&
+          other.stepRate == this.stepRate &&
+          other.elevationCm == this.elevationCm &&
+          other.uphillCm == this.uphillCm &&
+          other.downhillCm == this.downhillCm &&
+          other.source == this.source &&
+          other.createdAtUtc == this.createdAtUtc &&
+          other.deletedAtUtc == this.deletedAtUtc);
+}
+
+class ExerciseSessionsCompanion extends UpdateCompanion<ExerciseSession> {
+  final Value<String> id;
+  final Value<String> userId;
+  final Value<String> deviceId;
+  final Value<int> sportType;
+  final Value<int> startedAtUtc;
+  final Value<int?> endedAtUtc;
+  final Value<int> durationSec;
+  final Value<int> distanceM;
+  final Value<double> calories;
+  final Value<int?> avgSpeedCmS;
+  final Value<int?> maxSpeedCmS;
+  final Value<int?> avgHrBpm;
+  final Value<int?> minHrBpm;
+  final Value<int?> maxHrBpm;
+  final Value<int?> steps;
+  final Value<int?> stepRate;
+  final Value<int?> elevationCm;
+  final Value<int?> uphillCm;
+  final Value<int?> downhillCm;
+  final Value<DataSource> source;
+  final Value<int> createdAtUtc;
+  final Value<int?> deletedAtUtc;
+  final Value<int> rowid;
+  const ExerciseSessionsCompanion({
+    this.id = const Value.absent(),
+    this.userId = const Value.absent(),
+    this.deviceId = const Value.absent(),
+    this.sportType = const Value.absent(),
+    this.startedAtUtc = const Value.absent(),
+    this.endedAtUtc = const Value.absent(),
+    this.durationSec = const Value.absent(),
+    this.distanceM = const Value.absent(),
+    this.calories = const Value.absent(),
+    this.avgSpeedCmS = const Value.absent(),
+    this.maxSpeedCmS = const Value.absent(),
+    this.avgHrBpm = const Value.absent(),
+    this.minHrBpm = const Value.absent(),
+    this.maxHrBpm = const Value.absent(),
+    this.steps = const Value.absent(),
+    this.stepRate = const Value.absent(),
+    this.elevationCm = const Value.absent(),
+    this.uphillCm = const Value.absent(),
+    this.downhillCm = const Value.absent(),
+    this.source = const Value.absent(),
+    this.createdAtUtc = const Value.absent(),
+    this.deletedAtUtc = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ExerciseSessionsCompanion.insert({
+    required String id,
+    required String userId,
+    required String deviceId,
+    required int sportType,
+    required int startedAtUtc,
+    this.endedAtUtc = const Value.absent(),
+    required int durationSec,
+    this.distanceM = const Value.absent(),
+    this.calories = const Value.absent(),
+    this.avgSpeedCmS = const Value.absent(),
+    this.maxSpeedCmS = const Value.absent(),
+    this.avgHrBpm = const Value.absent(),
+    this.minHrBpm = const Value.absent(),
+    this.maxHrBpm = const Value.absent(),
+    this.steps = const Value.absent(),
+    this.stepRate = const Value.absent(),
+    this.elevationCm = const Value.absent(),
+    this.uphillCm = const Value.absent(),
+    this.downhillCm = const Value.absent(),
+    required DataSource source,
+    required int createdAtUtc,
+    this.deletedAtUtc = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       userId = Value(userId),
+       deviceId = Value(deviceId),
+       sportType = Value(sportType),
+       startedAtUtc = Value(startedAtUtc),
+       durationSec = Value(durationSec),
+       source = Value(source),
+       createdAtUtc = Value(createdAtUtc);
+  static Insertable<ExerciseSession> custom({
+    Expression<String>? id,
+    Expression<String>? userId,
+    Expression<String>? deviceId,
+    Expression<int>? sportType,
+    Expression<int>? startedAtUtc,
+    Expression<int>? endedAtUtc,
+    Expression<int>? durationSec,
+    Expression<int>? distanceM,
+    Expression<double>? calories,
+    Expression<int>? avgSpeedCmS,
+    Expression<int>? maxSpeedCmS,
+    Expression<int>? avgHrBpm,
+    Expression<int>? minHrBpm,
+    Expression<int>? maxHrBpm,
+    Expression<int>? steps,
+    Expression<int>? stepRate,
+    Expression<int>? elevationCm,
+    Expression<int>? uphillCm,
+    Expression<int>? downhillCm,
+    Expression<int>? source,
+    Expression<int>? createdAtUtc,
+    Expression<int>? deletedAtUtc,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (userId != null) 'user_id': userId,
+      if (deviceId != null) 'device_id': deviceId,
+      if (sportType != null) 'sport_type': sportType,
+      if (startedAtUtc != null) 'started_at_utc': startedAtUtc,
+      if (endedAtUtc != null) 'ended_at_utc': endedAtUtc,
+      if (durationSec != null) 'duration_sec': durationSec,
+      if (distanceM != null) 'distance_m': distanceM,
+      if (calories != null) 'calories': calories,
+      if (avgSpeedCmS != null) 'avg_speed_cm_s': avgSpeedCmS,
+      if (maxSpeedCmS != null) 'max_speed_cm_s': maxSpeedCmS,
+      if (avgHrBpm != null) 'avg_hr_bpm': avgHrBpm,
+      if (minHrBpm != null) 'min_hr_bpm': minHrBpm,
+      if (maxHrBpm != null) 'max_hr_bpm': maxHrBpm,
+      if (steps != null) 'steps': steps,
+      if (stepRate != null) 'step_rate': stepRate,
+      if (elevationCm != null) 'elevation_cm': elevationCm,
+      if (uphillCm != null) 'uphill_cm': uphillCm,
+      if (downhillCm != null) 'downhill_cm': downhillCm,
+      if (source != null) 'source': source,
+      if (createdAtUtc != null) 'created_at_utc': createdAtUtc,
+      if (deletedAtUtc != null) 'deleted_at_utc': deletedAtUtc,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ExerciseSessionsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? userId,
+    Value<String>? deviceId,
+    Value<int>? sportType,
+    Value<int>? startedAtUtc,
+    Value<int?>? endedAtUtc,
+    Value<int>? durationSec,
+    Value<int>? distanceM,
+    Value<double>? calories,
+    Value<int?>? avgSpeedCmS,
+    Value<int?>? maxSpeedCmS,
+    Value<int?>? avgHrBpm,
+    Value<int?>? minHrBpm,
+    Value<int?>? maxHrBpm,
+    Value<int?>? steps,
+    Value<int?>? stepRate,
+    Value<int?>? elevationCm,
+    Value<int?>? uphillCm,
+    Value<int?>? downhillCm,
+    Value<DataSource>? source,
+    Value<int>? createdAtUtc,
+    Value<int?>? deletedAtUtc,
+    Value<int>? rowid,
+  }) {
+    return ExerciseSessionsCompanion(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      deviceId: deviceId ?? this.deviceId,
+      sportType: sportType ?? this.sportType,
+      startedAtUtc: startedAtUtc ?? this.startedAtUtc,
+      endedAtUtc: endedAtUtc ?? this.endedAtUtc,
+      durationSec: durationSec ?? this.durationSec,
+      distanceM: distanceM ?? this.distanceM,
+      calories: calories ?? this.calories,
+      avgSpeedCmS: avgSpeedCmS ?? this.avgSpeedCmS,
+      maxSpeedCmS: maxSpeedCmS ?? this.maxSpeedCmS,
+      avgHrBpm: avgHrBpm ?? this.avgHrBpm,
+      minHrBpm: minHrBpm ?? this.minHrBpm,
+      maxHrBpm: maxHrBpm ?? this.maxHrBpm,
+      steps: steps ?? this.steps,
+      stepRate: stepRate ?? this.stepRate,
+      elevationCm: elevationCm ?? this.elevationCm,
+      uphillCm: uphillCm ?? this.uphillCm,
+      downhillCm: downhillCm ?? this.downhillCm,
+      source: source ?? this.source,
+      createdAtUtc: createdAtUtc ?? this.createdAtUtc,
+      deletedAtUtc: deletedAtUtc ?? this.deletedAtUtc,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
+    }
+    if (deviceId.present) {
+      map['device_id'] = Variable<String>(deviceId.value);
+    }
+    if (sportType.present) {
+      map['sport_type'] = Variable<int>(sportType.value);
+    }
+    if (startedAtUtc.present) {
+      map['started_at_utc'] = Variable<int>(startedAtUtc.value);
+    }
+    if (endedAtUtc.present) {
+      map['ended_at_utc'] = Variable<int>(endedAtUtc.value);
+    }
+    if (durationSec.present) {
+      map['duration_sec'] = Variable<int>(durationSec.value);
+    }
+    if (distanceM.present) {
+      map['distance_m'] = Variable<int>(distanceM.value);
+    }
+    if (calories.present) {
+      map['calories'] = Variable<double>(calories.value);
+    }
+    if (avgSpeedCmS.present) {
+      map['avg_speed_cm_s'] = Variable<int>(avgSpeedCmS.value);
+    }
+    if (maxSpeedCmS.present) {
+      map['max_speed_cm_s'] = Variable<int>(maxSpeedCmS.value);
+    }
+    if (avgHrBpm.present) {
+      map['avg_hr_bpm'] = Variable<int>(avgHrBpm.value);
+    }
+    if (minHrBpm.present) {
+      map['min_hr_bpm'] = Variable<int>(minHrBpm.value);
+    }
+    if (maxHrBpm.present) {
+      map['max_hr_bpm'] = Variable<int>(maxHrBpm.value);
+    }
+    if (steps.present) {
+      map['steps'] = Variable<int>(steps.value);
+    }
+    if (stepRate.present) {
+      map['step_rate'] = Variable<int>(stepRate.value);
+    }
+    if (elevationCm.present) {
+      map['elevation_cm'] = Variable<int>(elevationCm.value);
+    }
+    if (uphillCm.present) {
+      map['uphill_cm'] = Variable<int>(uphillCm.value);
+    }
+    if (downhillCm.present) {
+      map['downhill_cm'] = Variable<int>(downhillCm.value);
+    }
+    if (source.present) {
+      map['source'] = Variable<int>(
+        $ExerciseSessionsTable.$convertersource.toSql(source.value),
+      );
+    }
+    if (createdAtUtc.present) {
+      map['created_at_utc'] = Variable<int>(createdAtUtc.value);
+    }
+    if (deletedAtUtc.present) {
+      map['deleted_at_utc'] = Variable<int>(deletedAtUtc.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ExerciseSessionsCompanion(')
+          ..write('id: $id, ')
+          ..write('userId: $userId, ')
+          ..write('deviceId: $deviceId, ')
+          ..write('sportType: $sportType, ')
+          ..write('startedAtUtc: $startedAtUtc, ')
+          ..write('endedAtUtc: $endedAtUtc, ')
+          ..write('durationSec: $durationSec, ')
+          ..write('distanceM: $distanceM, ')
+          ..write('calories: $calories, ')
+          ..write('avgSpeedCmS: $avgSpeedCmS, ')
+          ..write('maxSpeedCmS: $maxSpeedCmS, ')
+          ..write('avgHrBpm: $avgHrBpm, ')
+          ..write('minHrBpm: $minHrBpm, ')
+          ..write('maxHrBpm: $maxHrBpm, ')
+          ..write('steps: $steps, ')
+          ..write('stepRate: $stepRate, ')
+          ..write('elevationCm: $elevationCm, ')
+          ..write('uphillCm: $uphillCm, ')
+          ..write('downhillCm: $downhillCm, ')
+          ..write('source: $source, ')
+          ..write('createdAtUtc: $createdAtUtc, ')
+          ..write('deletedAtUtc: $deletedAtUtc, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $SyncStateTable extends SyncState
     with TableInfo<$SyncStateTable, SyncStateData> {
   @override
@@ -13410,6 +15210,573 @@ class CloudSyncOutboxCompanion extends UpdateCompanion<CloudSyncOutboxData> {
   }
 }
 
+class $NotificationLogTable extends NotificationLog
+    with TableInfo<$NotificationLogTable, NotificationLogData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $NotificationLogTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+    'user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _typeMeta = const VerificationMeta('type');
+  @override
+  late final GeneratedColumn<String> type = GeneratedColumn<String>(
+    'type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dedupeKeyMeta = const VerificationMeta(
+    'dedupeKey',
+  );
+  @override
+  late final GeneratedColumn<String> dedupeKey = GeneratedColumn<String>(
+    'dedupe_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bodyMeta = const VerificationMeta('body');
+  @override
+  late final GeneratedColumn<String> body = GeneratedColumn<String>(
+    'body',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _payloadMeta = const VerificationMeta(
+    'payload',
+  );
+  @override
+  late final GeneratedColumn<String> payload = GeneratedColumn<String>(
+    'payload',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _channelMeta = const VerificationMeta(
+    'channel',
+  );
+  @override
+  late final GeneratedColumn<String> channel = GeneratedColumn<String>(
+    'channel',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _firedAtUtcSecMeta = const VerificationMeta(
+    'firedAtUtcSec',
+  );
+  @override
+  late final GeneratedColumn<int> firedAtUtcSec = GeneratedColumn<int>(
+    'fired_at_utc_sec',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    userId,
+    type,
+    dedupeKey,
+    title,
+    body,
+    payload,
+    channel,
+    firedAtUtcSec,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'notification_log';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<NotificationLogData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('user_id')) {
+      context.handle(
+        _userIdMeta,
+        userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_userIdMeta);
+    }
+    if (data.containsKey('type')) {
+      context.handle(
+        _typeMeta,
+        type.isAcceptableOrUnknown(data['type']!, _typeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_typeMeta);
+    }
+    if (data.containsKey('dedupe_key')) {
+      context.handle(
+        _dedupeKeyMeta,
+        dedupeKey.isAcceptableOrUnknown(data['dedupe_key']!, _dedupeKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_dedupeKeyMeta);
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_titleMeta);
+    }
+    if (data.containsKey('body')) {
+      context.handle(
+        _bodyMeta,
+        body.isAcceptableOrUnknown(data['body']!, _bodyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bodyMeta);
+    }
+    if (data.containsKey('payload')) {
+      context.handle(
+        _payloadMeta,
+        payload.isAcceptableOrUnknown(data['payload']!, _payloadMeta),
+      );
+    }
+    if (data.containsKey('channel')) {
+      context.handle(
+        _channelMeta,
+        channel.isAcceptableOrUnknown(data['channel']!, _channelMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_channelMeta);
+    }
+    if (data.containsKey('fired_at_utc_sec')) {
+      context.handle(
+        _firedAtUtcSecMeta,
+        firedAtUtcSec.isAcceptableOrUnknown(
+          data['fired_at_utc_sec']!,
+          _firedAtUtcSecMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_firedAtUtcSecMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  NotificationLogData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return NotificationLogData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      userId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}user_id'],
+      )!,
+      type: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}type'],
+      )!,
+      dedupeKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}dedupe_key'],
+      )!,
+      title: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title'],
+      )!,
+      body: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}body'],
+      )!,
+      payload: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}payload'],
+      ),
+      channel: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}channel'],
+      )!,
+      firedAtUtcSec: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}fired_at_utc_sec'],
+      )!,
+    );
+  }
+
+  @override
+  $NotificationLogTable createAlias(String alias) {
+    return $NotificationLogTable(attachedDatabase, alias);
+  }
+}
+
+class NotificationLogData extends DataClass
+    implements Insertable<NotificationLogData> {
+  final String id;
+  final String userId;
+
+  /// Stable rule id, e.g. 'hypertension' | 'afib' | 'sleep_apnea' | 'retention'.
+  final String type;
+
+  /// Per-occurrence key for dedup, e.g. 'afib-2026-06-22'.
+  final String dedupeKey;
+  final String title;
+  final String body;
+
+  /// JSON string for tap-routing payload (nullable).
+  final String? payload;
+
+  /// 'alert' (high importance) | 'retention' (default importance).
+  final String channel;
+  final int firedAtUtcSec;
+  const NotificationLogData({
+    required this.id,
+    required this.userId,
+    required this.type,
+    required this.dedupeKey,
+    required this.title,
+    required this.body,
+    this.payload,
+    required this.channel,
+    required this.firedAtUtcSec,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['user_id'] = Variable<String>(userId);
+    map['type'] = Variable<String>(type);
+    map['dedupe_key'] = Variable<String>(dedupeKey);
+    map['title'] = Variable<String>(title);
+    map['body'] = Variable<String>(body);
+    if (!nullToAbsent || payload != null) {
+      map['payload'] = Variable<String>(payload);
+    }
+    map['channel'] = Variable<String>(channel);
+    map['fired_at_utc_sec'] = Variable<int>(firedAtUtcSec);
+    return map;
+  }
+
+  NotificationLogCompanion toCompanion(bool nullToAbsent) {
+    return NotificationLogCompanion(
+      id: Value(id),
+      userId: Value(userId),
+      type: Value(type),
+      dedupeKey: Value(dedupeKey),
+      title: Value(title),
+      body: Value(body),
+      payload: payload == null && nullToAbsent
+          ? const Value.absent()
+          : Value(payload),
+      channel: Value(channel),
+      firedAtUtcSec: Value(firedAtUtcSec),
+    );
+  }
+
+  factory NotificationLogData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return NotificationLogData(
+      id: serializer.fromJson<String>(json['id']),
+      userId: serializer.fromJson<String>(json['userId']),
+      type: serializer.fromJson<String>(json['type']),
+      dedupeKey: serializer.fromJson<String>(json['dedupeKey']),
+      title: serializer.fromJson<String>(json['title']),
+      body: serializer.fromJson<String>(json['body']),
+      payload: serializer.fromJson<String?>(json['payload']),
+      channel: serializer.fromJson<String>(json['channel']),
+      firedAtUtcSec: serializer.fromJson<int>(json['firedAtUtcSec']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'userId': serializer.toJson<String>(userId),
+      'type': serializer.toJson<String>(type),
+      'dedupeKey': serializer.toJson<String>(dedupeKey),
+      'title': serializer.toJson<String>(title),
+      'body': serializer.toJson<String>(body),
+      'payload': serializer.toJson<String?>(payload),
+      'channel': serializer.toJson<String>(channel),
+      'firedAtUtcSec': serializer.toJson<int>(firedAtUtcSec),
+    };
+  }
+
+  NotificationLogData copyWith({
+    String? id,
+    String? userId,
+    String? type,
+    String? dedupeKey,
+    String? title,
+    String? body,
+    Value<String?> payload = const Value.absent(),
+    String? channel,
+    int? firedAtUtcSec,
+  }) => NotificationLogData(
+    id: id ?? this.id,
+    userId: userId ?? this.userId,
+    type: type ?? this.type,
+    dedupeKey: dedupeKey ?? this.dedupeKey,
+    title: title ?? this.title,
+    body: body ?? this.body,
+    payload: payload.present ? payload.value : this.payload,
+    channel: channel ?? this.channel,
+    firedAtUtcSec: firedAtUtcSec ?? this.firedAtUtcSec,
+  );
+  NotificationLogData copyWithCompanion(NotificationLogCompanion data) {
+    return NotificationLogData(
+      id: data.id.present ? data.id.value : this.id,
+      userId: data.userId.present ? data.userId.value : this.userId,
+      type: data.type.present ? data.type.value : this.type,
+      dedupeKey: data.dedupeKey.present ? data.dedupeKey.value : this.dedupeKey,
+      title: data.title.present ? data.title.value : this.title,
+      body: data.body.present ? data.body.value : this.body,
+      payload: data.payload.present ? data.payload.value : this.payload,
+      channel: data.channel.present ? data.channel.value : this.channel,
+      firedAtUtcSec: data.firedAtUtcSec.present
+          ? data.firedAtUtcSec.value
+          : this.firedAtUtcSec,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('NotificationLogData(')
+          ..write('id: $id, ')
+          ..write('userId: $userId, ')
+          ..write('type: $type, ')
+          ..write('dedupeKey: $dedupeKey, ')
+          ..write('title: $title, ')
+          ..write('body: $body, ')
+          ..write('payload: $payload, ')
+          ..write('channel: $channel, ')
+          ..write('firedAtUtcSec: $firedAtUtcSec')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    userId,
+    type,
+    dedupeKey,
+    title,
+    body,
+    payload,
+    channel,
+    firedAtUtcSec,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is NotificationLogData &&
+          other.id == this.id &&
+          other.userId == this.userId &&
+          other.type == this.type &&
+          other.dedupeKey == this.dedupeKey &&
+          other.title == this.title &&
+          other.body == this.body &&
+          other.payload == this.payload &&
+          other.channel == this.channel &&
+          other.firedAtUtcSec == this.firedAtUtcSec);
+}
+
+class NotificationLogCompanion extends UpdateCompanion<NotificationLogData> {
+  final Value<String> id;
+  final Value<String> userId;
+  final Value<String> type;
+  final Value<String> dedupeKey;
+  final Value<String> title;
+  final Value<String> body;
+  final Value<String?> payload;
+  final Value<String> channel;
+  final Value<int> firedAtUtcSec;
+  final Value<int> rowid;
+  const NotificationLogCompanion({
+    this.id = const Value.absent(),
+    this.userId = const Value.absent(),
+    this.type = const Value.absent(),
+    this.dedupeKey = const Value.absent(),
+    this.title = const Value.absent(),
+    this.body = const Value.absent(),
+    this.payload = const Value.absent(),
+    this.channel = const Value.absent(),
+    this.firedAtUtcSec = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  NotificationLogCompanion.insert({
+    required String id,
+    required String userId,
+    required String type,
+    required String dedupeKey,
+    required String title,
+    required String body,
+    this.payload = const Value.absent(),
+    required String channel,
+    required int firedAtUtcSec,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       userId = Value(userId),
+       type = Value(type),
+       dedupeKey = Value(dedupeKey),
+       title = Value(title),
+       body = Value(body),
+       channel = Value(channel),
+       firedAtUtcSec = Value(firedAtUtcSec);
+  static Insertable<NotificationLogData> custom({
+    Expression<String>? id,
+    Expression<String>? userId,
+    Expression<String>? type,
+    Expression<String>? dedupeKey,
+    Expression<String>? title,
+    Expression<String>? body,
+    Expression<String>? payload,
+    Expression<String>? channel,
+    Expression<int>? firedAtUtcSec,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (userId != null) 'user_id': userId,
+      if (type != null) 'type': type,
+      if (dedupeKey != null) 'dedupe_key': dedupeKey,
+      if (title != null) 'title': title,
+      if (body != null) 'body': body,
+      if (payload != null) 'payload': payload,
+      if (channel != null) 'channel': channel,
+      if (firedAtUtcSec != null) 'fired_at_utc_sec': firedAtUtcSec,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  NotificationLogCompanion copyWith({
+    Value<String>? id,
+    Value<String>? userId,
+    Value<String>? type,
+    Value<String>? dedupeKey,
+    Value<String>? title,
+    Value<String>? body,
+    Value<String?>? payload,
+    Value<String>? channel,
+    Value<int>? firedAtUtcSec,
+    Value<int>? rowid,
+  }) {
+    return NotificationLogCompanion(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      type: type ?? this.type,
+      dedupeKey: dedupeKey ?? this.dedupeKey,
+      title: title ?? this.title,
+      body: body ?? this.body,
+      payload: payload ?? this.payload,
+      channel: channel ?? this.channel,
+      firedAtUtcSec: firedAtUtcSec ?? this.firedAtUtcSec,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
+    }
+    if (type.present) {
+      map['type'] = Variable<String>(type.value);
+    }
+    if (dedupeKey.present) {
+      map['dedupe_key'] = Variable<String>(dedupeKey.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (body.present) {
+      map['body'] = Variable<String>(body.value);
+    }
+    if (payload.present) {
+      map['payload'] = Variable<String>(payload.value);
+    }
+    if (channel.present) {
+      map['channel'] = Variable<String>(channel.value);
+    }
+    if (firedAtUtcSec.present) {
+      map['fired_at_utc_sec'] = Variable<int>(firedAtUtcSec.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('NotificationLogCompanion(')
+          ..write('id: $id, ')
+          ..write('userId: $userId, ')
+          ..write('type: $type, ')
+          ..write('dedupeKey: $dedupeKey, ')
+          ..write('title: $title, ')
+          ..write('body: $body, ')
+          ..write('payload: $payload, ')
+          ..write('channel: $channel, ')
+          ..write('firedAtUtcSec: $firedAtUtcSec, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -13427,8 +15794,17 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $SleepEpochsTable sleepEpochs = $SleepEpochsTable(this);
   late final $BaselinesTable baselines = $BaselinesTable(this);
   late final $BpCalibrationsTable bpCalibrations = $BpCalibrationsTable(this);
+  late final $BatteryTelemetryTable batteryTelemetry = $BatteryTelemetryTable(
+    this,
+  );
+  late final $ExerciseSessionsTable exerciseSessions = $ExerciseSessionsTable(
+    this,
+  );
   late final $SyncStateTable syncState = $SyncStateTable(this);
   late final $CloudSyncOutboxTable cloudSyncOutbox = $CloudSyncOutboxTable(
+    this,
+  );
+  late final $NotificationLogTable notificationLog = $NotificationLogTable(
     this,
   );
   @override
@@ -13450,8 +15826,11 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     sleepEpochs,
     baselines,
     bpCalibrations,
+    batteryTelemetry,
+    exerciseSessions,
     syncState,
     cloudSyncOutbox,
+    notificationLog,
   ];
 }
 
@@ -13712,6 +16091,26 @@ final class $$UsersTableReferences
     ).filter((f) => f.userId.id.sqlEquals($_itemColumn<String>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_bpCalibrationsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$ExerciseSessionsTable, List<ExerciseSession>>
+  _exerciseSessionsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.exerciseSessions,
+    aliasName: $_aliasNameGenerator(db.users.id, db.exerciseSessions.userId),
+  );
+
+  $$ExerciseSessionsTableProcessedTableManager get exerciseSessionsRefs {
+    final manager = $$ExerciseSessionsTableTableManager(
+      $_db,
+      $_db.exerciseSessions,
+    ).filter((f) => f.userId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _exerciseSessionsRefsTable($_db),
+    );
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -14077,6 +16476,31 @@ class $$UsersTableFilterComposer extends Composer<_$AppDatabase, $UsersTable> {
           }) => $$BpCalibrationsTableFilterComposer(
             $db: $db,
             $table: $db.bpCalibrations,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> exerciseSessionsRefs(
+    Expression<bool> Function($$ExerciseSessionsTableFilterComposer f) f,
+  ) {
+    final $$ExerciseSessionsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.exerciseSessions,
+      getReferencedColumn: (t) => t.userId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ExerciseSessionsTableFilterComposer(
+            $db: $db,
+            $table: $db.exerciseSessions,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -14494,6 +16918,31 @@ class $$UsersTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> exerciseSessionsRefs<T extends Object>(
+    Expression<T> Function($$ExerciseSessionsTableAnnotationComposer a) f,
+  ) {
+    final $$ExerciseSessionsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.exerciseSessions,
+      getReferencedColumn: (t) => t.userId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ExerciseSessionsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.exerciseSessions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$UsersTableTableManager
@@ -14523,6 +16972,7 @@ class $$UsersTableTableManager
             bool sleepEpochsRefs,
             bool baselinesRefs,
             bool bpCalibrationsRefs,
+            bool exerciseSessionsRefs,
           })
         > {
   $$UsersTableTableManager(_$AppDatabase db, $UsersTable table)
@@ -14597,6 +17047,7 @@ class $$UsersTableTableManager
                 sleepEpochsRefs = false,
                 baselinesRefs = false,
                 bpCalibrationsRefs = false,
+                exerciseSessionsRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -14614,6 +17065,7 @@ class $$UsersTableTableManager
                     if (sleepEpochsRefs) db.sleepEpochs,
                     if (baselinesRefs) db.baselines,
                     if (bpCalibrationsRefs) db.bpCalibrations,
+                    if (exerciseSessionsRefs) db.exerciseSessions,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
@@ -14867,6 +17319,27 @@ class $$UsersTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (exerciseSessionsRefs)
+                        await $_getPrefetchedData<
+                          User,
+                          $UsersTable,
+                          ExerciseSession
+                        >(
+                          currentTable: table,
+                          referencedTable: $$UsersTableReferences
+                              ._exerciseSessionsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$UsersTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).exerciseSessionsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.userId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -14901,6 +17374,7 @@ typedef $$UsersTableProcessedTableManager =
         bool sleepEpochsRefs,
         bool baselinesRefs,
         bool bpCalibrationsRefs,
+        bool exerciseSessionsRefs,
       })
     >;
 typedef $$UserProfilesTableCreateCompanionBuilder =
@@ -15563,6 +18037,29 @@ final class $$DevicesTableReferences
     );
   }
 
+  static MultiTypedResultKey<$ExerciseSessionsTable, List<ExerciseSession>>
+  _exerciseSessionsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.exerciseSessions,
+    aliasName: $_aliasNameGenerator(
+      db.devices.id,
+      db.exerciseSessions.deviceId,
+    ),
+  );
+
+  $$ExerciseSessionsTableProcessedTableManager get exerciseSessionsRefs {
+    final manager = $$ExerciseSessionsTableTableManager(
+      $_db,
+      $_db.exerciseSessions,
+    ).filter((f) => f.deviceId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _exerciseSessionsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
   static MultiTypedResultKey<$SyncStateTable, List<SyncStateData>>
   _syncStateRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
     db.syncState,
@@ -15855,6 +18352,31 @@ class $$DevicesTableFilterComposer
           }) => $$SleepSessionsTableFilterComposer(
             $db: $db,
             $table: $db.sleepSessions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> exerciseSessionsRefs(
+    Expression<bool> Function($$ExerciseSessionsTableFilterComposer f) f,
+  ) {
+    final $$ExerciseSessionsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.exerciseSessions,
+      getReferencedColumn: (t) => t.deviceId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ExerciseSessionsTableFilterComposer(
+            $db: $db,
+            $table: $db.exerciseSessions,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -16274,6 +18796,31 @@ class $$DevicesTableAnnotationComposer
     return f(composer);
   }
 
+  Expression<T> exerciseSessionsRefs<T extends Object>(
+    Expression<T> Function($$ExerciseSessionsTableAnnotationComposer a) f,
+  ) {
+    final $$ExerciseSessionsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.exerciseSessions,
+      getReferencedColumn: (t) => t.deviceId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ExerciseSessionsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.exerciseSessions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
   Expression<T> syncStateRefs<T extends Object>(
     Expression<T> Function($$SyncStateTableAnnotationComposer a) f,
   ) {
@@ -16322,6 +18869,7 @@ class $$DevicesTableTableManager
             bool bpReadingsRefs,
             bool stepBucketsRefs,
             bool sleepSessionsRefs,
+            bool exerciseSessionsRefs,
             bool syncStateRefs,
           })
         > {
@@ -16430,6 +18978,7 @@ class $$DevicesTableTableManager
                 bpReadingsRefs = false,
                 stepBucketsRefs = false,
                 sleepSessionsRefs = false,
+                exerciseSessionsRefs = false,
                 syncStateRefs = false,
               }) {
                 return PrefetchHooks(
@@ -16442,6 +18991,7 @@ class $$DevicesTableTableManager
                     if (bpReadingsRefs) db.bpReadings,
                     if (stepBucketsRefs) db.stepBuckets,
                     if (sleepSessionsRefs) db.sleepSessions,
+                    if (exerciseSessionsRefs) db.exerciseSessions,
                     if (syncStateRefs) db.syncState,
                   ],
                   addJoins:
@@ -16625,6 +19175,27 @@ class $$DevicesTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (exerciseSessionsRefs)
+                        await $_getPrefetchedData<
+                          Device,
+                          $DevicesTable,
+                          ExerciseSession
+                        >(
+                          currentTable: table,
+                          referencedTable: $$DevicesTableReferences
+                              ._exerciseSessionsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$DevicesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).exerciseSessionsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.deviceId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                       if (syncStateRefs)
                         await $_getPrefetchedData<
                           Device,
@@ -16675,6 +19246,7 @@ typedef $$DevicesTableProcessedTableManager =
         bool bpReadingsRefs,
         bool stepBucketsRefs,
         bool sleepSessionsRefs,
+        bool exerciseSessionsRefs,
         bool syncStateRefs,
       })
     >;
@@ -20190,6 +22762,8 @@ typedef $$DailyMetricsTableCreateCompanionBuilder =
       Value<double?> hrvRmssdMs,
       Value<double?> hrvSdnnMs,
       Value<double?> restingRespRateBpm,
+      Value<double?> rrIrregularityPct,
+      Value<double?> ectopicBeatPct,
       Value<double?> spo2OvernightAvg,
       Value<int?> spo2OvernightMin,
       Value<int?> systolicMmhg,
@@ -20228,6 +22802,8 @@ typedef $$DailyMetricsTableUpdateCompanionBuilder =
       Value<double?> hrvRmssdMs,
       Value<double?> hrvSdnnMs,
       Value<double?> restingRespRateBpm,
+      Value<double?> rrIrregularityPct,
+      Value<double?> ectopicBeatPct,
       Value<double?> spo2OvernightAvg,
       Value<int?> spo2OvernightMin,
       Value<int?> systolicMmhg,
@@ -20321,6 +22897,16 @@ class $$DailyMetricsTableFilterComposer
 
   ColumnFilters<double> get restingRespRateBpm => $composableBuilder(
     column: $table.restingRespRateBpm,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get rrIrregularityPct => $composableBuilder(
+    column: $table.rrIrregularityPct,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get ectopicBeatPct => $composableBuilder(
+    column: $table.ectopicBeatPct,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -20523,6 +23109,16 @@ class $$DailyMetricsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<double> get rrIrregularityPct => $composableBuilder(
+    column: $table.rrIrregularityPct,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get ectopicBeatPct => $composableBuilder(
+    column: $table.ectopicBeatPct,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<double> get spo2OvernightAvg => $composableBuilder(
     column: $table.spo2OvernightAvg,
     builder: (column) => ColumnOrderings(column),
@@ -20715,6 +23311,16 @@ class $$DailyMetricsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<double> get rrIrregularityPct => $composableBuilder(
+    column: $table.rrIrregularityPct,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get ectopicBeatPct => $composableBuilder(
+    column: $table.ectopicBeatPct,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<double> get spo2OvernightAvg => $composableBuilder(
     column: $table.spo2OvernightAvg,
     builder: (column) => column,
@@ -20897,6 +23503,8 @@ class $$DailyMetricsTableTableManager
                 Value<double?> hrvRmssdMs = const Value.absent(),
                 Value<double?> hrvSdnnMs = const Value.absent(),
                 Value<double?> restingRespRateBpm = const Value.absent(),
+                Value<double?> rrIrregularityPct = const Value.absent(),
+                Value<double?> ectopicBeatPct = const Value.absent(),
                 Value<double?> spo2OvernightAvg = const Value.absent(),
                 Value<int?> spo2OvernightMin = const Value.absent(),
                 Value<int?> systolicMmhg = const Value.absent(),
@@ -20933,6 +23541,8 @@ class $$DailyMetricsTableTableManager
                 hrvRmssdMs: hrvRmssdMs,
                 hrvSdnnMs: hrvSdnnMs,
                 restingRespRateBpm: restingRespRateBpm,
+                rrIrregularityPct: rrIrregularityPct,
+                ectopicBeatPct: ectopicBeatPct,
                 spo2OvernightAvg: spo2OvernightAvg,
                 spo2OvernightMin: spo2OvernightMin,
                 systolicMmhg: systolicMmhg,
@@ -20971,6 +23581,8 @@ class $$DailyMetricsTableTableManager
                 Value<double?> hrvRmssdMs = const Value.absent(),
                 Value<double?> hrvSdnnMs = const Value.absent(),
                 Value<double?> restingRespRateBpm = const Value.absent(),
+                Value<double?> rrIrregularityPct = const Value.absent(),
+                Value<double?> ectopicBeatPct = const Value.absent(),
                 Value<double?> spo2OvernightAvg = const Value.absent(),
                 Value<int?> spo2OvernightMin = const Value.absent(),
                 Value<int?> systolicMmhg = const Value.absent(),
@@ -21007,6 +23619,8 @@ class $$DailyMetricsTableTableManager
                 hrvRmssdMs: hrvRmssdMs,
                 hrvSdnnMs: hrvSdnnMs,
                 restingRespRateBpm: restingRespRateBpm,
+                rrIrregularityPct: rrIrregularityPct,
+                ectopicBeatPct: ectopicBeatPct,
                 spo2OvernightAvg: spo2OvernightAvg,
                 spo2OvernightMin: spo2OvernightMin,
                 systolicMmhg: systolicMmhg,
@@ -23333,6 +25947,1002 @@ typedef $$BpCalibrationsTableProcessedTableManager =
       BpCalibration,
       PrefetchHooks Function({bool userId})
     >;
+typedef $$BatteryTelemetryTableCreateCompanionBuilder =
+    BatteryTelemetryCompanion Function({
+      required String id,
+      required int capturedAtUtc,
+      Value<int?> bandBatteryPercent,
+      Value<bool?> bandCharging,
+      required int syncIntervalMin,
+      required String eventType,
+      Value<int> rowid,
+    });
+typedef $$BatteryTelemetryTableUpdateCompanionBuilder =
+    BatteryTelemetryCompanion Function({
+      Value<String> id,
+      Value<int> capturedAtUtc,
+      Value<int?> bandBatteryPercent,
+      Value<bool?> bandCharging,
+      Value<int> syncIntervalMin,
+      Value<String> eventType,
+      Value<int> rowid,
+    });
+
+class $$BatteryTelemetryTableFilterComposer
+    extends Composer<_$AppDatabase, $BatteryTelemetryTable> {
+  $$BatteryTelemetryTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get capturedAtUtc => $composableBuilder(
+    column: $table.capturedAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get bandBatteryPercent => $composableBuilder(
+    column: $table.bandBatteryPercent,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get bandCharging => $composableBuilder(
+    column: $table.bandCharging,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get syncIntervalMin => $composableBuilder(
+    column: $table.syncIntervalMin,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get eventType => $composableBuilder(
+    column: $table.eventType,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$BatteryTelemetryTableOrderingComposer
+    extends Composer<_$AppDatabase, $BatteryTelemetryTable> {
+  $$BatteryTelemetryTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get capturedAtUtc => $composableBuilder(
+    column: $table.capturedAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get bandBatteryPercent => $composableBuilder(
+    column: $table.bandBatteryPercent,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get bandCharging => $composableBuilder(
+    column: $table.bandCharging,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get syncIntervalMin => $composableBuilder(
+    column: $table.syncIntervalMin,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get eventType => $composableBuilder(
+    column: $table.eventType,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$BatteryTelemetryTableAnnotationComposer
+    extends Composer<_$AppDatabase, $BatteryTelemetryTable> {
+  $$BatteryTelemetryTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get capturedAtUtc => $composableBuilder(
+    column: $table.capturedAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get bandBatteryPercent => $composableBuilder(
+    column: $table.bandBatteryPercent,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get bandCharging => $composableBuilder(
+    column: $table.bandCharging,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get syncIntervalMin => $composableBuilder(
+    column: $table.syncIntervalMin,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get eventType =>
+      $composableBuilder(column: $table.eventType, builder: (column) => column);
+}
+
+class $$BatteryTelemetryTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $BatteryTelemetryTable,
+          BatteryTelemetryData,
+          $$BatteryTelemetryTableFilterComposer,
+          $$BatteryTelemetryTableOrderingComposer,
+          $$BatteryTelemetryTableAnnotationComposer,
+          $$BatteryTelemetryTableCreateCompanionBuilder,
+          $$BatteryTelemetryTableUpdateCompanionBuilder,
+          (
+            BatteryTelemetryData,
+            BaseReferences<
+              _$AppDatabase,
+              $BatteryTelemetryTable,
+              BatteryTelemetryData
+            >,
+          ),
+          BatteryTelemetryData,
+          PrefetchHooks Function()
+        > {
+  $$BatteryTelemetryTableTableManager(
+    _$AppDatabase db,
+    $BatteryTelemetryTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$BatteryTelemetryTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$BatteryTelemetryTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$BatteryTelemetryTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<int> capturedAtUtc = const Value.absent(),
+                Value<int?> bandBatteryPercent = const Value.absent(),
+                Value<bool?> bandCharging = const Value.absent(),
+                Value<int> syncIntervalMin = const Value.absent(),
+                Value<String> eventType = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => BatteryTelemetryCompanion(
+                id: id,
+                capturedAtUtc: capturedAtUtc,
+                bandBatteryPercent: bandBatteryPercent,
+                bandCharging: bandCharging,
+                syncIntervalMin: syncIntervalMin,
+                eventType: eventType,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required int capturedAtUtc,
+                Value<int?> bandBatteryPercent = const Value.absent(),
+                Value<bool?> bandCharging = const Value.absent(),
+                required int syncIntervalMin,
+                required String eventType,
+                Value<int> rowid = const Value.absent(),
+              }) => BatteryTelemetryCompanion.insert(
+                id: id,
+                capturedAtUtc: capturedAtUtc,
+                bandBatteryPercent: bandBatteryPercent,
+                bandCharging: bandCharging,
+                syncIntervalMin: syncIntervalMin,
+                eventType: eventType,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$BatteryTelemetryTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $BatteryTelemetryTable,
+      BatteryTelemetryData,
+      $$BatteryTelemetryTableFilterComposer,
+      $$BatteryTelemetryTableOrderingComposer,
+      $$BatteryTelemetryTableAnnotationComposer,
+      $$BatteryTelemetryTableCreateCompanionBuilder,
+      $$BatteryTelemetryTableUpdateCompanionBuilder,
+      (
+        BatteryTelemetryData,
+        BaseReferences<
+          _$AppDatabase,
+          $BatteryTelemetryTable,
+          BatteryTelemetryData
+        >,
+      ),
+      BatteryTelemetryData,
+      PrefetchHooks Function()
+    >;
+typedef $$ExerciseSessionsTableCreateCompanionBuilder =
+    ExerciseSessionsCompanion Function({
+      required String id,
+      required String userId,
+      required String deviceId,
+      required int sportType,
+      required int startedAtUtc,
+      Value<int?> endedAtUtc,
+      required int durationSec,
+      Value<int> distanceM,
+      Value<double> calories,
+      Value<int?> avgSpeedCmS,
+      Value<int?> maxSpeedCmS,
+      Value<int?> avgHrBpm,
+      Value<int?> minHrBpm,
+      Value<int?> maxHrBpm,
+      Value<int?> steps,
+      Value<int?> stepRate,
+      Value<int?> elevationCm,
+      Value<int?> uphillCm,
+      Value<int?> downhillCm,
+      required DataSource source,
+      required int createdAtUtc,
+      Value<int?> deletedAtUtc,
+      Value<int> rowid,
+    });
+typedef $$ExerciseSessionsTableUpdateCompanionBuilder =
+    ExerciseSessionsCompanion Function({
+      Value<String> id,
+      Value<String> userId,
+      Value<String> deviceId,
+      Value<int> sportType,
+      Value<int> startedAtUtc,
+      Value<int?> endedAtUtc,
+      Value<int> durationSec,
+      Value<int> distanceM,
+      Value<double> calories,
+      Value<int?> avgSpeedCmS,
+      Value<int?> maxSpeedCmS,
+      Value<int?> avgHrBpm,
+      Value<int?> minHrBpm,
+      Value<int?> maxHrBpm,
+      Value<int?> steps,
+      Value<int?> stepRate,
+      Value<int?> elevationCm,
+      Value<int?> uphillCm,
+      Value<int?> downhillCm,
+      Value<DataSource> source,
+      Value<int> createdAtUtc,
+      Value<int?> deletedAtUtc,
+      Value<int> rowid,
+    });
+
+final class $$ExerciseSessionsTableReferences
+    extends
+        BaseReferences<_$AppDatabase, $ExerciseSessionsTable, ExerciseSession> {
+  $$ExerciseSessionsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $UsersTable _userIdTable(_$AppDatabase db) => db.users.createAlias(
+    $_aliasNameGenerator(db.exerciseSessions.userId, db.users.id),
+  );
+
+  $$UsersTableProcessedTableManager get userId {
+    final $_column = $_itemColumn<String>('user_id')!;
+
+    final manager = $$UsersTableTableManager(
+      $_db,
+      $_db.users,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_userIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $DevicesTable _deviceIdTable(_$AppDatabase db) =>
+      db.devices.createAlias(
+        $_aliasNameGenerator(db.exerciseSessions.deviceId, db.devices.id),
+      );
+
+  $$DevicesTableProcessedTableManager get deviceId {
+    final $_column = $_itemColumn<String>('device_id')!;
+
+    final manager = $$DevicesTableTableManager(
+      $_db,
+      $_db.devices,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_deviceIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$ExerciseSessionsTableFilterComposer
+    extends Composer<_$AppDatabase, $ExerciseSessionsTable> {
+  $$ExerciseSessionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sportType => $composableBuilder(
+    column: $table.sportType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get startedAtUtc => $composableBuilder(
+    column: $table.startedAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get endedAtUtc => $composableBuilder(
+    column: $table.endedAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get durationSec => $composableBuilder(
+    column: $table.durationSec,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get distanceM => $composableBuilder(
+    column: $table.distanceM,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get calories => $composableBuilder(
+    column: $table.calories,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get avgSpeedCmS => $composableBuilder(
+    column: $table.avgSpeedCmS,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get maxSpeedCmS => $composableBuilder(
+    column: $table.maxSpeedCmS,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get avgHrBpm => $composableBuilder(
+    column: $table.avgHrBpm,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get minHrBpm => $composableBuilder(
+    column: $table.minHrBpm,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get maxHrBpm => $composableBuilder(
+    column: $table.maxHrBpm,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get steps => $composableBuilder(
+    column: $table.steps,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get stepRate => $composableBuilder(
+    column: $table.stepRate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get elevationCm => $composableBuilder(
+    column: $table.elevationCm,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get uphillCm => $composableBuilder(
+    column: $table.uphillCm,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get downhillCm => $composableBuilder(
+    column: $table.downhillCm,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<DataSource, DataSource, int> get source =>
+      $composableBuilder(
+        column: $table.source,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
+
+  ColumnFilters<int> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get deletedAtUtc => $composableBuilder(
+    column: $table.deletedAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$UsersTableFilterComposer get userId {
+    final $$UsersTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableFilterComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$DevicesTableFilterComposer get deviceId {
+    final $$DevicesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.deviceId,
+      referencedTable: $db.devices,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DevicesTableFilterComposer(
+            $db: $db,
+            $table: $db.devices,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ExerciseSessionsTableOrderingComposer
+    extends Composer<_$AppDatabase, $ExerciseSessionsTable> {
+  $$ExerciseSessionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sportType => $composableBuilder(
+    column: $table.sportType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get startedAtUtc => $composableBuilder(
+    column: $table.startedAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get endedAtUtc => $composableBuilder(
+    column: $table.endedAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get durationSec => $composableBuilder(
+    column: $table.durationSec,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get distanceM => $composableBuilder(
+    column: $table.distanceM,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get calories => $composableBuilder(
+    column: $table.calories,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get avgSpeedCmS => $composableBuilder(
+    column: $table.avgSpeedCmS,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get maxSpeedCmS => $composableBuilder(
+    column: $table.maxSpeedCmS,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get avgHrBpm => $composableBuilder(
+    column: $table.avgHrBpm,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get minHrBpm => $composableBuilder(
+    column: $table.minHrBpm,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get maxHrBpm => $composableBuilder(
+    column: $table.maxHrBpm,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get steps => $composableBuilder(
+    column: $table.steps,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get stepRate => $composableBuilder(
+    column: $table.stepRate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get elevationCm => $composableBuilder(
+    column: $table.elevationCm,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get uphillCm => $composableBuilder(
+    column: $table.uphillCm,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get downhillCm => $composableBuilder(
+    column: $table.downhillCm,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get deletedAtUtc => $composableBuilder(
+    column: $table.deletedAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$UsersTableOrderingComposer get userId {
+    final $$UsersTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableOrderingComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$DevicesTableOrderingComposer get deviceId {
+    final $$DevicesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.deviceId,
+      referencedTable: $db.devices,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DevicesTableOrderingComposer(
+            $db: $db,
+            $table: $db.devices,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ExerciseSessionsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ExerciseSessionsTable> {
+  $$ExerciseSessionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get sportType =>
+      $composableBuilder(column: $table.sportType, builder: (column) => column);
+
+  GeneratedColumn<int> get startedAtUtc => $composableBuilder(
+    column: $table.startedAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get endedAtUtc => $composableBuilder(
+    column: $table.endedAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get durationSec => $composableBuilder(
+    column: $table.durationSec,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get distanceM =>
+      $composableBuilder(column: $table.distanceM, builder: (column) => column);
+
+  GeneratedColumn<double> get calories =>
+      $composableBuilder(column: $table.calories, builder: (column) => column);
+
+  GeneratedColumn<int> get avgSpeedCmS => $composableBuilder(
+    column: $table.avgSpeedCmS,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get maxSpeedCmS => $composableBuilder(
+    column: $table.maxSpeedCmS,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get avgHrBpm =>
+      $composableBuilder(column: $table.avgHrBpm, builder: (column) => column);
+
+  GeneratedColumn<int> get minHrBpm =>
+      $composableBuilder(column: $table.minHrBpm, builder: (column) => column);
+
+  GeneratedColumn<int> get maxHrBpm =>
+      $composableBuilder(column: $table.maxHrBpm, builder: (column) => column);
+
+  GeneratedColumn<int> get steps =>
+      $composableBuilder(column: $table.steps, builder: (column) => column);
+
+  GeneratedColumn<int> get stepRate =>
+      $composableBuilder(column: $table.stepRate, builder: (column) => column);
+
+  GeneratedColumn<int> get elevationCm => $composableBuilder(
+    column: $table.elevationCm,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get uphillCm =>
+      $composableBuilder(column: $table.uphillCm, builder: (column) => column);
+
+  GeneratedColumn<int> get downhillCm => $composableBuilder(
+    column: $table.downhillCm,
+    builder: (column) => column,
+  );
+
+  GeneratedColumnWithTypeConverter<DataSource, int> get source =>
+      $composableBuilder(column: $table.source, builder: (column) => column);
+
+  GeneratedColumn<int> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get deletedAtUtc => $composableBuilder(
+    column: $table.deletedAtUtc,
+    builder: (column) => column,
+  );
+
+  $$UsersTableAnnotationComposer get userId {
+    final $$UsersTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableAnnotationComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$DevicesTableAnnotationComposer get deviceId {
+    final $$DevicesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.deviceId,
+      referencedTable: $db.devices,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DevicesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.devices,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ExerciseSessionsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ExerciseSessionsTable,
+          ExerciseSession,
+          $$ExerciseSessionsTableFilterComposer,
+          $$ExerciseSessionsTableOrderingComposer,
+          $$ExerciseSessionsTableAnnotationComposer,
+          $$ExerciseSessionsTableCreateCompanionBuilder,
+          $$ExerciseSessionsTableUpdateCompanionBuilder,
+          (ExerciseSession, $$ExerciseSessionsTableReferences),
+          ExerciseSession,
+          PrefetchHooks Function({bool userId, bool deviceId})
+        > {
+  $$ExerciseSessionsTableTableManager(
+    _$AppDatabase db,
+    $ExerciseSessionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ExerciseSessionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ExerciseSessionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ExerciseSessionsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> userId = const Value.absent(),
+                Value<String> deviceId = const Value.absent(),
+                Value<int> sportType = const Value.absent(),
+                Value<int> startedAtUtc = const Value.absent(),
+                Value<int?> endedAtUtc = const Value.absent(),
+                Value<int> durationSec = const Value.absent(),
+                Value<int> distanceM = const Value.absent(),
+                Value<double> calories = const Value.absent(),
+                Value<int?> avgSpeedCmS = const Value.absent(),
+                Value<int?> maxSpeedCmS = const Value.absent(),
+                Value<int?> avgHrBpm = const Value.absent(),
+                Value<int?> minHrBpm = const Value.absent(),
+                Value<int?> maxHrBpm = const Value.absent(),
+                Value<int?> steps = const Value.absent(),
+                Value<int?> stepRate = const Value.absent(),
+                Value<int?> elevationCm = const Value.absent(),
+                Value<int?> uphillCm = const Value.absent(),
+                Value<int?> downhillCm = const Value.absent(),
+                Value<DataSource> source = const Value.absent(),
+                Value<int> createdAtUtc = const Value.absent(),
+                Value<int?> deletedAtUtc = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ExerciseSessionsCompanion(
+                id: id,
+                userId: userId,
+                deviceId: deviceId,
+                sportType: sportType,
+                startedAtUtc: startedAtUtc,
+                endedAtUtc: endedAtUtc,
+                durationSec: durationSec,
+                distanceM: distanceM,
+                calories: calories,
+                avgSpeedCmS: avgSpeedCmS,
+                maxSpeedCmS: maxSpeedCmS,
+                avgHrBpm: avgHrBpm,
+                minHrBpm: minHrBpm,
+                maxHrBpm: maxHrBpm,
+                steps: steps,
+                stepRate: stepRate,
+                elevationCm: elevationCm,
+                uphillCm: uphillCm,
+                downhillCm: downhillCm,
+                source: source,
+                createdAtUtc: createdAtUtc,
+                deletedAtUtc: deletedAtUtc,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String userId,
+                required String deviceId,
+                required int sportType,
+                required int startedAtUtc,
+                Value<int?> endedAtUtc = const Value.absent(),
+                required int durationSec,
+                Value<int> distanceM = const Value.absent(),
+                Value<double> calories = const Value.absent(),
+                Value<int?> avgSpeedCmS = const Value.absent(),
+                Value<int?> maxSpeedCmS = const Value.absent(),
+                Value<int?> avgHrBpm = const Value.absent(),
+                Value<int?> minHrBpm = const Value.absent(),
+                Value<int?> maxHrBpm = const Value.absent(),
+                Value<int?> steps = const Value.absent(),
+                Value<int?> stepRate = const Value.absent(),
+                Value<int?> elevationCm = const Value.absent(),
+                Value<int?> uphillCm = const Value.absent(),
+                Value<int?> downhillCm = const Value.absent(),
+                required DataSource source,
+                required int createdAtUtc,
+                Value<int?> deletedAtUtc = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ExerciseSessionsCompanion.insert(
+                id: id,
+                userId: userId,
+                deviceId: deviceId,
+                sportType: sportType,
+                startedAtUtc: startedAtUtc,
+                endedAtUtc: endedAtUtc,
+                durationSec: durationSec,
+                distanceM: distanceM,
+                calories: calories,
+                avgSpeedCmS: avgSpeedCmS,
+                maxSpeedCmS: maxSpeedCmS,
+                avgHrBpm: avgHrBpm,
+                minHrBpm: minHrBpm,
+                maxHrBpm: maxHrBpm,
+                steps: steps,
+                stepRate: stepRate,
+                elevationCm: elevationCm,
+                uphillCm: uphillCm,
+                downhillCm: downhillCm,
+                source: source,
+                createdAtUtc: createdAtUtc,
+                deletedAtUtc: deletedAtUtc,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$ExerciseSessionsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({userId = false, deviceId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (userId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.userId,
+                                referencedTable:
+                                    $$ExerciseSessionsTableReferences
+                                        ._userIdTable(db),
+                                referencedColumn:
+                                    $$ExerciseSessionsTableReferences
+                                        ._userIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+                    if (deviceId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.deviceId,
+                                referencedTable:
+                                    $$ExerciseSessionsTableReferences
+                                        ._deviceIdTable(db),
+                                referencedColumn:
+                                    $$ExerciseSessionsTableReferences
+                                        ._deviceIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$ExerciseSessionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ExerciseSessionsTable,
+      ExerciseSession,
+      $$ExerciseSessionsTableFilterComposer,
+      $$ExerciseSessionsTableOrderingComposer,
+      $$ExerciseSessionsTableAnnotationComposer,
+      $$ExerciseSessionsTableCreateCompanionBuilder,
+      $$ExerciseSessionsTableUpdateCompanionBuilder,
+      (ExerciseSession, $$ExerciseSessionsTableReferences),
+      ExerciseSession,
+      PrefetchHooks Function({bool userId, bool deviceId})
+    >;
 typedef $$SyncStateTableCreateCompanionBuilder =
     SyncStateCompanion Function({
       required String id,
@@ -23971,6 +27581,294 @@ typedef $$CloudSyncOutboxTableProcessedTableManager =
       CloudSyncOutboxData,
       PrefetchHooks Function()
     >;
+typedef $$NotificationLogTableCreateCompanionBuilder =
+    NotificationLogCompanion Function({
+      required String id,
+      required String userId,
+      required String type,
+      required String dedupeKey,
+      required String title,
+      required String body,
+      Value<String?> payload,
+      required String channel,
+      required int firedAtUtcSec,
+      Value<int> rowid,
+    });
+typedef $$NotificationLogTableUpdateCompanionBuilder =
+    NotificationLogCompanion Function({
+      Value<String> id,
+      Value<String> userId,
+      Value<String> type,
+      Value<String> dedupeKey,
+      Value<String> title,
+      Value<String> body,
+      Value<String?> payload,
+      Value<String> channel,
+      Value<int> firedAtUtcSec,
+      Value<int> rowid,
+    });
+
+class $$NotificationLogTableFilterComposer
+    extends Composer<_$AppDatabase, $NotificationLogTable> {
+  $$NotificationLogTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dedupeKey => $composableBuilder(
+    column: $table.dedupeKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get body => $composableBuilder(
+    column: $table.body,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get payload => $composableBuilder(
+    column: $table.payload,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get channel => $composableBuilder(
+    column: $table.channel,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get firedAtUtcSec => $composableBuilder(
+    column: $table.firedAtUtcSec,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$NotificationLogTableOrderingComposer
+    extends Composer<_$AppDatabase, $NotificationLogTable> {
+  $$NotificationLogTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get dedupeKey => $composableBuilder(
+    column: $table.dedupeKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get body => $composableBuilder(
+    column: $table.body,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get payload => $composableBuilder(
+    column: $table.payload,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get channel => $composableBuilder(
+    column: $table.channel,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get firedAtUtcSec => $composableBuilder(
+    column: $table.firedAtUtcSec,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$NotificationLogTableAnnotationComposer
+    extends Composer<_$AppDatabase, $NotificationLogTable> {
+  $$NotificationLogTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get userId =>
+      $composableBuilder(column: $table.userId, builder: (column) => column);
+
+  GeneratedColumn<String> get type =>
+      $composableBuilder(column: $table.type, builder: (column) => column);
+
+  GeneratedColumn<String> get dedupeKey =>
+      $composableBuilder(column: $table.dedupeKey, builder: (column) => column);
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<String> get body =>
+      $composableBuilder(column: $table.body, builder: (column) => column);
+
+  GeneratedColumn<String> get payload =>
+      $composableBuilder(column: $table.payload, builder: (column) => column);
+
+  GeneratedColumn<String> get channel =>
+      $composableBuilder(column: $table.channel, builder: (column) => column);
+
+  GeneratedColumn<int> get firedAtUtcSec => $composableBuilder(
+    column: $table.firedAtUtcSec,
+    builder: (column) => column,
+  );
+}
+
+class $$NotificationLogTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $NotificationLogTable,
+          NotificationLogData,
+          $$NotificationLogTableFilterComposer,
+          $$NotificationLogTableOrderingComposer,
+          $$NotificationLogTableAnnotationComposer,
+          $$NotificationLogTableCreateCompanionBuilder,
+          $$NotificationLogTableUpdateCompanionBuilder,
+          (
+            NotificationLogData,
+            BaseReferences<
+              _$AppDatabase,
+              $NotificationLogTable,
+              NotificationLogData
+            >,
+          ),
+          NotificationLogData,
+          PrefetchHooks Function()
+        > {
+  $$NotificationLogTableTableManager(
+    _$AppDatabase db,
+    $NotificationLogTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$NotificationLogTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$NotificationLogTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$NotificationLogTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> userId = const Value.absent(),
+                Value<String> type = const Value.absent(),
+                Value<String> dedupeKey = const Value.absent(),
+                Value<String> title = const Value.absent(),
+                Value<String> body = const Value.absent(),
+                Value<String?> payload = const Value.absent(),
+                Value<String> channel = const Value.absent(),
+                Value<int> firedAtUtcSec = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => NotificationLogCompanion(
+                id: id,
+                userId: userId,
+                type: type,
+                dedupeKey: dedupeKey,
+                title: title,
+                body: body,
+                payload: payload,
+                channel: channel,
+                firedAtUtcSec: firedAtUtcSec,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String userId,
+                required String type,
+                required String dedupeKey,
+                required String title,
+                required String body,
+                Value<String?> payload = const Value.absent(),
+                required String channel,
+                required int firedAtUtcSec,
+                Value<int> rowid = const Value.absent(),
+              }) => NotificationLogCompanion.insert(
+                id: id,
+                userId: userId,
+                type: type,
+                dedupeKey: dedupeKey,
+                title: title,
+                body: body,
+                payload: payload,
+                channel: channel,
+                firedAtUtcSec: firedAtUtcSec,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$NotificationLogTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $NotificationLogTable,
+      NotificationLogData,
+      $$NotificationLogTableFilterComposer,
+      $$NotificationLogTableOrderingComposer,
+      $$NotificationLogTableAnnotationComposer,
+      $$NotificationLogTableCreateCompanionBuilder,
+      $$NotificationLogTableUpdateCompanionBuilder,
+      (
+        NotificationLogData,
+        BaseReferences<
+          _$AppDatabase,
+          $NotificationLogTable,
+          NotificationLogData
+        >,
+      ),
+      NotificationLogData,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -24003,8 +27901,14 @@ class $AppDatabaseManager {
       $$BaselinesTableTableManager(_db, _db.baselines);
   $$BpCalibrationsTableTableManager get bpCalibrations =>
       $$BpCalibrationsTableTableManager(_db, _db.bpCalibrations);
+  $$BatteryTelemetryTableTableManager get batteryTelemetry =>
+      $$BatteryTelemetryTableTableManager(_db, _db.batteryTelemetry);
+  $$ExerciseSessionsTableTableManager get exerciseSessions =>
+      $$ExerciseSessionsTableTableManager(_db, _db.exerciseSessions);
   $$SyncStateTableTableManager get syncState =>
       $$SyncStateTableTableManager(_db, _db.syncState);
   $$CloudSyncOutboxTableTableManager get cloudSyncOutbox =>
       $$CloudSyncOutboxTableTableManager(_db, _db.cloudSyncOutbox);
+  $$NotificationLogTableTableManager get notificationLog =>
+      $$NotificationLogTableTableManager(_db, _db.notificationLog);
 }

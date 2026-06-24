@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hlth_app/core/auth/current_user_provider.dart';
+import 'package:hlth_app/core/auth/supabase_client_provider.dart';
 import 'package:hlth_app/core/ble/ble_service.dart';
 import 'package:hlth_app/ui/theme/app_colors.dart';
 
@@ -13,6 +15,7 @@ class SettingsScreen extends ConsumerWidget {
           data: (s) => s == BleConnectionState.connected,
           orElse: () => false,
         );
+    final user = ref.watch(currentUserProvider);
     return SafeArea(
       child: ListView(
         padding: const EdgeInsets.all(20),
@@ -22,6 +25,28 @@ class SettingsScreen extends ConsumerWidget {
             style: Theme.of(context).textTheme.headlineMedium,
           ),
           const SizedBox(height: 24),
+          // Account section — Supabase sign-in is OPTIONAL. The app
+          // works fully without it; signing in unlocks cross-device
+          // sync + cloud-backed features. Surfacing it here (rather
+          // than gating app entry on it) matches the product brief:
+          // "they already own the device, so they shouldn't have to
+          // create an account just to use it".
+          _SectionHeader(title: 'Account'),
+          if (user == null)
+            _SettingsTile(
+              icon: Icons.cloud_off,
+              title: 'Sign in or create account',
+              subtitle: 'Optional — back up readings and sync across devices',
+              onTap: () => context.push('/auth'),
+            )
+          else
+            _SettingsTile(
+              icon: Icons.cloud_done,
+              title: user.email ?? user.phone ?? 'Signed in',
+              subtitle: 'Cloud sync enabled · tap to sign out',
+              onTap: () => _confirmSignOut(context, ref),
+            ),
+          const SizedBox(height: 16),
           // Profile section
           _SectionHeader(title: 'Profile'),
           _SettingsTile(
@@ -98,6 +123,42 @@ class SettingsScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  /// Two-step sign-out so a stray tap doesn't drop the user's cloud
+  /// session unexpectedly. Local health data stays untouched — only the
+  /// Supabase session token is cleared.
+  Future<void> _confirmSignOut(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Sign out?'),
+        content: const Text(
+          'Your health data stays on this device. Cloud sync will pause '
+          'until you sign back in.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Sign out'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await ref.read(supabaseClientProvider).auth.signOut();
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Sign out failed: $e')),
+        );
+      }
+    }
   }
 }
 

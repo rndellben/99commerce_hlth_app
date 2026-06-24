@@ -234,6 +234,9 @@ class DailyMetrics extends Table {
   RealColumn get hrvRmssdMs => real().nullable()();
   RealColumn get hrvSdnnMs => real().nullable()();
   RealColumn get restingRespRateBpm => real().nullable()();
+  // Rhythm — irregular-heartbeat screen (raw R-R, pre-ectopic-cleaning)
+  RealColumn get rrIrregularityPct => real().nullable()();
+  RealColumn get ectopicBeatPct => real().nullable()();
   // SpO2
   RealColumn get spo2OvernightAvg => real().nullable()();
   IntColumn get spo2OvernightMin => integer().nullable()();
@@ -381,6 +384,89 @@ class CloudSyncOutbox extends Table {
   IntColumn get attempts => integer().withDefault(const Constant(0))();
   IntColumn get lastAttemptAtUtc => integer().nullable()();
   TextColumn get lastError => text().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// Exercise sessions — one row per completed workout pulled from the
+/// band via `SportPlusHandle.syncSportPlus`. Source-of-truth is the band's
+/// internal workout state machine (sdk_ring.pdf §2.3.10) — the app starts
+/// the session with `PhoneSportReq.getSportStatus(1, sportType)` and the
+/// band records HR/distance/calories until the app sends status=4 (End).
+///
+/// Cardinality: 1 row per workout. Band keeps the ~10 most-recent sessions
+/// on-device; we sync them down on session end and store indefinitely.
+///
+/// Note: `sportType` is the raw SDK byte (4=Walking, 7=Running, 9=Cycling,
+/// etc. — see BleService.sportTypeX constants). Display label resolution
+/// lives in the feature layer.
+class ExerciseSessions extends Table {
+  TextColumn get id => text()(); // UUID v4
+  TextColumn get userId => text().references(Users, #id)();
+  TextColumn get deviceId => text().references(Devices, #id)();
+  IntColumn get sportType => integer()();
+  IntColumn get startedAtUtc => integer()();
+  IntColumn get endedAtUtc => integer().nullable()();
+  IntColumn get durationSec => integer()();
+  IntColumn get distanceM => integer().withDefault(const Constant(0))();
+  RealColumn get calories => real().withDefault(const Constant(0))();
+  // Speed in cm/s per SDK spec. Convert to m/s in the display layer.
+  IntColumn get avgSpeedCmS => integer().nullable()();
+  IntColumn get maxSpeedCmS => integer().nullable()();
+  IntColumn get avgHrBpm => integer().nullable()();
+  IntColumn get minHrBpm => integer().nullable()();
+  IntColumn get maxHrBpm => integer().nullable()();
+  IntColumn get steps => integer().nullable()();
+  IntColumn get stepRate => integer().nullable()();
+  // Vertical movement in cm — only populated for outdoor GPS workouts.
+  IntColumn get elevationCm => integer().nullable()();
+  IntColumn get uphillCm => integer().nullable()();
+  IntColumn get downhillCm => integer().nullable()();
+  IntColumn get source => intEnum<DataSource>()();
+  IntColumn get createdAtUtc => integer()();
+  IntColumn get deletedAtUtc => integer().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// Battery telemetry — one row per periodic sync tick logging the band's
+/// battery %. Used by the BLE Debug "Battery Drain Test" panel to compute
+/// %/hr drain at the active cadence and project to 24h. Lightweight:
+/// ~144 rows/day at 10-min cadence, ~48/day at 30-min. Not part of the
+/// cloud-sync footprint — debug-only data, lives only in local SQLite.
+class BatteryTelemetry extends Table {
+  TextColumn get id => text()(); // UUID v4
+  IntColumn get capturedAtUtc => integer()();
+  IntColumn get bandBatteryPercent => integer().nullable()();
+  BoolColumn get bandCharging => boolean().nullable()();
+  IntColumn get syncIntervalMin => integer()();
+  // 'tick' | 'connect' | 'manual'
+  TextColumn get eventType => text()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// Log of fired local notifications. Powers rate-limiting / dedup
+/// (Ryan: "only show once every 7 days") and an in-app history. One row
+/// per *fired* notification. The rate-limit is checked per (userId, type)
+/// using the most recent firedAtUtcSec.
+class NotificationLog extends Table {
+  TextColumn get id => text()(); // UUID v4
+  TextColumn get userId => text()();
+  /// Stable rule id, e.g. 'hypertension' | 'afib' | 'sleep_apnea' | 'retention'.
+  TextColumn get type => text()();
+  /// Per-occurrence key for dedup, e.g. 'afib-2026-06-22'.
+  TextColumn get dedupeKey => text()();
+  TextColumn get title => text()();
+  TextColumn get body => text()();
+  /// JSON string for tap-routing payload (nullable).
+  TextColumn get payload => text().nullable()();
+  /// 'alert' (high importance) | 'retention' (default importance).
+  TextColumn get channel => text()();
+  IntColumn get firedAtUtcSec => integer()();
 
   @override
   Set<Column> get primaryKey => {id};

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hlth_app/core/ble/ble_service.dart';
 import 'package:hlth_app/core/ble/sync_adapters.dart' as adapters;
 import 'package:hlth_app/core/bootstrap/active_session.dart';
+import 'package:hlth_app/core/repositories/battery_telemetry_repository.dart';
 import 'package:hlth_app/core/repositories/daily_metrics_repository.dart';
 import 'package:hlth_app/core/repositories/device_repository.dart';
 import 'package:hlth_app/core/repositories/hr_repository.dart';
@@ -14,8 +15,10 @@ import 'package:hlth_app/core/repositories/stress_repository.dart';
 import 'package:hlth_app/core/processing/fall_detector.dart';
 import 'package:hlth_app/core/services/daily_aggregator.dart';
 import 'package:hlth_app/core/auth/current_user_provider.dart';
+import 'package:hlth_app/core/services/alerts/alert_evaluator.dart';
 import 'package:hlth_app/core/services/cloud_sync_service.dart';
 import 'package:hlth_app/core/services/retention_sweep_service.dart';
+import 'package:hlth_app/core/services/scheduled_ppg_capture_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math' as math;
 
@@ -469,12 +472,19 @@ class PeriodicSyncCoordinator {
     required this.retentionSweep,
     required this.ble,
     required this.cloudSync,
+    required this.alertEvaluator,
+    required this.scheduledPpgCapture,
     required this.authUserIdReader,
-    required Stream<void> tickStream,
+    required Stream<int> tickStream,
     this.fallSweepDuration = const Duration(seconds: 30),
     FallDetector? fallDetector,
+    this.onTickIntervalMinutes,
   }) : _fallDetector = fallDetector ?? const FallDetector() {
-    _tickSub = tickStream.listen((_) => _onTick());
+    _tickSub = tickStream.listen((mins) {
+      lastTickIntervalMin = mins;
+      onTickIntervalMinutes?.call(mins);
+      _onTick();
+    });
     // Auto-sync on connect: every time the band transitions into
     // `connected`, kick off a one-shot sync so the home cards populate
     // without the user having to open the debug screen first. Guarded by
@@ -487,11 +497,21 @@ class PeriodicSyncCoordinator {
   final RetentionSweepService retentionSweep;
   final BleService ble;
   final CloudSyncService cloudSync;
+  final AlertEvaluator alertEvaluator;
+  final ScheduledPpgCaptureService scheduledPpgCapture;
   final String? Function() authUserIdReader;
   final Duration fallSweepDuration;
   final FallDetector _fallDetector;
-  StreamSubscription<void>? _tickSub;
+  StreamSubscription<int>? _tickSub;
   StreamSubscription<BleConnectionState>? _connSub;
+  /// Most-recent native-tick cadence (minutes). Null until the first tick
+  /// fires. Public for debug UIs that want to show "currently syncing
+  /// every N min" without re-reading the native side.
+  int? lastTickIntervalMin;
+  /// Hook fired on every tick with the active interval in minutes. Used by
+  /// the battery telemetry path so each row is tagged with the cadence
+  /// that triggered it. Optional — null means "don't log telemetry".
+  final void Function(int intervalMin)? onTickIntervalMinutes;
   BleConnectionState? _lastConnState;
   bool _inFlight = false;
   final _runs = StreamController<SyncRunResult>.broadcast();
@@ -555,11 +575,25 @@ class PeriodicSyncCoordinator {
           await cloudSync.processOutbox(authUserId: authUid);
         }
       } catch (_) {}
+      // Evaluate alert rules against the freshly-synced data (non-fatal).
+      // Rate-limiting lives in the evaluator, so this is safe to run every
+      // tick.
+      try {
+        await alertEvaluator.evaluateAll(userId: ActiveSession.defaultUserId);
+      } catch (_) {}
       // HLT-5: run the background fall sweep once data sync is done.
       // Sequenced after sync so we never have two `startMeasureHrRaw`
       // sessions racing for the same BLE link.
       final fallResult = await _runFallSweep();
       _fallSweeps.add(fallResult);
+      // Step 3: once-a-day PPG capture for resting respiratory + HRV.
+      // Sequenced last (after the fall sweep's raw window) so the two raw
+      // captures never overlap. Daily-gated internally + non-fatal.
+      try {
+        await scheduledPpgCapture.maybeRunDaily(
+          userId: ActiveSession.defaultUserId,
+        );
+      } catch (_) {}
     } finally {
       _inFlight = false;
     }
@@ -766,14 +800,32 @@ class PeriodicSyncCoordinator {
 final periodicSyncCoordinatorProvider =
     Provider<PeriodicSyncCoordinator>((ref) {
   final ble = ref.watch(bleServiceProvider);
+  final telemetryRepo = ref.watch(batteryTelemetryRepositoryProvider);
   final coord = PeriodicSyncCoordinator(
     sync: ref.watch(syncServiceProvider),
     deviceRepo: ref.watch(deviceRepositoryProvider),
     retentionSweep: ref.watch(retentionSweepServiceProvider),
     ble: ble,
     cloudSync: ref.watch(cloudSyncServiceProvider),
+    alertEvaluator: ref.watch(alertEvaluatorProvider),
+    scheduledPpgCapture: ref.watch(scheduledPpgCaptureServiceProvider),
     authUserIdReader: () => ref.read(currentUserIdProvider),
     tickStream: ble.periodicSyncTick,
+    // Battery-drain telemetry — one row per tick. Fire-and-forget; we
+    // never want a telemetry write to block the actual sync work.
+    onTickIntervalMinutes: (intervalMin) async {
+      try {
+        final band = await ble.requestBattery();
+        await telemetryRepo.insert(
+          bandBatteryPercent: band?.level,
+          bandCharging: band?.charging,
+          syncIntervalMin: intervalMin,
+          eventType: 'tick',
+        );
+      } catch (_) {
+        // Swallow — telemetry must never break the actual sync.
+      }
+    },
   );
   ref.onDispose(coord.dispose);
   return coord;

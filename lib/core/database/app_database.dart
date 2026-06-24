@@ -34,8 +34,11 @@ part 'app_database.g.dart';
     SleepEpochs,
     Baselines,
     BpCalibrations,
+    BatteryTelemetry,
+    ExerciseSessions,
     SyncState,
     CloudSyncOutbox,
+    NotificationLog,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -44,7 +47,7 @@ class AppDatabase extends _$AppDatabase {
   /// Bump on every schema change. Add a migration step in
   /// `migration` below. See hlth-db-schema.md §"Schema versioning".
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -74,6 +77,36 @@ class AppDatabase extends _$AppDatabase {
               'CREATE INDEX IF NOT EXISTS idx_bpcal_user_active ON bp_calibrations(user_id, is_active, captured_at_utc DESC)',
             );
             await m.createTable(cloudSyncOutbox);
+          }
+          // v3 → v4: add battery_telemetry for the 24h drain test
+          if (from < 4) {
+            await m.createTable(batteryTelemetry);
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_battery_time ON battery_telemetry(captured_at_utc DESC)',
+            );
+          }
+          // v4 → v5: add exercise_sessions for band-side sport mode
+          if (from < 5) {
+            await m.createTable(exerciseSessions);
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_exercise_user_time ON exercise_sessions(user_id, started_at_utc DESC)',
+            );
+            await customStatement(
+              'CREATE UNIQUE INDEX IF NOT EXISTS idx_exercise_dedup ON exercise_sessions(user_id, device_id, started_at_utc, source)',
+            );
+          }
+          // v5 → v6: add notification_log for alert rate-limiting + history
+          if (from < 6) {
+            await m.createTable(notificationLog);
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_notiflog_user_type_time ON notification_log(user_id, type, fired_at_utc_sec DESC)',
+            );
+          }
+          // v6 → v7: add rhythm-irregularity columns to daily_metrics
+          // (irregular-heartbeat alert, sensor-agnostic R-R analysis)
+          if (from < 7) {
+            await m.addColumn(dailyMetrics, dailyMetrics.rrIrregularityPct);
+            await m.addColumn(dailyMetrics, dailyMetrics.ectopicBeatPct);
           }
         },
       );
@@ -117,8 +150,15 @@ class AppDatabase extends _$AppDatabase {
       // bp_calibrations
       'CREATE INDEX IF NOT EXISTS idx_bpcal_user_time ON bp_calibrations(user_id, captured_at_utc DESC)',
       'CREATE INDEX IF NOT EXISTS idx_bpcal_user_active ON bp_calibrations(user_id, is_active, captured_at_utc DESC)',
+      // battery_telemetry
+      'CREATE INDEX IF NOT EXISTS idx_battery_time ON battery_telemetry(captured_at_utc DESC)',
+      // exercise_sessions
+      'CREATE INDEX IF NOT EXISTS idx_exercise_user_time ON exercise_sessions(user_id, started_at_utc DESC)',
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_exercise_dedup ON exercise_sessions(user_id, device_id, started_at_utc, source)',
       // sync_state
       'CREATE UNIQUE INDEX IF NOT EXISTS idx_sync_state_unique ON sync_state(device_id, metric_key)',
+      // notification_log
+      'CREATE INDEX IF NOT EXISTS idx_notiflog_user_type_time ON notification_log(user_id, type, fired_at_utc_sec DESC)',
       // devices
       'CREATE INDEX IF NOT EXISTS idx_devices_user_id ON devices(user_id)',
       'CREATE INDEX IF NOT EXISTS idx_devices_mac ON devices(mac_address) WHERE mac_address IS NOT NULL',

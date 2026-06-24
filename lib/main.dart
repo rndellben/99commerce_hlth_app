@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:hlth_app/app.dart';
 import 'package:hlth_app/core/auth/supabase_client_provider.dart';
 import 'package:hlth_app/core/config/app_env.dart';
+import 'package:hlth_app/core/services/notification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,5 +33,16 @@ Future<void> main() async {
     // instead of crashing. Real diagnostic goes to console.
     debugPrint('Supabase.initialize failed: $e\n$st');
   }
+  // Set up local notifications (channels) and request permission once at
+  // boot. The OS only prompts on the first call; later calls just return
+  // the stored decision. Non-fatal — the app launches regardless.
+  try {
+    final notifications = NotificationService();
+    await notifications.init();
+    await notifications.requestPermission();
+  } catch (e, st) {
+    debugPrint('Notification init failed: $e\n$st');
+  }
+
   runApp(const ProviderScope(child: HlthApp()));
 }

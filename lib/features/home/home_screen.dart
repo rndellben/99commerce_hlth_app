@@ -2,19 +2,58 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hlth_app/core/ble/ble_service.dart';
+import 'package:hlth_app/core/bootstrap/active_session.dart';
 import 'package:hlth_app/core/services/feature_gate.dart';
+import 'package:hlth_app/core/services/scheduled_ppg_capture_service.dart';
 import 'package:hlth_app/features/blood_pressure/bp_calibration_providers.dart';
 import 'package:hlth_app/features/home/home_providers.dart';
 import 'package:hlth_app/ui/theme/app_colors.dart';
 import 'package:hlth_app/ui/widgets/connection_indicator.dart';
 import 'package:hlth_app/ui/widgets/health_metric_card.dart';
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _maybeCaptureRespiratory());
+  }
+
+  /// Respiratory has no band-native source — it's derived from an active PPG
+  /// capture. Kick one when the home screen first appears so the card
+  /// populates from app usage, not only the background tick. `maybeRunDaily`
+  /// is fully self-gated (once-per-day pass, attempt cap, connection check),
+  /// so calling it here can't double-capture or run when it shouldn't.
+  void _maybeCaptureRespiratory() {
+    if (!mounted) return;
+    ref
+        .read(scheduledPpgCaptureServiceProvider)
+        .maybeRunDaily(userId: ActiveSession.defaultUserId);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Also capture when the band (re)connects while we're on home, so a
+    // mid-session connect refreshes respiratory without waiting for a tick.
+    ref.listen<AsyncValue<BleConnectionState>>(
+      bleConnectionStateProvider,
+      (prev, next) {
+        if (next.valueOrNull == BleConnectionState.connected) {
+          _maybeCaptureRespiratory();
+        }
+      },
+    );
+
     final gate = ref.watch(featureGateProvider);
+    final capturingResp =
+        ref.watch(ppgCapturingProvider).valueOrNull ?? false;
     final today = ref.watch(todayDailyMetricsProvider).valueOrNull;
     final latestHr = ref.watch(latestHrSampleProvider).valueOrNull;
     final latestSpo2 = ref.watch(latestSpo2SampleProvider).valueOrNull;
@@ -143,7 +182,7 @@ class HomeScreen extends ConsumerWidget {
                   onTap: () => context.push('/hrv'),
                 ),
                 HealthMetricCard(
-                  title: 'Stress',
+                  title: 'Strain',
                   value: latestStress?.stressScore.toString() ?? '--',
                   unit: latestStress == null ? '' : _stressLabel(latestStress.stressScore),
                   icon: Icons.spa_outlined,
@@ -153,12 +192,34 @@ class HomeScreen extends ConsumerWidget {
                   onTap: () => context.push('/stress'),
                 ),
                 HealthMetricCard(
+                  title: 'Respiratory',
+                  value: today?.restingRespRateBpm == null
+                      ? '--'
+                      : today!.restingRespRateBpm!.toStringAsFixed(0),
+                  unit: 'bpm',
+                  icon: Icons.air,
+                  color: AppColors.accent,
+                  date: todayLabel,
+                  // Show a "Measuring…" state while an active capture is in
+                  // flight and we don't yet have today's value.
+                  busy: capturingResp && today?.restingRespRateBpm == null,
+                  busyLabel: 'Measuring…',
+                ),
+                HealthMetricCard(
                   title: 'One Key',
                   value: 'Tap',
                   unit: '',
                   icon: Icons.touch_app,
                   color: AppColors.recovery,
                   onTap: () => context.push('/one-key'),
+                ),
+                HealthMetricCard(
+                  title: 'Workout',
+                  value: 'Start',
+                  unit: '',
+                  icon: Icons.directions_run,
+                  color: AppColors.activity,
+                  onTap: () => context.push('/workouts'),
                 ),
                 HealthMetricCard(
                   title: 'Steps',

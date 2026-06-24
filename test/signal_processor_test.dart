@@ -104,6 +104,107 @@ void main() {
       );
     });
   });
+
+  group('SignalProcessor.refinePeaksParabolic', () {
+    test('asymmetric triple shifts the peak toward the taller neighbour', () {
+      // Vertex of the parabola through (9,8,6): delta = 0.5*(9-6)/(9-16+6)
+      // = 0.5*3/-1 = -1.5, clamped to -0.5 → refined index 4.5.
+      final s = Float64List.fromList([0, 0, 0, 9, 8, 6, 0, 0]);
+      final refined = sp.refinePeaksParabolic(s, [4]);
+      expect(refined.single, closeTo(3.5, 1e-9));
+    });
+
+    test('symmetric peak stays on the integer grid', () {
+      final s = Float64List.fromList([0, 1, 5, 1, 0]);
+      final refined = sp.refinePeaksParabolic(s, [2]);
+      expect(refined.single, closeTo(2.0, 1e-9));
+    });
+
+    test('boundary peaks are returned unrefined', () {
+      final s = Float64List.fromList([5, 4, 3, 4, 5]);
+      expect(sp.refinePeaksParabolic(s, [0]).single, 0.0);
+      expect(sp.refinePeaksParabolic(s, [4]).single, 4.0);
+    });
+
+    test('refined R-R intervals reduce quantisation jitter vs integer grid',
+        () {
+      // A clean 72 bpm sinusoid has perfectly even beats; on the integer
+      // grid the R-R series carries ±1-sample jitter, which sub-sample
+      // refinement should shrink. Compare the spread (SD) of each series.
+      final s = _sine(freqHz: 1.2, fs: 75, durationS: 60, amplitude: 1.0);
+      final peaks = sp.detectPeaks(s);
+      final coarse = sp.extractRRIntervals(peaks);
+      final fine = sp.extractRRIntervalsRefined(s, peaks);
+      expect(fine.length, coarse.length);
+      expect(_sd(fine), lessThan(_sd(coarse)),
+          reason: 'refined SD=${_sd(fine)} coarse SD=${_sd(coarse)}');
+    });
+  });
+
+  group('SignalProcessor.reconstructUniformFromCounter', () {
+    test('contiguous counter passes through unchanged', () {
+      final counts = List<int>.generate(50, (i) => i % 256);
+      final greens = List<double>.generate(50, (i) => 100.0 + i);
+      final r = sp.reconstructUniformFromCounter(counts, greens)!;
+      expect(r.bandSampleCount, 50);
+      expect(r.keptSamples, 50);
+      expect(r.gapsInterpolated, 0);
+      expect(r.samples.first, 100.0);
+      expect(r.samples.last, 149.0);
+    });
+
+    test('a dropped sample is linearly interpolated at its true position', () {
+      // Band-index 5 is missing (…4,6…); it should be filled with the
+      // mean of its neighbours, not by closing the gap.
+      final counts = <int>[];
+      final greens = <double>[];
+      for (int i = 0; i < 40; i++) {
+        if (i == 5) continue;
+        counts.add(i);
+        greens.add(100.0 + i * 10); // nonzero so none read as blanks
+      }
+      final r = sp.reconstructUniformFromCounter(counts, greens)!;
+      expect(r.bandSampleCount, 40); // span 0..39 preserved
+      expect(r.keptSamples, 39);
+      expect(r.gapsInterpolated, 1);
+      expect(r.samples[4], closeTo(140.0, 1e-9));
+      expect(r.samples[5], closeTo(150.0, 1e-9)); // interpolated
+      expect(r.samples[6], closeTo(160.0, 1e-9));
+    });
+
+    test('green=0 sample is treated as a gap and interpolated', () {
+      final counts = List<int>.generate(40, (i) => i);
+      final greens = List<double>.generate(40, (i) => 100.0);
+      greens[10] = 0.0; // blank
+      final r = sp.reconstructUniformFromCounter(counts, greens)!;
+      expect(r.keptSamples, 39);
+      expect(r.gapsInterpolated, 1);
+      expect(r.samples[10], closeTo(100.0, 1e-9));
+    });
+
+    test('counter wrap (255→0) is unwrapped, not a phantom gap', () {
+      final counts = [253, 254, 255, 0, 1, 2, 3, 4, 5, 6, 7, 8];
+      final greens = List<double>.generate(counts.length, (i) => 200.0 + i);
+      final r = sp.reconstructUniformFromCounter(counts, greens)!;
+      expect(r.bandSampleCount, counts.length);
+      expect(r.gapsInterpolated, 0);
+    });
+
+    test('returns null when too few usable samples or misaligned', () {
+      expect(sp.reconstructUniformFromCounter([1, 2, 3], [10, 20, 30]), isNull);
+      expect(sp.reconstructUniformFromCounter([1, 2], [10, 20]), isNull);
+      expect(sp.reconstructUniformFromCounter([1, 2, 3], [10, 20]), isNull);
+    });
+  });
+}
+
+double _sd(List<double> xs) {
+  final mean = xs.reduce((a, b) => a + b) / xs.length;
+  double s = 0;
+  for (final x in xs) {
+    s += (x - mean) * (x - mean);
+  }
+  return sqrt(s / xs.length);
 }
 
 Float64List _sine({

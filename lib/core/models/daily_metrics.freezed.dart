@@ -24,7 +24,10 @@ mixin _$DailyMetrics {
   int? get restingHrBpm => throw _privateConstructorUsedError;
   double? get hrvRmssdMs => throw _privateConstructorUsedError;
   double? get hrvSdnnMs => throw _privateConstructorUsedError;
-  double? get restingRespRateBpm => throw _privateConstructorUsedError; // SpO2
+  double? get restingRespRateBpm =>
+      throw _privateConstructorUsedError; // Rhythm — irregular-heartbeat screen
+  double? get rrIrregularityPct => throw _privateConstructorUsedError;
+  double? get ectopicBeatPct => throw _privateConstructorUsedError; // SpO2
   double? get spo2OvernightAvg => throw _privateConstructorUsedError;
   int? get spo2OvernightMin => throw _privateConstructorUsedError; // BP
   int? get systolicMmhg => throw _privateConstructorUsedError;
@@ -76,6 +79,8 @@ abstract class $DailyMetricsCopyWith<$Res> {
     double? hrvRmssdMs,
     double? hrvSdnnMs,
     double? restingRespRateBpm,
+    double? rrIrregularityPct,
+    double? ectopicBeatPct,
     double? spo2OvernightAvg,
     int? spo2OvernightMin,
     int? systolicMmhg,
@@ -127,6 +132,8 @@ class _$DailyMetricsCopyWithImpl<$Res, $Val extends DailyMetrics>
     Object? hrvRmssdMs = freezed,
     Object? hrvSdnnMs = freezed,
     Object? restingRespRateBpm = freezed,
+    Object? rrIrregularityPct = freezed,
+    Object? ectopicBeatPct = freezed,
     Object? spo2OvernightAvg = freezed,
     Object? spo2OvernightMin = freezed,
     Object? systolicMmhg = freezed,
@@ -186,6 +193,14 @@ class _$DailyMetricsCopyWithImpl<$Res, $Val extends DailyMetrics>
             restingRespRateBpm: freezed == restingRespRateBpm
                 ? _value.restingRespRateBpm
                 : restingRespRateBpm // ignore: cast_nullable_to_non_nullable
+                      as double?,
+            rrIrregularityPct: freezed == rrIrregularityPct
+                ? _value.rrIrregularityPct
+                : rrIrregularityPct // ignore: cast_nullable_to_non_nullable
+                      as double?,
+            ectopicBeatPct: freezed == ectopicBeatPct
+                ? _value.ectopicBeatPct
+                : ectopicBeatPct // ignore: cast_nullable_to_non_nullable
                       as double?,
             spo2OvernightAvg: freezed == spo2OvernightAvg
                 ? _value.spo2OvernightAvg
@@ -311,6 +326,8 @@ abstract class _$$DailyMetricsImplCopyWith<$Res>
     double? hrvRmssdMs,
     double? hrvSdnnMs,
     double? restingRespRateBpm,
+    double? rrIrregularityPct,
+    double? ectopicBeatPct,
     double? spo2OvernightAvg,
     int? spo2OvernightMin,
     int? systolicMmhg,
@@ -361,6 +378,8 @@ class __$$DailyMetricsImplCopyWithImpl<$Res>
     Object? hrvRmssdMs = freezed,
     Object? hrvSdnnMs = freezed,
     Object? restingRespRateBpm = freezed,
+    Object? rrIrregularityPct = freezed,
+    Object? ectopicBeatPct = freezed,
     Object? spo2OvernightAvg = freezed,
     Object? spo2OvernightMin = freezed,
     Object? systolicMmhg = freezed,
@@ -420,6 +439,14 @@ class __$$DailyMetricsImplCopyWithImpl<$Res>
         restingRespRateBpm: freezed == restingRespRateBpm
             ? _value.restingRespRateBpm
             : restingRespRateBpm // ignore: cast_nullable_to_non_nullable
+                  as double?,
+        rrIrregularityPct: freezed == rrIrregularityPct
+            ? _value.rrIrregularityPct
+            : rrIrregularityPct // ignore: cast_nullable_to_non_nullable
+                  as double?,
+        ectopicBeatPct: freezed == ectopicBeatPct
+            ? _value.ectopicBeatPct
+            : ectopicBeatPct // ignore: cast_nullable_to_non_nullable
                   as double?,
         spo2OvernightAvg: freezed == spo2OvernightAvg
             ? _value.spo2OvernightAvg
@@ -538,6 +565,8 @@ class _$DailyMetricsImpl implements _DailyMetrics {
     this.hrvRmssdMs,
     this.hrvSdnnMs,
     this.restingRespRateBpm,
+    this.rrIrregularityPct,
+    this.ectopicBeatPct,
     this.spo2OvernightAvg,
     this.spo2OvernightMin,
     this.systolicMmhg,
@@ -582,6 +611,11 @@ class _$DailyMetricsImpl implements _DailyMetrics {
   final double? hrvSdnnMs;
   @override
   final double? restingRespRateBpm;
+  // Rhythm — irregular-heartbeat screen
+  @override
+  final double? rrIrregularityPct;
+  @override
+  final double? ectopicBeatPct;
   // SpO2
   @override
   final double? spo2OvernightAvg;
@@ -643,7 +677,7 @@ class _$DailyMetricsImpl implements _DailyMetrics {
 
   @override
   String toString() {
-    return 'DailyMetrics(id: $id, userId: $userId, localDate: $localDate, tzOffsetMin: $tzOffsetMin, restingHrBpm: $restingHrBpm, hrvRmssdMs: $hrvRmssdMs, hrvSdnnMs: $hrvSdnnMs, restingRespRateBpm: $restingRespRateBpm, spo2OvernightAvg: $spo2OvernightAvg, spo2OvernightMin: $spo2OvernightMin, systolicMmhg: $systolicMmhg, diastolicMmhg: $diastolicMmhg, sleepTotalMin: $sleepTotalMin, sleepDeepPct: $sleepDeepPct, sleepRemPct: $sleepRemPct, sleepLightPct: $sleepLightPct, sleepEfficiencyPct: $sleepEfficiencyPct, bedtime: $bedtime, wake: $wake, steps: $steps, distanceM: $distanceM, caloriesKcal: $caloriesKcal, activeMinutes: $activeMinutes, stiffnessIndex: $stiffnessIndex, augmentationIndex: $augmentationIndex, strokeVolumeIndex: $strokeVolumeIndex, breathingDisruptionsHr: $breathingDisruptionsHr, recoveryScore: $recoveryScore, wellnessScore: $wellnessScore, cyclePhase: $cyclePhase, computedAt: $computedAt, algorithmVersion: $algorithmVersion, source: $source)';
+    return 'DailyMetrics(id: $id, userId: $userId, localDate: $localDate, tzOffsetMin: $tzOffsetMin, restingHrBpm: $restingHrBpm, hrvRmssdMs: $hrvRmssdMs, hrvSdnnMs: $hrvSdnnMs, restingRespRateBpm: $restingRespRateBpm, rrIrregularityPct: $rrIrregularityPct, ectopicBeatPct: $ectopicBeatPct, spo2OvernightAvg: $spo2OvernightAvg, spo2OvernightMin: $spo2OvernightMin, systolicMmhg: $systolicMmhg, diastolicMmhg: $diastolicMmhg, sleepTotalMin: $sleepTotalMin, sleepDeepPct: $sleepDeepPct, sleepRemPct: $sleepRemPct, sleepLightPct: $sleepLightPct, sleepEfficiencyPct: $sleepEfficiencyPct, bedtime: $bedtime, wake: $wake, steps: $steps, distanceM: $distanceM, caloriesKcal: $caloriesKcal, activeMinutes: $activeMinutes, stiffnessIndex: $stiffnessIndex, augmentationIndex: $augmentationIndex, strokeVolumeIndex: $strokeVolumeIndex, breathingDisruptionsHr: $breathingDisruptionsHr, recoveryScore: $recoveryScore, wellnessScore: $wellnessScore, cyclePhase: $cyclePhase, computedAt: $computedAt, algorithmVersion: $algorithmVersion, source: $source)';
   }
 
   @override
@@ -665,6 +699,10 @@ class _$DailyMetricsImpl implements _DailyMetrics {
                 other.hrvSdnnMs == hrvSdnnMs) &&
             (identical(other.restingRespRateBpm, restingRespRateBpm) ||
                 other.restingRespRateBpm == restingRespRateBpm) &&
+            (identical(other.rrIrregularityPct, rrIrregularityPct) ||
+                other.rrIrregularityPct == rrIrregularityPct) &&
+            (identical(other.ectopicBeatPct, ectopicBeatPct) ||
+                other.ectopicBeatPct == ectopicBeatPct) &&
             (identical(other.spo2OvernightAvg, spo2OvernightAvg) ||
                 other.spo2OvernightAvg == spo2OvernightAvg) &&
             (identical(other.spo2OvernightMin, spo2OvernightMin) ||
@@ -724,6 +762,8 @@ class _$DailyMetricsImpl implements _DailyMetrics {
     hrvRmssdMs,
     hrvSdnnMs,
     restingRespRateBpm,
+    rrIrregularityPct,
+    ectopicBeatPct,
     spo2OvernightAvg,
     spo2OvernightMin,
     systolicMmhg,
@@ -770,6 +810,8 @@ abstract class _DailyMetrics implements DailyMetrics {
     final double? hrvRmssdMs,
     final double? hrvSdnnMs,
     final double? restingRespRateBpm,
+    final double? rrIrregularityPct,
+    final double? ectopicBeatPct,
     final double? spo2OvernightAvg,
     final int? spo2OvernightMin,
     final int? systolicMmhg,
@@ -812,7 +854,11 @@ abstract class _DailyMetrics implements DailyMetrics {
   @override
   double? get hrvSdnnMs;
   @override
-  double? get restingRespRateBpm; // SpO2
+  double? get restingRespRateBpm; // Rhythm — irregular-heartbeat screen
+  @override
+  double? get rrIrregularityPct;
+  @override
+  double? get ectopicBeatPct; // SpO2
   @override
   double? get spo2OvernightAvg;
   @override

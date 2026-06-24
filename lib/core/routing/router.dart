@@ -2,8 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hlth_app/core/auth/current_user_provider.dart';
-import 'package:hlth_app/core/config/region_detector.dart';
-import 'package:hlth_app/core/services/consent_service.dart';
 import 'package:hlth_app/features/activity/activity_screen.dart';
 import 'package:hlth_app/features/auth/auth_screen.dart';
 import 'package:hlth_app/features/auth/privacy_screen.dart';
@@ -21,17 +19,29 @@ import 'package:hlth_app/features/settings/settings_screen.dart';
 import 'package:hlth_app/features/sleep/sleep_screen.dart';
 import 'package:hlth_app/features/spo2/spo2_screen.dart';
 import 'package:hlth_app/features/stress/stress_screen.dart';
+import 'package:hlth_app/features/workouts/workouts_screen.dart';
 import 'package:hlth_app/ui/widgets/shell_screen.dart';
 
-/// GoRouter wrapped in a provider so it can react to BOTH the
-/// `authStateProvider` (sign-in / sign-out events) and the
-/// `userProfileProvider` (first-launch onboarding gate). The redirect
-/// runs whenever either notifier bumps.
+/// GoRouter wrapped in a provider so it can react to the
+/// `userProfileProvider` (first-launch onboarding gate).
+///
+/// Auth is intentionally NOT a redirect gate. The product premise is that
+/// the band itself is the entitlement — owning a paired ring is what
+/// unlocks the app. A Supabase account is opt-in from Settings → Account
+/// for cloud features (cross-device sync, family share, future coach).
+/// Anonymous users get the full local experience; the cloud sync path
+/// inside SyncService skips itself when no Supabase user is signed in.
+///
+/// Same goes for the GDPR consent gate — it's tied to *cloud* data
+/// upload, not local-only use, so it surfaces inside the account setup
+/// flow when the user opts to enable cloud sync, not at app launch.
 final appRouterProvider = Provider<GoRouter>((ref) {
   final notifier = _RouterRefreshNotifier();
   ref.listen(userProfileProvider, (_, __) => notifier.bump());
+  // Auth events still trigger a refresh so the Account row in Settings
+  // re-renders the right "Signed in as …" / "Sign in" copy without a
+  // manual rebuild — but they no longer redirect.
   ref.listen(authStateProvider, (_, __) => notifier.bump());
-  ref.listen(hasRequiredConsentProvider, (_, __) => notifier.bump());
   ref.onDispose(notifier.dispose);
 
   return GoRouter(
@@ -43,36 +53,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // Always allow /debug — useful while iterating without a profile.
       if (loc == '/debug') return null;
 
-      // Auth gate first: if signed out, force /auth (with /privacy as a
-      // reachable side-trip from the consent link).
-      final signedIn = ref.read(currentUserIdProvider) != null;
-      final atAuthOrPrivacy = loc == '/auth' || loc == '/privacy';
-      if (!signedIn) {
-        return atAuthOrPrivacy ? null : '/auth';
-      }
-
-      // Signed in. Bounce away from /auth (post-sign-up arrival) but
-      // keep /privacy reachable as a normal route from settings.
-      if (loc == '/auth') return '/';
-
-      // Profile gate: if signed in but onboarding incomplete, force it.
+      // First-launch profile gate (DOB / sex / height / weight). This is
+      // the ONLY mandatory step before reaching the app body — the band
+      // can't personalize calibration math without these inputs.
       final profileAsync = ref.read(userProfileProvider);
       if (profileAsync.isLoading) return null;
       final hasProfile = profileAsync.valueOrNull != null;
       final atOnboarding = loc == '/onboarding';
       if (!hasProfile && !atOnboarding) return '/onboarding';
       if (hasProfile && atOnboarding) return '/';
-
-      // Consent gate: if geo config requires explicit consent and
-      // the user hasn't granted it yet, redirect to onboarding.
-      final geoConfig = ref.read(geoConfigProvider);
-      if (geoConfig.requiresExplicitConsent) {
-        final hasConsent =
-            ref.read(hasRequiredConsentProvider).valueOrNull ?? true;
-        if (!hasConsent && !atOnboarding && loc != '/privacy') {
-          return '/onboarding';
-        }
-      }
 
       return null;
     },
@@ -106,6 +95,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/stress',
         builder: (context, state) => const StressScreen(),
+      ),
+      GoRoute(
+        path: '/workouts',
+        builder: (context, state) => const WorkoutsScreen(),
       ),
       GoRoute(
         path: '/hrv',

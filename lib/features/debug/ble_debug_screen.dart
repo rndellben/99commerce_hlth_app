@@ -1,33 +1,38 @@
 import 'dart:async';
 
+import 'dart:convert';
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hlth_app/core/auth/current_user_provider.dart';
 import 'package:hlth_app/core/ble/ble_service.dart';
 import 'package:hlth_app/core/bootstrap/active_session.dart';
 import 'package:hlth_app/core/database/enums.dart';
 import 'package:hlth_app/core/models/daily_metrics.dart';
 import 'package:hlth_app/core/processing/fall_detector.dart';
-import 'package:hlth_app/core/processing/frequency_domain_hrv.dart';
-import 'package:hlth_app/core/processing/hrv_calculator.dart';
-import 'package:hlth_app/core/processing/respiratory_rate.dart';
-import 'package:hlth_app/core/processing/signal_processor.dart';
 import 'package:hlth_app/core/repositories/daily_metrics_repository.dart';
 import 'package:hlth_app/core/repositories/device_repository.dart';
+import 'package:hlth_app/core/services/alerts/alert_evaluator.dart';
+import 'package:hlth_app/core/services/notification_service.dart';
+import 'package:hlth_app/core/services/ppg_analysis_service.dart';
+import 'package:hlth_app/core/services/scheduled_ppg_capture_service.dart';
 import 'package:hlth_app/core/repositories/hr_repository.dart';
 import 'package:hlth_app/core/repositories/sleep_repository.dart';
 import 'package:hlth_app/core/repositories/spo2_repository.dart';
 import 'package:hlth_app/core/repositories/step_bucket_repository.dart';
 import 'package:hlth_app/core/services/activity_classifier.dart';
 import 'package:hlth_app/core/repositories/baseline_repository.dart';
+import 'package:hlth_app/core/repositories/battery_telemetry_repository.dart';
 import 'package:hlth_app/core/repositories/bp_repository.dart';
 import 'package:hlth_app/core/services/baseline_service.dart';
+import 'package:hlth_app/core/services/cloud_sync_service.dart';
 import 'package:hlth_app/core/services/daily_aggregator.dart';
+import 'package:hlth_app/features/home/home_providers.dart';
 import 'package:hlth_app/core/services/sync_service.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 const _uuid = Uuid();
@@ -86,9 +91,47 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
   // session. Cleared on each Capture PPG tap. The Analyze button reads
   // this buffer and runs the signal-processing pipeline.
   final List<double> _ppgGreenBuffer = [];
+  // Step 1 capture-quality diagnostics. The band stamps every raw sample
+  // with a monotonic 0-255 `ppg_count`. Recording every received count
+  // (before the green>0 filter) lets Analyze separate two failure modes:
+  //   * gaps in the count   → samples lost in transit (BLE packet loss)
+  //   * green=0 received     → sensor blanked (poor fit / not seeing blood)
+  // Both collapse the effective sample rate; the fix differs per cause.
+  final List<int> _ppgCountSeq = [];
+  // Green value for every counted sample, aligned 1:1 with _ppgCountSeq
+  // (green=0 stored as 0.0 so it reads as a gap). Step 2 feeds this pair
+  // into counter-based timing reconstruction.
+  final List<double> _ppgGreenAll = [];
+  int _greenZeroCount = 0;
+  // Raw multi-channel buffers, each aligned 1:1 with [_ppgCountSeq], for the
+  // morphology / cardio-load export Ryan asked for. The band emits all of
+  // these on every packet (green/red/IR + accel XYZ); we keep them only while
+  // a capture is running. [_ppgEpochMsAll] is the wall-clock arrival time of
+  // the packet each sample came in on — ppg_count is the precise relative
+  // timing signal, this just anchors the series to real time.
+  final List<double> _ppgRedAll = [];
+  final List<double> _ppgIrAll = [];
+  final List<int> _ppgAccelXAll = [];
+  final List<int> _ppgAccelYAll = [];
+  final List<int> _ppgAccelZAll = [];
+  final List<int> _ppgEpochMsAll = [];
+  // The complete per-packet sample maps, exactly as received from the band
+  // (every field: green/red/IR + heart/rri/hrv + accel). Kept so the export
+  // can reproduce the per-packet log lines verbatim.
+  final List<Map<String, dynamic>> _ppgRawSamples = [];
   int? _captureStartMs;
   int? _captureEndMs; // frozen when capture stops — used to compute true fs
   bool _capturing = false;
+  // The pending auto-stop timer for the active capture. Held so a new capture
+  // (or a manual stop) can cancel it — otherwise a stale timer from a previous
+  // capture fires later and stops the wrong measurement.
+  Timer? _captureStopTimer;
+  // Raw-capture window. The same value is passed to the band AND used for the
+  // Dart auto-stop timer, so the capture stops itself when the window is up.
+  static const int _rawCaptureSeconds = 90;
+  // Last Analyze result — kept so we can export its derived R-R series for
+  // off-device cleaner tuning (Ryan's request).
+  PpgAnalysisResult? _lastPpgResult;
 
   // HLT-5 Fall Watch state. Toggled by the Fall Watch debug button.
   // While active, we hold `startMeasureHrRaw` open (the H59 only emits
@@ -133,6 +176,15 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
   bool _logMaximized = false;
   bool _statusExpanded = true;
   bool _actionsExpanded = true;
+  bool _batteryTestExpanded = true;
+
+  // Battery drain test — the panel maintains a "test started at" marker
+  // (persisted to SharedPreferences) so closing/reopening the app keeps
+  // the same 24h window. Reset via "Start new test".
+  static const _kBatteryTestStartKey = 'battery_test_started_at_utc_sec';
+  static const _kBatteryTestIntervalKey = 'battery_test_interval_min';
+  DateTime? _batteryTestStartedAt;
+  int _selectedSyncIntervalMin = 30;
 
   @override
   void initState() {
@@ -142,6 +194,7 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
       _attachListeners();
       _refreshAliases();
       _refreshBound();
+      _loadBatteryTestState();
     });
   }
 
@@ -200,9 +253,38 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
         // green=0 packets — these are SDK status/empty packets that
         // contaminate the buffer and cause huge spikes in the bandpass.
         if (_capturing) {
+          final nowMs = DateTime.now().millisecondsSinceEpoch;
           for (final s in samples) {
+            // Record the band's sample counter for every received sample,
+            // regardless of green value — gaps here are BLE loss. Keep a
+            // green value aligned 1:1 with the counter (0 = blank/gap).
+            final c = s['ppg_count'];
             final g = s['green'];
-            if (g is num && g > 0) _ppgGreenBuffer.add(g.toDouble());
+            final gv = (g is num) ? g.toDouble() : 0.0;
+            if (c is num) {
+              _ppgCountSeq.add(c.toInt());
+              _ppgGreenAll.add(gv);
+              // Keep the remaining channels aligned 1:1 with the counter for
+              // the raw multi-channel export (morphology / cardio-load).
+              final r = s['red'];
+              final ir = s['infrared'];
+              final ax = s['accel_x'];
+              final ay = s['accel_y'];
+              final az = s['accel_z'];
+              _ppgRedAll.add(r is num ? r.toDouble() : 0.0);
+              _ppgIrAll.add(ir is num ? ir.toDouble() : 0.0);
+              _ppgAccelXAll.add(ax is num ? ax.toInt() : 0);
+              _ppgAccelYAll.add(ay is num ? ay.toInt() : 0);
+              _ppgAccelZAll.add(az is num ? az.toInt() : 0);
+              _ppgEpochMsAll.add(nowMs);
+              // Full packet map, verbatim, for the per-packet export lines.
+              _ppgRawSamples.add(Map<String, dynamic>.from(s));
+            }
+            if (gv > 0) {
+              _ppgGreenBuffer.add(gv);
+            } else {
+              _greenZeroCount++;
+            }
           }
         }
         // HLT-5: feed every accel triple into the Fall Watch buffer.
@@ -282,6 +364,16 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
   void dispose() {
     for (final s in _subs) {
       s.cancel();
+    }
+    // If a raw capture is still running, stop it so the band's LEDs don't stay
+    // lit (and keep draining battery) after we leave the screen. Fire the stop
+    // commands directly — `_stopActiveCapture` touches state/UI we can't use
+    // post-dispose.
+    _captureStopTimer?.cancel();
+    if (_capturing) {
+      final ble = ref.read(bleServiceProvider);
+      ble.stopMeasure().catchError((_) {});
+      ble.stopMeasureSpo2Raw().catchError((_) {});
     }
     super.dispose();
   }
@@ -800,6 +892,115 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
     }
   }
 
+  /// Pull every sleep session the band still has buffered (it retains ~7
+  /// days) in one go, persist them all, then re-aggregate the window so
+  /// daily_metrics + the Home/Sleep screens reflect the full history.
+  Future<void> _syncAllSleep() async {
+    if (!_requireSession()) return;
+    const maxDayOffset = 7; // H59 retains ~7 days of sleep history
+    final offsets = [for (var d = 0; d <= maxDayOffset; d++) d];
+    _push('Sync All Sleep: pulling day offsets 0–$maxDayOffset '
+        '(${offsets.length} BLE round-trips)...');
+    final results = await ref.read(syncServiceProvider).syncSleepRange(
+          userId: _activeUserId!,
+          deviceId: _activeDeviceId!,
+          offsets: offsets,
+        );
+    var sessions = 0;
+    var epochs = 0;
+    for (var i = 0; i < results.length; i++) {
+      final res = results[i];
+      final label = i == 0 ? 'today' : '$i d ago';
+      if (!res.ok) {
+        _push('  offset $i ($label): error ${res.error}');
+        continue;
+      }
+      if (res.count == 0) {
+        _push('  offset $i ($label): ${res.note ?? "no sleep"}');
+        continue;
+      }
+      sessions++;
+      epochs += res.count;
+      final startedAt = (res.extra?['startedAt'] as String?) ?? '';
+      final shortStarted = startedAt.length >= 16
+          ? startedAt.substring(0, 16).replaceFirst('T', ' ')
+          : startedAt;
+      _push('  offset $i ($label): $shortStarted, '
+          '${res.extra?['totalMin']}min, ${res.count} epochs');
+    }
+    _push('Sync All Sleep: $sessions session(s), $epochs epoch(s) persisted');
+    try {
+      await ref.read(dailyAggregatorProvider).aggregateRecent(
+            userId: _activeUserId!,
+            days: maxDayOffset + 1,
+          );
+      _push('  aggregated last ${maxDayOffset + 1} days');
+    } catch (e) {
+      _push('  aggregate failed: $e');
+    }
+    // Build a clean, paste-ready export of everything now stored and put it on
+    // the clipboard so it can be sent straight to Ryan.
+    await _exportAllSleepToClipboard();
+  }
+
+  /// Read every stored sleep session (trailing 30 days) + its epochs and copy
+  /// a clean JSON blob to the clipboard. This is the canonical model shape
+  /// (parsed, not raw band payload): `DateTime`s as ISO-8601, stages as enum
+  /// names — exactly what drop-in Dart would consume.
+  Future<void> _exportAllSleepToClipboard() async {
+    if (!_requireSession()) return;
+    final repo = ref.read(sleepRepositoryProvider);
+    final now = DateTime.now().toUtc();
+    final sessions = await repo.getInRange(
+      userId: _activeUserId!,
+      from: now.subtract(const Duration(days: 30)),
+      to: now.add(const Duration(days: 1)),
+      type: SleepSessionType.night,
+    );
+    final out = <String, dynamic>{
+      'exported_at': now.toIso8601String(),
+      'user_id': _activeUserId,
+      'session_count': sessions.length,
+      'stage_enum': 'awake, light, deep, rem, noSleep, unweared',
+      'sessions': <dynamic>[],
+    };
+    for (final s in sessions) {
+      final eps = await repo.getEpochsForSession(s.id);
+      (out['sessions'] as List).add({
+        'id': s.id,
+        'started_at': s.startedAt.toIso8601String(),
+        'ended_at': s.endedAt.toIso8601String(),
+        'tz_offset_min': s.tzOffsetMin,
+        'protocol_version': s.protocolVersion, // 2 = REM-capable
+        'total_min': s.totalMin,
+        'deep_min': s.deepMin,
+        'light_min': s.lightMin,
+        'rem_min': s.remMin,
+        'awake_min': s.awakeMin,
+        'coverage_gap_min': s.coverageGapMin,
+        'efficiency_pct': s.efficiencyPct,
+        'has_unweared': s.hasUnweared,
+        'epochs': [
+          for (final e in eps)
+            {
+              'started_at': e.startedAt.toIso8601String(),
+              'duration_min': e.durationMin,
+              'stage': e.stage.name,
+            }
+        ],
+      });
+    }
+    final json = const JsonEncoder.withIndent('  ').convert(out);
+    await Clipboard.setData(ClipboardData(text: json));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content:
+          Text('Sleep export copied (${sessions.length} sessions)')),
+    );
+    _push('📋 Sleep export copied to clipboard — ${sessions.length} '
+        'session(s) as JSON (paste & send to Ryan)');
+  }
+
   Future<void> _getSteps() async {
     if (!_requireSession()) return;
     _push('getDailyTotals: requesting...');
@@ -1097,6 +1298,37 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
         '(${result.totalSamples} total samples)');
   }
 
+  /// Manual cloud sync: enqueue recent local rows + drain the outbox to
+  /// Supabase. Used to smoke-test the cloud path without waiting for the
+  /// 30-min periodic tick.
+  Future<void> _pushToCloud() async {
+    final authUid = ref.read(currentUserIdProvider);
+    if (authUid == null) {
+      _push('cloud push: no auth UID — sign in via Settings → Account first');
+      return;
+    }
+    final localUserId = _activeUserId ?? ActiveSession.defaultUserId;
+    final cloudSync = ref.read(cloudSyncServiceProvider);
+    _push('cloud push: enqueueing recent metrics + identity for $localUserId...');
+    try {
+      await cloudSync.enqueueRecentMetrics(userId: localUserId);
+      await cloudSync.enqueueIdentity(userId: localUserId);
+    } catch (e) {
+      _push('  enqueue error: $e');
+      return;
+    }
+    _push('cloud push: draining outbox to Supabase (auth=$authUid)...');
+    try {
+      final result = await cloudSync.processOutbox(authUserId: authUid);
+      _push('  pushed=${result.pushed} failed=${result.failed}');
+      for (final err in result.errors) {
+        _push('  ✗ $err');
+      }
+    } catch (e) {
+      _push('  processOutbox error: $e');
+    }
+  }
+
   Future<void> _aggregate() async {
     final userId = _activeUserId ?? ActiveSession.defaultUserId;
     _push('aggregate: rebuilding last 14 days of daily_metrics...');
@@ -1343,33 +1575,82 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
     setState(() {});
   }
 
+  /// Clear every capture buffer + counter so a fresh capture starts clean.
+  /// Shared by the green-only HR raw capture and the red/IR SpO2 raw capture.
+  void _resetCaptureBuffers() {
+    setState(() => _ppgPacketCount = 0);
+    _ppgGreenBuffer.clear();
+    _ppgCountSeq.clear();
+    _ppgGreenAll.clear();
+    _ppgRedAll.clear();
+    _ppgIrAll.clear();
+    _ppgAccelXAll.clear();
+    _ppgAccelYAll.clear();
+    _ppgAccelZAll.clear();
+    _ppgEpochMsAll.clear();
+    _ppgRawSamples.clear();
+    _greenZeroCount = 0;
+    _captureStartMs = DateTime.now().millisecondsSinceEpoch;
+    _captureEndMs = null;
+    _capturing = true;
+  }
+
+  /// Stop whatever raw capture is running and turn the LEDs off. Sends BOTH
+  /// the HR-mode and SpO2-mode stop commands — the band may be in either raw
+  /// mode, and an extra stop for the inactive mode is a harmless no-op, so
+  /// this guarantees the green and red/IR LEDs both go dark. The band calls
+  /// run regardless of widget lifecycle (ref captured up front) so leaving the
+  /// screen still kills the measurement; only the log lines are mounted-gated.
+  Future<void> _stopActiveCapture({bool announce = true}) async {
+    _captureStopTimer?.cancel();
+    _captureStopTimer = null;
+    final ble = ref.read(bleServiceProvider);
+    final wasCapturing = _capturing;
+    try {
+      await ble.stopMeasure();
+    } catch (e) {
+      if (mounted) _push('HR-mode stop error: $e');
+    }
+    try {
+      await ble.stopMeasureSpo2Raw();
+    } catch (e) {
+      if (mounted) _push('SpO2-mode stop error: $e');
+    }
+    if (wasCapturing) {
+      _captureEndMs = DateTime.now().millisecondsSinceEpoch;
+    }
+    _capturing = false;
+    if (announce && mounted) {
+      _push('Capture stopped — LEDs off (packets=$_ppgPacketCount)');
+    }
+  }
+
   Future<void> _capturePpg() async {
     if (!_connected) {
       _push('PPG capture: not connected');
       return;
     }
-    setState(() => _ppgPacketCount = 0);
-    _ppgGreenBuffer.clear();
-    _captureStartMs = DateTime.now().millisecondsSinceEpoch;
-    _captureEndMs = null;
-    _capturing = true;
-    _push('PPG capture: starting 90s measurement...');
+    // Stop any in-flight capture first so we never stack two measurements on
+    // the band (the cause of LEDs staying lit).
+    await _stopActiveCapture(announce: false);
+    _resetCaptureBuffers();
+    _push('PPG capture: starting ${_rawCaptureSeconds}s measurement...');
     try {
       // HLT-7 needs ≥60s of clean tachogram for stable LF/HF; 90s
       // gives ~60s after the bandpass ±2s trim, matching the
       // wearable-industry standard for frequency-domain HRV.
-      final r = await ref.read(bleServiceProvider).startMeasureHrRaw(durationSec: 90);
+      final r = await ref
+          .read(bleServiceProvider)
+          .startMeasureHrRaw(durationSec: _rawCaptureSeconds);
       _push('PPG capture: started $r');
-      // Auto-stop after 91s in case the band keeps streaming.
-      Future.delayed(const Duration(seconds: 91), () async {
-        if (!mounted) return;
-        try {
-          await ref.read(bleServiceProvider).stopMeasure();
-          _captureEndMs = DateTime.now().millisecondsSinceEpoch;
-          _capturing = false;
-          _push('PPG capture: stopped — total packets=$_ppgPacketCount');
-        } catch (e) {
-          _push('PPG stop error: $e');
+      // Auto-stop when the window is up — the single source of truth for
+      // ending the capture and turning the LED off.
+      _captureStopTimer =
+          Timer(const Duration(seconds: _rawCaptureSeconds), () async {
+        await _stopActiveCapture(announce: false);
+        if (mounted) {
+          _push('PPG capture: auto-stopped after ${_rawCaptureSeconds}s — '
+              'total packets=$_ppgPacketCount');
         }
       });
     } catch (e) {
@@ -1377,182 +1658,85 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
     }
   }
 
+  /// Blood-oxygen raw capture — drives the red + IR LEDs. Buffers into the
+  /// same channels as [_capturePpg] so Analyze / Export Raw work unchanged;
+  /// the point of this capture is to see whether the red/IR columns come back
+  /// nonzero (HR raw mode is green-only).
+  Future<void> _captureSpo2Raw() async {
+    if (!_connected) {
+      _push('SpO2 raw capture: not connected');
+      return;
+    }
+    await _stopActiveCapture(announce: false);
+    _resetCaptureBuffers();
+    _push('SpO2 raw capture: starting ${_rawCaptureSeconds}s measurement '
+        '(red + IR LEDs)...');
+    try {
+      final r = await ref
+          .read(bleServiceProvider)
+          .startMeasureSpo2Raw(durationSec: _rawCaptureSeconds);
+      _push('SpO2 raw capture: started $r');
+      _captureStopTimer =
+          Timer(const Duration(seconds: _rawCaptureSeconds), () async {
+        await _stopActiveCapture(announce: false);
+        if (mounted) {
+          _push('SpO2 raw capture: auto-stopped after ${_rawCaptureSeconds}s — '
+              'total packets=$_ppgPacketCount. '
+              'Tap Export Raw to check the red/infrared columns.');
+        }
+      });
+    } catch (e) {
+      _push('SpO2 raw capture error: $e');
+    }
+  }
+
   Future<void> _analyzePpg() async {
-    final samples = _ppgGreenBuffer;
-    if (samples.length < 100) {
-      _push('Analyze: need more samples — buffer has ${samples.length}. Tap Capture PPG first.');
+    if (_ppgGreenBuffer.length < 100) {
+      _push('Analyze: need more samples — buffer has ${_ppgGreenBuffer.length}. Tap Capture PPG first.');
       return;
     }
 
     final endMs = _captureEndMs ?? DateTime.now().millisecondsSinceEpoch;
     final startMs = _captureStartMs ?? endMs;
     final durationS = ((endMs - startMs) / 1000.0).clamp(1.0, 9999.0);
-    final fsNative = (samples.length / durationS).round().clamp(5, 200);
-    _push('Analyze: ${samples.length} samples over ${durationS.toStringAsFixed(1)}s → fs_native ≈ $fsNative Hz');
 
-    // Diagnostic: raw signal stats (helps see if band actually captured PPG).
-    final raw = Float64List.fromList(samples);
-    final rawStats = _stats(raw);
-    _push('  raw: min=${rawStats.min.toStringAsFixed(0)} max=${rawStats.max.toStringAsFixed(0)} mean=${rawStats.mean.toStringAsFixed(0)} std=${rawStats.std.toStringAsFixed(1)}');
-
-    // Defensive outlier clip at ±3σ. The reference pipeline
-    // (`hlth_pipeline/pipeline/filters.py`) doesn't clip — but the H59's
-    // optical sensor occasionally saturates the 16-bit ADC at 65535,
-    // producing single-sample spikes that bleed straight through the
-    // 0.5-5Hz bandpass and inflate its std. Once std is inflated, the
-    // adaptive height threshold inside detectPeaks (median + 0.3·σ)
-    // rises above real cardiac peak amplitude and they get rejected.
-    // 3σ is permissive enough to leave the cardiac waveform untouched
-    // (real modulation sits inside ±2σ) while still catching the
-    // saturation rail and gain-step jumps that the band emits.
-    final clipLo = rawStats.mean - 3.0 * rawStats.std;
-    final clipHi = rawStats.mean + 3.0 * rawStats.std;
-    var clippedCount = 0;
-    for (int i = 0; i < raw.length; i++) {
-      if (raw[i] < clipLo) {
-        raw[i] = clipLo;
-        clippedCount++;
-      } else if (raw[i] > clipHi) {
-        raw[i] = clipHi;
-        clippedCount++;
-      }
-    }
-    if (clippedCount > 0) {
-      final clippedStats = _stats(raw);
-      _push('  clipped $clippedCount outliers (>3σ) → new std=${clippedStats.std.toStringAsFixed(1)}');
-    }
-
-    // Try BOTH polarities: inverted (per primer line 53) and as-is. Pick
-    // whichever gives more peaks. This way we don't have to guess which
-    // direction H59 reports.
-    const fsTarget = 75;
-    final upsampledPos = _linearResample(raw, fsNative, fsTarget);
-
-    // DC removal before bandpass. H59 PPG sits at a ~30k DC offset; our
-    // biquad bandpass + filtfilt starts at zero state, so the offset
-    // looks like a giant step input and the filter rings for hundreds of
-    // samples settling. That ringing pulse dominates the bandpass output
-    // (bandpassed max=10k-12k from a raw std of ~1000 on the first
-    // captures), inflates std, and pushes the peak-height threshold
-    // above real cardiac amplitude. scipy's `sosfiltfilt` avoids this by
-    // initialising state to steady-state; cheaper here to just subtract
-    // the mean so the filter sees a zero-mean input from sample 0.
-    double sum = 0;
-    for (final v in upsampledPos) {
-      sum += v;
-    }
-    final dc = sum / upsampledPos.length;
-    for (int i = 0; i < upsampledPos.length; i++) {
-      upsampledPos[i] -= dc;
-    }
-    final upsampledNeg = Float64List.fromList(upsampledPos.map((v) => -v).toList());
-    _push('  resampled ${samples.length} → ${upsampledPos.length} samples @ ${fsTarget}Hz, dc=${dc.toStringAsFixed(0)} removed');
-
-    final sp = SignalProcessor(samplingRate: fsTarget);
-
-    // Run cardiac bandpass on both polarities.
-    final cardiacPosFull = sp.bandpassFilter(upsampledPos, 0.5, 5.0);
-    final cardiacNegFull = sp.bandpassFilter(upsampledNeg, 0.5, 5.0);
-
-    // Trim 2s on each side of the bandpassed signal. The biquad IIR
-    // rings for ~1-2s at the start/end of filtfilt, and the H59 also
-    // emits mid-capture gain-step jumps that produce edge-like
-    // transients in the bandpass output. Including those samples in the
-    // std calculation drives the adaptive height threshold above real
-    // cardiac amplitude. 27s of trimmed signal is still ample for HRV
-    // (>20 beats at any reasonable HR).
-    const trimSamples = fsTarget * 2;
-    final canTrim = cardiacPosFull.length > trimSamples * 2 + 100;
-    final cardiacPos = canTrim
-        ? Float64List.fromList(cardiacPosFull.sublist(
-            trimSamples, cardiacPosFull.length - trimSamples))
-        : cardiacPosFull;
-    final cardiacNeg = canTrim
-        ? Float64List.fromList(cardiacNegFull.sublist(
-            trimSamples, cardiacNegFull.length - trimSamples))
-        : cardiacNegFull;
-    final cpStats = _stats(cardiacPos);
-    _push('  bandpassed (0.5-5Hz${canTrim ? ", trimmed ±2s" : ""}): min=${cpStats.min.toStringAsFixed(1)} max=${cpStats.max.toStringAsFixed(1)} std=${cpStats.std.toStringAsFixed(2)}');
-
-    final peaksPos = sp.detectPeaks(cardiacPos);
-    final peaksNeg = sp.detectPeaks(cardiacNeg);
-    _push('  peaks: as-is=${peaksPos.length}, inverted=${peaksNeg.length}');
-
-    // Pick the polarity with more peaks.
-    final useInverted = peaksNeg.length > peaksPos.length;
-    final cardiac = useInverted ? cardiacNeg : cardiacPos;
-    final peaks = useInverted ? peaksNeg : peaksPos;
-    final upsampled = useInverted ? upsampledNeg : upsampledPos;
-    _push('  using polarity: ${useInverted ? "inverted" : "as-is"}');
-
-    if (peaks.isEmpty) {
-      _push('  ❌ no peaks detected at all — signal may be flat or too noisy');
-      return;
-    }
-
-    // Cardiac pipeline
-    try {
-      final rrIntervals = sp.extractRRIntervals(peaks);
-      _push('  cardiac: ${peaks.length} peaks, ${rrIntervals.length} valid R-R intervals (300-2000ms)');
-      if (rrIntervals.isNotEmpty) {
-        final hr = sp.calculateHeartRate(rrIntervals);
-        _push('  HR: ${hr ?? "—"} bpm');
-        final calc = HrvCalculator();
-        final cleanedRr = calc.cleanEctopics(rrIntervals);
-        final dropped = rrIntervals.length - cleanedRr.length;
-        _push('  ectopic cleaning (Malik, 2-beat ratio, ±20%): ${rrIntervals.length} → ${cleanedRr.length} ($dropped dropped)');
-        final hrv = calc.calculate(
-          cleanedRr,
-          policy: EctopicCleaningPolicy.none,
+    // The capture → metrics pipeline lives in PpgAnalysisService so the
+    // headless scheduled-capture path (Step 3) and this debug screen share
+    // one implementation. The service returns the same step-by-step log
+    // lines we used to build inline, plus a structured result + quality
+    // verdict. Pass the band's own HR so the gate's HR cross-check runs.
+    final result = ref.read(ppgAnalysisServiceProvider).analyze(
+          counts: _ppgCountSeq,
+          greens: _ppgGreenAll,
+          greenZeroCount: _greenZeroCount,
+          durationSec: durationS,
+          bandHr: _lastRealtimeHr,
         );
-        if (hrv != null) {
-          _push('  HRV: rmssd=${hrv.rmssd.toStringAsFixed(1)}ms sdnn=${hrv.sdnn.toStringAsFixed(1)}ms pnn50=${hrv.pnn50.toStringAsFixed(1)}%');
-        } else {
-          _push('  HRV: need ≥10 clean beats (have ${cleanedRr.length})');
-        }
-
-        // HLT-7: frequency-domain HRV. LF=0.04-0.15Hz, HF=0.15-0.4Hz.
-        // Needs ≥25s of tachogram; 90s capture gives ~60s after trim,
-        // matching the wearable-industry minimum. LF values from
-        // tachograms under ~60s are flagged as unstable in the log.
-        final fdHrv = FrequencyDomainHrv().calculate(cleanedRr);
-        if (fdHrv != null) {
-          final stabilityNote = fdHrv.tachogramDurationS < 60
-              ? ' (LF unstable — tachogram <60s)'
-              : '';
-          _push('  HRV freq: lf=${fdHrv.lfPowerMs2.toStringAsFixed(0)}ms² hf=${fdHrv.hfPowerMs2.toStringAsFixed(0)}ms² lf/hf=${fdHrv.lfHfRatio.toStringAsFixed(2)}$stabilityNote');
-        } else {
-          _push('  HRV freq: need ≥25s of clean tachogram (have ${cleanedRr.length} beats)');
-        }
-      } else {
-        _push('  no valid R-R intervals — peaks may be too irregular');
-      }
-    } catch (e) {
-      _push('  cardiac pipeline error: $e');
+    for (final line in result.log) {
+      _push(line);
     }
+    _lastPpgResult = result;
+    _push('  → R-R series ready (${result.rrIntervalsMs.length} intervals) — '
+        'tap the R-R export button to copy for tuning');
 
-    // Respiratory pipeline
-    try {
-      final rr = RespiratoryRateCalculator(samplingRate: fsTarget).calculate(upsampled);
-      _push('  respiratory rate: ${rr ?? "—"} breaths/min');
-      // HLT-8: persist into today's daily_metrics so the morning aggregator
-      // and 14-day baseline pick it up. On H59 the band doesn't stream PPG
-      // continuously — the only RR signal we have is what Analyze derives
-      // from a user-triggered PPG capture, so this is the canonical write
-      // path. daily_aggregator does not touch restingRespRateBpm, so the
-      // value survives subsequent Aggregate Day runs.
-      if (rr != null && _activeUserId != null) {
-        await _persistRespRateForToday(rr);
-      }
-    } catch (e) {
-      _push('  respiratory pipeline error: $e');
+    // HLT-8: persist resting respiratory into today's daily_metrics, but
+    // only when the capture cleared the quality gate — a rejected capture
+    // writes nothing rather than poisoning the day's metric.
+    if (result.passedQualityGate &&
+        result.respRateBpm != null &&
+        _activeUserId != null) {
+      await _persistRespRateForToday(result);
+      // Refresh the home "today" provider in case it was built on an earlier
+      // calendar day (app left open) and is still watching the wrong date —
+      // otherwise this fresh write lands on a day nothing is observing.
+      ref.invalidate(todayDailyMetricsProvider);
     }
   }
 
-  /// HLT-8: upsert today's `restingRespRateBpm` without clobbering other
-  /// daily_metrics columns. Mirrors the merge pattern in `_aggregate` and
-  /// the step-sync persistence path.
-  Future<void> _persistRespRateForToday(double respRateBpm) async {
+  /// HLT-8: upsert today's `restingRespRateBpm` + rhythm-irregularity metrics
+  /// without clobbering other daily_metrics columns. Mirrors the merge
+  /// pattern in `_aggregate` and the step-sync persistence path.
+  Future<void> _persistRespRateForToday(PpgAnalysisResult result) async {
     final now = DateTime.now();
     final localDate = DateTime(now.year, now.month, now.day);
     final tzOffsetMin = now.timeZoneOffset.inMinutes;
@@ -1573,46 +1757,15 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
               source: DataSource.appRecomputed,
             ))
         .copyWith(
-      restingRespRateBpm: respRateBpm,
+      restingRespRateBpm: result.respRateBpm,
+      rrIrregularityPct: result.rrIrregularityPct ?? existing?.rrIrregularityPct,
+      ectopicBeatPct: result.ectopicBeatPct ?? existing?.ectopicBeatPct,
       computedAt: nowUtc,
     );
     await repo.upsert(merged);
-    _push('  persisted resting_resp_rate_bpm=${respRateBpm.toStringAsFixed(1)} for today');
-  }
-
-  ({double min, double max, double mean, double std}) _stats(Float64List s) {
-    if (s.isEmpty) return (min: 0, max: 0, mean: 0, std: 0);
-    double mn = s[0], mx = s[0], sum = 0;
-    for (final v in s) {
-      if (v < mn) mn = v;
-      if (v > mx) mx = v;
-      sum += v;
-    }
-    final mean = sum / s.length;
-    double sq = 0;
-    for (final v in s) {
-      final d = v - mean;
-      sq += d * d;
-    }
-    final variance = sq / s.length;
-    return (min: mn, max: mx, mean: mean, std: math.sqrt(variance));
-  }
-
-  /// Linear interpolation resampler. Native fs → target fs. Good enough
-  /// for cardiac (0.5-5 Hz) and respiratory (0.1-0.5 Hz) bands.
-  Float64List _linearResample(Float64List signal, int fsIn, int fsOut) {
-    if (fsIn == fsOut) return signal;
-    final newLength = (signal.length * fsOut / fsIn).round();
-    final out = Float64List(newLength);
-    final ratio = (signal.length - 1) / (newLength - 1);
-    for (int i = 0; i < newLength; i++) {
-      final src = i * ratio;
-      final lo = src.floor();
-      final hi = (lo + 1).clamp(0, signal.length - 1);
-      final frac = src - lo;
-      out[i] = signal[lo] * (1 - frac) + signal[hi] * frac;
-    }
-    return out;
+    _push('  persisted resp=${result.respRateBpm?.toStringAsFixed(1)} '
+        'irregularity=${result.rrIrregularityPct?.toStringAsFixed(1) ?? "—"}% '
+        'ectopic=${result.ectopicBeatPct?.toStringAsFixed(1) ?? "—"}% for today');
   }
 
   Future<void> _showDbCounts() async {
@@ -1641,12 +1794,154 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
     }
   }
 
+  /// Smoke-test the local-notification pipe end-to-end: init → request
+  /// permission → fire one notification. Proves `flutter_local_notifications`
+  /// works on this device before the alert rules engine is built on top.
+  Future<void> _sendTestNotification() async {
+    final notifications = ref.read(notificationServiceProvider);
+    _push('Test notification: initializing…');
+    try {
+      await notifications.init();
+      final granted = await notifications.requestPermission();
+      _push('  permission granted: $granted');
+      if (!granted) {
+        _push('  ⚠️ denied — enable notifications for HLTH in system settings');
+        return;
+      }
+      await notifications.show(
+        id: 9001,
+        title: 'HLTH test alert',
+        body: 'If you can see this, local notifications work. 🎉',
+        channel: AlertChannel.alert,
+      );
+      _push('  ✅ fired — check your notification shade');
+    } catch (e) {
+      _push('  ❌ test notification error: $e');
+    }
+  }
+
+  /// Run the alert rules engine once and log each rule's outcome. Lets us
+  /// verify the evaluator → notification → log pipeline on-device without
+  /// waiting for a real trigger condition (e.g. 3-day retention staleness).
+  Future<void> _evaluateAlerts() async {
+    final evaluator = ref.read(alertEvaluatorProvider);
+    final userId = _activeUserId ?? ActiveSession.defaultUserId;
+    _push('Evaluate alerts: running rules…');
+    try {
+      final results = await evaluator.evaluateAll(userId: userId);
+      for (final r in results) {
+        _push('  ${r.type}: ${r.fired ? "🔔 FIRED" : r.reason}');
+      }
+    } catch (e) {
+      _push('  ❌ evaluate error: $e');
+    }
+  }
+
+  /// Run the headless scheduled-capture pipeline on demand (bypasses the
+  /// once-daily gate) so we can verify Step 3 without waiting for the tick.
+  /// Blocks for the full capture window (~3 min) then logs the outcome.
+  Future<void> _scheduledCaptureNow() async {
+    final svc = ref.read(scheduledPpgCaptureServiceProvider);
+    final userId = _activeUserId ?? ActiveSession.defaultUserId;
+    _push('Scheduled capture: starting ~3-min PPG capture… (sit still)');
+    final result = await svc.captureAndPersist(userId: userId);
+    if (result == null) {
+      _push('  ⚠️ skipped — band not connected, capture in flight, or too few samples');
+      return;
+    }
+    for (final line in result.log) {
+      _push(line);
+    }
+    if (result.passedQualityGate) {
+      _push('  ✅ persisted to today — resp=${result.respRateBpm ?? "—"} bpm, '
+          'rmssd=${result.hrvRmssdMs?.toStringAsFixed(1) ?? "—"}ms');
+    } else {
+      _push('  ⚠️ not persisted — quality gate rejected');
+    }
+  }
+
+  /// Probe whether the H59 supports per-minute (interval) SpO2 — the
+  /// granularity a breathing-disruption alert needs. Proper sequence:
+  ///   1. read the capability bitmap (authoritative yes/no),
+  ///   2. if supported, ENABLE per-minute interval monitoring (this is the
+  ///      step that was missing before — interval SpO2 is off by default,
+  ///      so an un-enabled read just times out and looks "unsupported"),
+  ///   3. read back the setting to confirm it stuck,
+  ///   4. attempt an immediate read (likely sparse until worn overnight).
+  Future<void> _probeSpo2Interval() async {
+    final ble = ref.read(bleServiceProvider);
+    _push('SpO2 interval probe — step 1: reading device capability…');
+    try {
+      final cap = await ble.getSpO2Capability();
+      if (cap['ok'] != true) {
+        _push('  ⚠️ capability read failed/timed out — retry while connected');
+        return;
+      }
+      final supported = cap['supportIntervalBloodOxygen'] == true;
+      _push('  supportIntervalBloodOxygen=$supported '
+          '(hr=${cap['supportIntervalHeartRate']}, temp=${cap['supportIntervalTemperature']})');
+      if (!supported) {
+        _push('  ⚠️ capability reports false — trying enable anyway (bitmap may under-report)');
+      }
+
+      _push('SpO2 interval probe — step 2: enabling interval monitoring (interval=2)…');
+      final en = await ble.enableSpO2Interval(enable: true, intervalMinutes: 2);
+      _push('  read-back: isEnable=${en['isEnable']} interval=${en['interval']}min');
+      if (en['isEnable'] != true) {
+        _push('  ⚠️ enable did not stick — band may need re-bind/reconnect');
+      }
+
+      _push('SpO2 interval probe — step 3: reading today\'s buffer…');
+      final r = await ble.getSpO2Interval(dayOffset: 0);
+      final total = r['total'] ?? 0;
+      final nonZero = r['nonZero'] ?? 0;
+      if (r['timedOut'] == true) {
+        _push('  (empty buffer — expected right after enabling)');
+      } else {
+        _push('  total=$total samples, nonZero=$nonZero, '
+            'min=${r['min']}%, max=${r['max']}%');
+      }
+      if (nonZero > 0) {
+        _push('  ✅ per-minute SpO2 flowing — breathing-disruption alert is feasible');
+      } else {
+        _push('  ✅ supported + enabled. WEAR OVERNIGHT, then re-tap to read the buffer.');
+      }
+    } catch (e) {
+      _push('  ❌ probe error: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('BLE Debug'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.bloodtype_outlined),
+            onPressed: _probeSpo2Interval,
+            tooltip: 'Probe interval SpO2',
+          ),
+          IconButton(
+            icon: const Icon(Icons.timelapse),
+            onPressed: _scheduledCaptureNow,
+            tooltip: 'Scheduled capture now (~3 min)',
+          ),
+          IconButton(
+            icon: const Icon(Icons.notifications_active_outlined),
+            onPressed: _sendTestNotification,
+            tooltip: 'Send test notification',
+          ),
+          IconButton(
+            icon: const Icon(Icons.fact_check_outlined),
+            onPressed: _evaluateAlerts,
+            tooltip: 'Evaluate alert rules',
+          ),
+          IconButton(
+            icon: const Icon(Icons.monitor_heart_outlined),
+            onPressed: _exportRrToClipboard,
+            tooltip: 'Export R-R series (for cleaner tuning)',
+          ),
           IconButton(
             icon: Icon(_logMaximized ? Icons.fullscreen_exit : Icons.fullscreen),
             onPressed: () =>
@@ -1686,6 +1981,20 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
               ),
               const Divider(height: 1),
               _CollapsibleSection(
+                title: 'Battery drain test (24h)',
+                expanded: _batteryTestExpanded,
+                onToggle: () => setState(
+                    () => _batteryTestExpanded = !_batteryTestExpanded),
+                child: _BatteryTestPanel(
+                  startedAt: _batteryTestStartedAt,
+                  selectedIntervalMin: _selectedSyncIntervalMin,
+                  onSelectInterval: _setSyncInterval,
+                  onStartNewTest: _startBatteryTest,
+                  onExportCsv: _exportBatteryTestCsv,
+                ),
+              ),
+              const Divider(height: 1),
+              _CollapsibleSection(
                 title: 'Actions',
                 expanded: _actionsExpanded,
                 onToggle: () =>
@@ -1703,9 +2012,13 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
                   onSpo2Day: _getSpo2SpecificDay,
                   onSpo2: _getSpo2,
                   onSleep: _getSleep,
+                  onSyncAllSleep: _syncAllSleep,
                   onSteps: _getSteps,
                   onCapturePpg: _capturePpg,
+                  onCaptureSpo2Raw: _captureSpo2Raw,
+                  onStopCapture: () => _stopActiveCapture(),
                   onAnalyzePpg: _analyzePpg,
+                  onExportRaw: _exportRawCaptureToClipboard,
                   onDbCounts: _showDbCounts,
                   onAggregate: _aggregate,
                   onHrv: _getHrv,
@@ -1723,6 +2036,7 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
                   onStepBuckets: _getStepBuckets,
                   onStepDay: _getStepSpecificDay,
                   onRunAll: _runAllSyncs,
+                  onPushCloud: _pushToCloud,
                   onToggleFallWatch: _toggleFallWatch,
                   fallWatchActive: _fallWatchActive,
                   fallWatchLastMagG: _fallLastMagG,
@@ -1834,6 +2148,198 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
         ),
       ),
     );
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Battery drain test — Ryan's "Priority 2" from the 2026-06-17 sync.
+  // Toggles native sync cadence (10/15/30 min) and tracks band+phone
+  // battery deltas in the `battery_telemetry` table. Lives here (not in
+  // Settings) because it's a debug-only diagnostic — production users
+  // should never see this control.
+  // ──────────────────────────────────────────────────────────────────────
+
+  Future<void> _loadBatteryTestState() async {
+    final prefs = await SharedPreferences.getInstance();
+    final startSec = prefs.getInt(_kBatteryTestStartKey);
+    final interval = prefs.getInt(_kBatteryTestIntervalKey) ?? 30;
+    // Re-apply the persisted cadence on the native side (the native default
+    // is 30 — if the user previously selected 10 we need to push it back
+    // every cold start).
+    final ble = ref.read(bleServiceProvider);
+    final applied = await ble.setSyncIntervalMinutes(interval);
+    if (!mounted) return;
+    setState(() {
+      _selectedSyncIntervalMin = applied?.minutes ?? interval;
+      _batteryTestStartedAt = startSec == null
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(startSec * 1000, isUtc: true);
+    });
+  }
+
+  Future<void> _setSyncInterval(int minutes) async {
+    final ble = ref.read(bleServiceProvider);
+    final applied = await ble.setSyncIntervalMinutes(minutes);
+    if (applied == null) {
+      _push('Sync interval: failed (band not bound?)');
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_kBatteryTestIntervalKey, applied.minutes);
+    if (!mounted) return;
+    setState(() => _selectedSyncIntervalMin = applied.minutes);
+    _push('Sync cadence → ${applied.minutes} min'
+        '${applied.clamped ? " (clamped)" : ""}');
+  }
+
+  Future<void> _startBatteryTest() async {
+    // Reset the test marker AND log a baseline sample so the panel has
+    // start values immediately (don't make the user wait for the first
+    // periodic tick to see meaningful numbers).
+    final now = DateTime.now().toUtc();
+    final ble = ref.read(bleServiceProvider);
+    final repo = ref.read(batteryTelemetryRepositoryProvider);
+    final band = await ble.requestBattery();
+    await repo.insert(
+      bandBatteryPercent: band?.level,
+      bandCharging: band?.charging,
+      syncIntervalMin: _selectedSyncIntervalMin,
+      eventType: 'manual',
+    );
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(
+      _kBatteryTestStartKey,
+      now.millisecondsSinceEpoch ~/ 1000,
+    );
+    if (!mounted) return;
+    setState(() => _batteryTestStartedAt = now);
+    _push('Battery test started — band=${band?.level ?? "?"}% '
+        '@ $_selectedSyncIntervalMin min cadence');
+  }
+
+  Future<void> _exportBatteryTestCsv() async {
+    final since = _batteryTestStartedAt ??
+        DateTime.now().toUtc().subtract(const Duration(days: 1));
+    final repo = ref.read(batteryTelemetryRepositoryProvider);
+    final csv = await repo.exportCsv(since);
+    await Clipboard.setData(ClipboardData(text: csv));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Battery telemetry CSV copied to clipboard')),
+    );
+    _push('Exported ${csv.split('\n').length - 2} telemetry rows to clipboard');
+  }
+
+  /// Export the last Analyze's derived R-R series for off-device cleaner
+  /// tuning (Ryan's request). Copies a small JSON blob: the raw R-R array the
+  /// cleaner operates on, the post-cleaning array, plus the context he needs
+  /// (HR, loss, gate verdict) to set alpha/window against real data.
+  Future<void> _exportRrToClipboard() async {
+    final r = _lastPpgResult;
+    if (r == null || r.rrIntervalsMs.isEmpty) {
+      _push('No R-R series yet — Capture PPG then Analyze first.');
+      return;
+    }
+    String arr(List<double> xs) =>
+        '[${xs.map((v) => v.toStringAsFixed(1)).join(', ')}]';
+    final blob = StringBuffer()
+      ..writeln('{')
+      ..writeln('  "captured_at": "${DateTime.now().toIso8601String()}",')
+      ..writeln('  "hr_bpm": ${r.hrBpm?.toStringAsFixed(1) ?? "null"},')
+      ..writeln('  "fs_band_hz": ${r.fsNativeHz},')
+      ..writeln('  "ble_loss_pct": ${r.blePacketLossPct.toStringAsFixed(1)},')
+      ..writeln('  "passed_quality_gate": ${r.passedQualityGate},')
+      ..writeln('  "ectopic_dropped": ${r.ectopicDropped},')
+      ..writeln('  "rr_irregularity_pct": '
+          '${r.rrIrregularityPct?.toStringAsFixed(1) ?? "null"},')
+      ..writeln('  "ectopic_beat_pct": '
+          '${r.ectopicBeatPct?.toStringAsFixed(1) ?? "null"},')
+      ..writeln('  "rr_raw_ms": ${arr(r.rrIntervalsMs)},')
+      ..writeln('  "rr_cleaned_ms": ${arr(r.cleanedRrMs)}')
+      ..writeln('}');
+    await Clipboard.setData(ClipboardData(text: blob.toString()));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('R-R series copied '
+          '(${r.rrIntervalsMs.length} raw, ${r.cleanedRrMs.length} cleaned)')),
+    );
+    _push('Exported R-R series to clipboard — '
+        '${r.rrIntervalsMs.length} raw / ${r.cleanedRrMs.length} cleaned '
+        'intervals (paste into a message/file for Ryan)');
+  }
+
+  /// Export the full raw multi-channel capture for Ryan's morphology /
+  /// cardio-load work — one line per packet in the same map format as the
+  /// live log: every field the band emits (timestamp_ms, ppg_count,
+  /// green/red/IR, heart/rri/hrv, accel XYZ). A header carries the sample
+  /// count, fs, and a per-channel activity summary so it's obvious at a
+  /// glance which LEDs were driven.
+  Future<void> _exportRawCaptureToClipboard() async {
+    final n = _ppgCountSeq.length;
+    if (n == 0) {
+      _push('No raw capture buffered — tap Capture PPG first.');
+      return;
+    }
+    final fsHz = (_captureStartMs != null &&
+            _captureEndMs != null &&
+            _captureEndMs! > _captureStartMs!)
+        ? n / ((_captureEndMs! - _captureStartMs!) / 1000.0)
+        : null;
+
+    // Channel-activity check — the decisive test for whether the firmware
+    // actually streams red/IR in this manual-HR mode, or green only. A "dark"
+    // channel (0 nonzero) means the LED isn't driven in this mode regardless
+    // of the SDK exposing the field.
+    String channelSummary(String name, List<num> xs) {
+      var nonZero = 0;
+      num lo = 0, hi = 0;
+      var seen = false;
+      for (final v in xs) {
+        if (v != 0) {
+          nonZero++;
+          if (!seen) {
+            lo = v;
+            hi = v;
+            seen = true;
+          } else {
+            if (v < lo) lo = v;
+            if (v > hi) hi = v;
+          }
+        }
+      }
+      return nonZero == 0
+          ? '$name: DARK (0 nonzero of ${xs.length})'
+          : '$name: $nonZero nonzero, range $lo..$hi';
+    }
+
+    _push('── raw channel activity (n=$n) ──');
+    _push('  ${channelSummary("green", _ppgGreenAll)}');
+    _push('  ${channelSummary("red", _ppgRedAll)}');
+    _push('  ${channelSummary("infrared", _ppgIrAll)}');
+    _push('  ${channelSummary("accel_x", _ppgAccelXAll)}');
+
+    // Body: one line per packet, in the exact same map format as the live
+    // per-packet log (every field: green/red/IR + heart/rri/hrv + accel).
+    final buf = StringBuffer()
+      ..writeln('# hlth raw PPG capture')
+      ..writeln('# samples=$n '
+          'fs_hz=${fsHz?.toStringAsFixed(1) ?? "?"} '
+          'green_zero=$_greenZeroCount')
+      ..writeln('# ${channelSummary("green", _ppgGreenAll)}')
+      ..writeln('# ${channelSummary("red", _ppgRedAll)}')
+      ..writeln('# ${channelSummary("infrared", _ppgIrAll)}')
+      ..writeln('# ${channelSummary("accel_x", _ppgAccelXAll)}');
+    for (final s in _ppgRawSamples) {
+      buf.writeln(s);
+    }
+    await Clipboard.setData(ClipboardData(text: buf.toString()));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content:
+          Text('Raw capture copied (${_ppgRawSamples.length} packets)')),
+    );
+    _push('Exported raw multi-channel capture — ${_ppgRawSamples.length} packets '
+        '(full per-packet format: green/red/IR + heart/rri/hrv + accel) '
+        'to clipboard');
   }
 
   Future<void> _copyLogToClipboard() async {
@@ -1978,6 +2484,162 @@ class _StatusPanel extends StatelessWidget {
   }
 }
 
+/// Battery drain test panel — Ryan's "Priority 2" deliverable.
+///
+/// The panel does three things:
+///   1. Lets the user pick the periodic-sync cadence (10/15/30 min) at
+///      runtime — written to native via `BleService.setSyncIntervalMinutes`.
+///   2. Shows the start/now battery snapshot for band + phone with computed
+///      drain rates (%/hr) and 24h projections.
+///   3. Provides "Start new test" (resets the start marker + logs a baseline
+///      sample) and "Export CSV" (copies raw telemetry rows to clipboard).
+class _BatteryTestPanel extends ConsumerWidget {
+  const _BatteryTestPanel({
+    required this.startedAt,
+    required this.selectedIntervalMin,
+    required this.onSelectInterval,
+    required this.onStartNewTest,
+    required this.onExportCsv,
+  });
+
+  final DateTime? startedAt;
+  final int selectedIntervalMin;
+  final void Function(int) onSelectInterval;
+  final VoidCallback onStartNewTest;
+  final VoidCallback onExportCsv;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final since = startedAt ??
+        DateTime.now().toUtc().subtract(const Duration(hours: 24));
+    final summaryStream =
+        ref.watch(batteryTelemetryRepositoryProvider).watchSummary(since);
+    return StreamBuilder<BatteryDrainSummary>(
+      stream: summaryStream,
+      builder: (context, snap) {
+        final s = snap.data;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Cadence selector
+              const Text('Sync cadence', style: TextStyle(fontSize: 11)),
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 6,
+                children: [10, 15, 30].map((m) {
+                  final selected = m == selectedIntervalMin;
+                  return ChoiceChip(
+                    label: Text('$m min'),
+                    selected: selected,
+                    onSelected: (_) => onSelectInterval(m),
+                    visualDensity: VisualDensity.compact,
+                    labelStyle: const TextStyle(fontSize: 11),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 10),
+              // Test status
+              if (startedAt == null) ...[
+                const Text(
+                  'No test running. Pick a cadence above, then tap "Start new test" '
+                  'to log a baseline. Leave the app + band running for 24h.',
+                  style: TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+              ] else ...[
+                Text(
+                  'Test started ${_fmtElapsed(s?.elapsed)} ago '
+                  '· ${s?.sampleCount ?? 0} samples logged',
+                  style: const TextStyle(fontSize: 11),
+                ),
+                const SizedBox(height: 8),
+                _row(
+                  'Band',
+                  start: s?.firstBandPercent,
+                  now: s?.lastBandPercent,
+                  ratePerHr: s?.bandDrainPctPerHour,
+                  projected24h: s?.bandProjected24h,
+                ),
+              ],
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 6,
+                children: [
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.restart_alt, size: 14),
+                    label: Text(
+                      startedAt == null ? 'Start new test' : 'Restart test',
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                    onPressed: onStartNewTest,
+                    style: OutlinedButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.file_download_outlined, size: 14),
+                    label: const Text('Export CSV',
+                        style: TextStyle(fontSize: 11)),
+                    onPressed: onExportCsv,
+                    style: OutlinedButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _row(
+    String label, {
+    required int? start,
+    required int? now,
+    required double? ratePerHr,
+    required double? projected24h,
+  }) {
+    final rateText = ratePerHr == null
+        ? '…'
+        : '${ratePerHr.toStringAsFixed(2)}%/hr';
+    final projText = projected24h == null
+        ? '…'
+        : '${projected24h.toStringAsFixed(1)}% over 24h';
+    return Row(
+      children: [
+        SizedBox(
+          width: 50,
+          child: Text(label,
+              style: const TextStyle(
+                  fontSize: 11, fontWeight: FontWeight.w600)),
+        ),
+        Expanded(
+          child: Text(
+            'start ${start ?? "?"}% → now ${now ?? "?"}%',
+            style: const TextStyle(fontSize: 11),
+          ),
+        ),
+        Text(rateText,
+            style: const TextStyle(fontSize: 11, color: Colors.blueGrey)),
+        const SizedBox(width: 8),
+        Text(projText,
+            style: const TextStyle(fontSize: 11, color: Colors.blueGrey)),
+      ],
+    );
+  }
+
+  String _fmtElapsed(Duration? d) {
+    if (d == null || d == Duration.zero) return '0m';
+    final hours = d.inHours;
+    final minutes = d.inMinutes % 60;
+    if (hours == 0) return '${minutes}m';
+    return '${hours}h ${minutes}m';
+  }
+}
+
 class _ActionBar extends StatelessWidget {
   final bool scanning;
   final bool connected;
@@ -1991,9 +2653,13 @@ class _ActionBar extends StatelessWidget {
   final VoidCallback onSpo2;
   final VoidCallback onSpo2Day;
   final VoidCallback onSleep;
+  final VoidCallback onSyncAllSleep;
   final VoidCallback onSteps;
   final VoidCallback onCapturePpg;
+  final VoidCallback onCaptureSpo2Raw;
+  final VoidCallback onStopCapture;
   final VoidCallback onAnalyzePpg;
+  final VoidCallback onExportRaw;
   final VoidCallback onDbCounts;
   final VoidCallback onAggregate;
   final VoidCallback onHrv;
@@ -2011,6 +2677,7 @@ class _ActionBar extends StatelessWidget {
   final VoidCallback onStepBuckets;
   final VoidCallback onStepDay;
   final VoidCallback onRunAll;
+  final VoidCallback onPushCloud;
   // HLT-5 Fall Watch debug toggle + live status.
   final VoidCallback onToggleFallWatch;
   final bool fallWatchActive;
@@ -2034,9 +2701,13 @@ class _ActionBar extends StatelessWidget {
     required this.onSpo2,
     required this.onSpo2Day,
     required this.onSleep,
+    required this.onSyncAllSleep,
     required this.onSteps,
     required this.onCapturePpg,
+    required this.onCaptureSpo2Raw,
+    required this.onStopCapture,
     required this.onAnalyzePpg,
+    required this.onExportRaw,
     required this.onDbCounts,
     required this.onAggregate,
     required this.onHrv,
@@ -2054,6 +2725,7 @@ class _ActionBar extends StatelessWidget {
     required this.onStepBuckets,
     required this.onStepDay,
     required this.onRunAll,
+    required this.onPushCloud,
     required this.onToggleFallWatch,
     required this.fallWatchActive,
     required this.fallWatchCalibrated,
@@ -2139,6 +2811,15 @@ class _ActionBar extends StatelessWidget {
             style: compactStyle,
             child: const Text('Sync Sleep'),
           ),
+          FilledButton.icon(
+            onPressed: connected ? onSyncAllSleep : null,
+            icon: const Icon(Icons.bedtime, size: 14),
+            label: const Text('Sync All Sleep'),
+            style: compactStyle.copyWith(
+              backgroundColor: WidgetStateProperty.all(Colors.indigo),
+              foregroundColor: WidgetStateProperty.all(Colors.white),
+            ),
+          ),
           OutlinedButton(
             onPressed: connected ? onSteps : null,
             style: compactStyle,
@@ -2213,10 +2894,31 @@ class _ActionBar extends StatelessWidget {
               foregroundColor: WidgetStateProperty.all(Colors.white),
             ),
           ),
+          FilledButton.icon(
+            onPressed: connected ? onCaptureSpo2Raw : null,
+            icon: const Icon(Icons.bloodtype, size: 14),
+            label: const Text('SpO2 Raw'),
+            style: compactStyle.copyWith(
+              backgroundColor: WidgetStateProperty.all(Colors.redAccent),
+              foregroundColor: WidgetStateProperty.all(Colors.white),
+            ),
+          ),
+          OutlinedButton.icon(
+            onPressed: connected ? onStopCapture : null,
+            icon: const Icon(Icons.stop_circle_outlined, size: 14),
+            label: const Text('Stop Capture'),
+            style: compactStyle,
+          ),
           OutlinedButton.icon(
             onPressed: onAnalyzePpg,
             icon: const Icon(Icons.analytics, size: 14),
             label: const Text('Analyze'),
+            style: compactStyle,
+          ),
+          OutlinedButton.icon(
+            onPressed: onExportRaw,
+            icon: const Icon(Icons.science_outlined, size: 14),
+            label: const Text('Export Raw'),
             style: compactStyle,
           ),
           OutlinedButton.icon(
@@ -2240,6 +2942,15 @@ class _ActionBar extends StatelessWidget {
             label: const Text('Run All'),
             style: compactStyle.copyWith(
               backgroundColor: WidgetStateProperty.all(Colors.indigo),
+              foregroundColor: WidgetStateProperty.all(Colors.white),
+            ),
+          ),
+          FilledButton.icon(
+            onPressed: onPushCloud,
+            icon: const Icon(Icons.cloud_upload, size: 14),
+            label: const Text('Push Cloud'),
+            style: compactStyle.copyWith(
+              backgroundColor: WidgetStateProperty.all(Colors.deepPurple),
               foregroundColor: WidgetStateProperty.all(Colors.white),
             ),
           ),

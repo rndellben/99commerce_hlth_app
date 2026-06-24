@@ -62,8 +62,8 @@ class _StressScreenState extends ConsumerState<StressScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(total == 0
-                ? 'No new stress samples on band yet'
-                : 'Synced $total stress sample(s)'),
+                ? 'No new strain samples on band yet'
+                : 'Synced $total strain sample(s)'),
             duration: const Duration(seconds: 2),
           ),
         );
@@ -127,7 +127,7 @@ class _StressScreenState extends ConsumerState<StressScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Stress'),
+        title: const Text('Strain'),
         leading: const BackButton(),
         actions: [
           IconButton(
@@ -138,7 +138,7 @@ class _StressScreenState extends ConsumerState<StressScreen> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.refresh),
-            tooltip: 'Sync stress from band',
+            tooltip: 'Sync strain from band',
             onPressed: _syncing ? null : _refreshFromBand,
           ),
         ],
@@ -162,7 +162,7 @@ class _StressScreenState extends ConsumerState<StressScreen> {
           ),
           const SizedBox(height: 20),
           const Text(
-            'The band measures stress automatically using HRV. Wear it during '
+            'The band measures strain automatically using HRV. Wear it during '
             'the day for a full picture.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
@@ -228,7 +228,7 @@ class _DayChart extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("Today's stress",
+          Text("Today's strain",
               style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 12),
           SizedBox(
@@ -416,7 +416,7 @@ class _ScheduledCard extends StatelessWidget {
       ),
       child: SwitchListTile(
         secondary: const Icon(Icons.schedule, color: AppColors.warning),
-        title: const Text('Stress Detection'),
+        title: const Text('Strain Detection'),
         subtitle: Text(
           enabled == null
               ? 'Connect the band to view status'

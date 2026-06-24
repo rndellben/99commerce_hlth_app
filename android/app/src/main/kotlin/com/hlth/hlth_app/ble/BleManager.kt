@@ -19,19 +19,26 @@ import com.oudmon.ble.base.communication.ICommandResponse
 import com.oudmon.ble.base.communication.LargeDataHandler
 import com.oudmon.ble.base.communication.bigData.BloodOxygenEntity
 import com.oudmon.ble.base.communication.bigData.IBloodOxygenCallback
+import com.oudmon.ble.base.communication.bigData.IntervalBloodOxygenEntity
 import com.oudmon.ble.base.communication.entity.BlePressure
 import com.oudmon.ble.base.communication.entity.BleStepDetails
 import com.oudmon.ble.base.communication.entity.StartEndTimeEntity
 import com.oudmon.ble.base.communication.req.BloodOxygenSettingReq
 import com.oudmon.ble.base.communication.req.BpSettingReq
+import com.oudmon.ble.base.communication.req.DeviceSupportReq
 import com.oudmon.ble.base.communication.req.HeartRateSettingReq
 import com.oudmon.ble.base.communication.req.HrvSettingReq
+import com.oudmon.ble.base.communication.req.PhoneSportReq
 import com.oudmon.ble.base.communication.req.PressureSettingReq
 import com.oudmon.ble.base.communication.req.ReadDetailSportDataReq
 import com.oudmon.ble.base.communication.req.ReadHeartRateReq
 import com.oudmon.ble.base.communication.req.SetTimeReq
 import com.oudmon.ble.base.communication.req.SimpleKeyReq
 import com.oudmon.ble.base.communication.req.TimeFormatReq
+import com.oudmon.ble.base.communication.rsp.AppSportRsp
+import com.oudmon.ble.base.communication.sport.BaseCallback
+import com.oudmon.ble.base.communication.sport.SportPlusEntity
+import com.oudmon.ble.base.communication.sport.SportPlusHandle
 import com.oudmon.ble.base.communication.responseImpl.DeviceNotifyListener
 import com.oudmon.ble.base.communication.rsp.BaseRspCmd
 import com.oudmon.ble.base.communication.rsp.BatteryRsp
@@ -41,6 +48,7 @@ import com.oudmon.ble.base.communication.rsp.BpSettingRsp
 import com.oudmon.ble.base.communication.rsp.PressureRsp
 import com.oudmon.ble.base.communication.rsp.PressureSettingRsp
 import com.oudmon.ble.base.communication.rsp.DeviceNotifyRsp
+import com.oudmon.ble.base.communication.rsp.DeviceSupportFunctionRsp
 import com.oudmon.ble.base.communication.rsp.HRVRsp
 import com.oudmon.ble.base.communication.rsp.HRVSettingRsp
 import com.oudmon.ble.base.communication.rsp.HeartRateSettingRsp
@@ -89,11 +97,14 @@ class BleManager(
         private const val PPG_EVENT_CHANNEL = "hlth/realtime_stream"
         private const val ACCEL_EVENT_CHANNEL = "hlth/realtime_stream_accel"
         private const val SCAN_TIMEOUT_MS = 10_000L
-        // HLT-11: periodic sync cadence (30 min). Long enough that battery
-        // cost is negligible on top of the always-on BLE connection; short
-        // enough to keep home-screen cards fresh and to make the band's
-        // 30-min HRV slot resolution observable without manual taps.
-        private const val PERIODIC_SYNC_INTERVAL_MS = 30L * 60L * 1000L
+        // HLT-11: periodic sync cadence — DEFAULT is 30 min. Settable at
+        // runtime via the `setSyncIntervalMinutes` method-channel call so
+        // we can A/B 10-min vs 30-min cadence for the battery drain test
+        // Ryan asked for in the 2026-06-17 sync. See `syncIntervalMs` (the
+        // live var) and `setSyncIntervalMinutes` below.
+        private const val DEFAULT_SYNC_INTERVAL_MS = 30L * 60L * 1000L
+        private const val MIN_SYNC_INTERVAL_MS = 5L * 60L * 1000L
+        private const val MAX_SYNC_INTERVAL_MS = 60L * 60L * 1000L
 
         // Scan name-prefix allowlist (see [isHlthBandName]). Mirrors the
         // QRing SDK's internal BleScannerHelper.sFILTER_PREFIX list +
@@ -126,8 +137,14 @@ class BleManager(
     // notifications batch.
     private var lastRealtimeHrSyncMs: Long = 0L
 
+    // Live sync interval — mutable so the debug screen's battery-drain test
+    // can flip cadence at runtime without a rebuild. Changing this resets
+    // the pending Handler callback so the new cadence takes effect on the
+    // next tick (not on the currently-queued one).
+    private var syncIntervalMs: Long = DEFAULT_SYNC_INTERVAL_MS
+
     // HLT-11: periodic sync tick. Posts a Runnable on the main looper every
-    // PERIODIC_SYNC_INTERVAL_MS while connected. The runnable just signals
+    // syncIntervalMs while connected. The runnable just signals
     // Dart via `onPeriodicSyncTick` — no business logic lives natively.
     // Dart's PeriodicSyncCoordinator owns the actual sync orchestration.
     //
@@ -138,13 +155,17 @@ class BleManager(
     private val periodicSyncRunnable = object : Runnable {
         override fun run() {
             try {
-                methodChannel.invokeMethod("onPeriodicSyncTick", null)
-                Log.i("HlthBLE", "periodic sync tick → Dart")
+                methodChannel.invokeMethod(
+                    "onPeriodicSyncTick",
+                    mapOf("intervalMin" to (syncIntervalMs / 60_000L).toInt())
+                )
+                Log.i("HlthBLE", "periodic sync tick → Dart (${syncIntervalMs / 60_000L} min)")
             } catch (e: Exception) {
                 Log.w("HlthBLE", "periodic sync tick failed: ${e.message}")
             }
-            // Re-arm
-            mainHandler.postDelayed(this, PERIODIC_SYNC_INTERVAL_MS)
+            // Re-arm at the CURRENT cadence (may have been bumped via
+            // setSyncIntervalMinutes since the previous tick).
+            mainHandler.postDelayed(this, syncIntervalMs)
         }
     }
     private lateinit var methodChannel: MethodChannel
@@ -221,14 +242,14 @@ class BleManager(
                     hasBootstrapped = true
                     mainHandler.postDelayed({ bootstrapBandAfterConnect() }, 1500)
                     // HLT-11: kick off the periodic sync schedule. First tick
-                    // fires PERIODIC_SYNC_INTERVAL_MS after connect (not
-                    // immediately — Dart side handles startup sync on its own
-                    // when it wants to).
+                    // fires syncIntervalMs after connect (not immediately —
+                    // Dart side handles startup sync on its own when it
+                    // wants to).
                     mainHandler.postDelayed(
                         periodicSyncRunnable,
-                        PERIODIC_SYNC_INTERVAL_MS
+                        syncIntervalMs
                     )
-                    Log.i("HlthBLE", "periodic sync scheduled (every ${PERIODIC_SYNC_INTERVAL_MS / 60000} min)")
+                    Log.i("HlthBLE", "periodic sync scheduled (every ${syncIntervalMs / 60000} min)")
                 }
             } else {
                 hasBootstrapped = false
@@ -252,6 +273,33 @@ class BleManager(
             "connect" -> connect(call.argument<String>("deviceId"), result)
             "disconnect" -> disconnect(result)
             "getBattery" -> getBattery(result)
+            "startSportMode" -> startSportMode(
+                sportType = call.argument<Int>("sportType") ?: 7,
+                result = result,
+            )
+            "pauseSportMode" -> sendSportStatus(
+                status = 2,
+                sportType = call.argument<Int>("sportType") ?: 7,
+                result = result,
+            )
+            "resumeSportMode" -> sendSportStatus(
+                status = 3,
+                sportType = call.argument<Int>("sportType") ?: 7,
+                result = result,
+            )
+            "endSportMode" -> sendSportStatus(
+                status = 4,
+                sportType = call.argument<Int>("sportType") ?: 7,
+                result = result,
+            )
+            "syncSportSessions" -> syncSportSessions(result)
+            "setSyncIntervalMinutes" -> setSyncIntervalMinutes(
+                minutes = call.argument<Int>("minutes") ?: 30,
+                result = result,
+            )
+            "getSyncIntervalMinutes" -> result.success(
+                mapOf("minutes" to (syncIntervalMs / 60_000L).toInt())
+            )
             "setPersonalInfo" -> setPersonalInfo(
                 is24h = call.argument<Boolean>("is24h") ?: true,
                 metric = call.argument<Boolean>("metric") ?: true,
@@ -297,6 +345,13 @@ class BleManager(
             "getHrHistory" -> syncHeartRate(call.argument<Int>("dayOffset") ?: 0, result)
             "getSpO2History" -> syncSpO2(result)
             "getSpO2Day" -> syncSpO2Day(call.argument<Int>("dayOffset") ?: 0, result)
+            "getSpO2Interval" -> syncSpO2Interval(call.argument<Int>("dayOffset") ?: 0, result)
+            "getSpO2Capability" -> getSpO2Capability(result)
+            "enableSpO2Interval" -> enableSpO2Interval(
+                enable = call.argument<Boolean>("enable") ?: true,
+                intervalMinutes = call.argument<Int>("intervalMinutes") ?: 1,
+                result = result
+            )
             "getHrvHistory" -> syncHRV(call.argument<Int>("dayOffset") ?: 0, result)
             "getBpHistory" -> syncBloodPressure(result)
             "getBpDay" -> syncBloodPressureDay(call.argument<Int>("dayOffset") ?: 0, result)
@@ -322,6 +377,17 @@ class BleManager(
                 result = result
             )
             "stopMeasure" -> stopPpgRawCapture(result)
+
+            // Blood-oxygen raw stream. Same StopHeartRateRsp packet as the HR
+            // raw stream, but this mode drives the red + IR LEDs (pulse
+            // oximetry), so redLightPpg / infraredPpg should be populated —
+            // unlike startMeasureHrRaw, which is green-only.
+            "startMeasureSpo2Raw" -> startSpo2RawCapture(
+                seconds = call.argument<Int>("duration_sec")
+                    ?: call.argument<Int>("seconds") ?: 30,
+                result = result
+            )
+            "stopMeasureSpo2Raw" -> stopSpo2RawCapture(result)
 
             else -> result.notImplemented()
         }
@@ -604,6 +670,165 @@ class BleManager(
     }
 
     /**
+     * Reset the periodic-sync cadence at runtime. Used by the BLE Debug
+     * screen's battery-drain test panel to A/B 10/15/30 min intervals
+     * without rebuilding. Clamped to [MIN_SYNC_INTERVAL_MS, MAX_SYNC_INTERVAL_MS]
+     * so a typo can't accidentally hammer the band every second.
+     *
+     * Reschedules the in-flight Handler callback so the new cadence takes
+     * effect on the NEXT tick — does not fire one immediately.
+     */
+    private fun setSyncIntervalMinutes(minutes: Int, result: MethodChannel.Result) {
+        try {
+            val requestedMs = minutes.toLong() * 60_000L
+            val clampedMs = requestedMs
+                .coerceAtLeast(MIN_SYNC_INTERVAL_MS)
+                .coerceAtMost(MAX_SYNC_INTERVAL_MS)
+            syncIntervalMs = clampedMs
+            // Only restart the queued runnable if we're actively scheduled
+            // (i.e. currently connected). When disconnected, hasBootstrapped
+            // is false and there's no pending callback to cancel.
+            if (hasBootstrapped) {
+                mainHandler.removeCallbacks(periodicSyncRunnable)
+                mainHandler.postDelayed(periodicSyncRunnable, syncIntervalMs)
+            }
+            Log.i(
+                "HlthBLE",
+                "sync interval set to ${syncIntervalMs / 60_000L} min " +
+                    "(requested $minutes min, clamped: ${clampedMs != requestedMs})"
+            )
+            result.success(
+                mapOf(
+                    "minutes" to (syncIntervalMs / 60_000L).toInt(),
+                    "clamped" to (clampedMs != requestedMs),
+                )
+            )
+        } catch (e: Exception) {
+            Log.e("HlthBLE", "setSyncIntervalMinutes failed", e)
+            result.error("SET_SYNC_INTERVAL_FAILED", e.message, null)
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Sport mode (sdk_ring.pdf §2.3.10 "APP opens exercise type")
+    //
+    // Architecture: the band has a dedicated workout state machine separate
+    // from the scheduled HR path. When we send `PhoneSportReq.getSportStatus(
+    // 1, sportType)`, the band:
+    //   - Enters sport mode for the chosen exercise type
+    //   - Records HR every location point into `SportLocation.mRateReal`
+    //   - Tracks distance, calories, speed, elevation, step rate, etc.
+    //   - Emits HR change notifications via DeviceNotifyListener (dataType=1)
+    //     at sub-minute cadence (firmware-driven; verify on hardware)
+    //
+    // After end, `SportPlusHandle.syncSportPlus(...)` pulls the workout
+    // summary (avg/min/max HR, total distance/calories/duration).
+    //
+    // Status codes (from sdk_ring.pdf §2.3.10):
+    //   1 = Start, 2 = Pause, 3 = Continue, 4 = End, 6 = movement start ts
+    //
+    // Sport types we expose are a curated subset per Ryan's 2026-06-17 call
+    // ("eight things people actually do"). See SportType enum in the Dart
+    // layer for the canonical list — this method accepts the raw SDK byte.
+    // ──────────────────────────────────────────────────────────────────────
+
+    private fun startSportMode(sportType: Int, result: MethodChannel.Result) {
+        sendSportStatus(status = 1, sportType = sportType, result = result)
+    }
+
+    private fun sendSportStatus(
+        status: Int,
+        sportType: Int,
+        result: MethodChannel.Result,
+    ) {
+        try {
+            CommandHandle.getInstance().executeReqCmd(
+                PhoneSportReq.getSportStatus(status.toByte(), sportType.toByte()),
+                ICommandResponse<AppSportRsp> { rsp ->
+                    if (rsp != null && rsp.status == BaseRspCmd.RESULT_OK) {
+                        Log.i(
+                            "HlthBLE",
+                            "sport status $status (type=$sportType) -> gps=${rsp.gpsStatus} ts=${rsp.timeStamp}",
+                        )
+                        mainHandler.post {
+                            result.success(
+                                mapOf(
+                                    "status" to status,
+                                    "sportType" to sportType,
+                                    "gpsStatus" to rsp.gpsStatus,
+                                    "timestamp" to rsp.timeStamp,
+                                ),
+                            )
+                        }
+                    } else {
+                        Log.w("HlthBLE", "sport status $status rejected: ${rsp?.status}")
+                        mainHandler.post {
+                            result.success(null)
+                        }
+                    }
+                },
+            )
+        } catch (e: Exception) {
+            Log.e("HlthBLE", "sendSportStatus($status) failed", e)
+            result.error("SPORT_STATUS_FAILED", e.message, null)
+        }
+    }
+
+    /**
+     * Pull recorded sport sessions from the band. Returns a list of session
+     * summaries — each entry maps to one workout the band recorded since
+     * last sync. The band keeps at most ~10 most-recent sessions
+     * (sdk_ring.pdf "Synchronous training records").
+     */
+    private fun syncSportSessions(result: MethodChannel.Result) {
+        try {
+            val handle = SportPlusHandle()
+            handle.timeFormat = "yyyy-MM-dd HH:mm"
+            handle.syncSportPlus(
+                BaseCallback<MutableList<SportPlusEntity>> { errCode, entities ->
+                    if (errCode != 0 || entities == null) {
+                        Log.w("HlthBLE", "syncSportSessions failed: errCode=$errCode")
+                        mainHandler.post {
+                            result.success(mapOf("sessions" to emptyList<Any>()))
+                        }
+                        return@BaseCallback
+                    }
+                    val sessions = entities.map { e ->
+                        mapOf(
+                            "sportType" to e.mSportType,
+                            "startTime" to e.mStartTime,
+                            "trainingStartTime" to (e.trainingStartTime ?: ""),
+                            "duration" to e.mDuration,
+                            "distance" to e.mDistance,
+                            "calories" to e.mCalories,
+                            "speedAvg" to e.mSpeedAvg,
+                            "speedMax" to e.mSpeedMax,
+                            "rateAvg" to e.mRateAvg,
+                            "rateMin" to e.mRateMin,
+                            "rateMax" to e.mRateMax,
+                            "elevation" to e.mElevation,
+                            "uphill" to e.mUphill,
+                            "downhill" to e.mDownhill,
+                            "stepRate" to e.mStepRate,
+                            "steps" to e.steps,
+                            "sportCount" to e.mSportCount,
+                            "locationCount" to (e.mLocations?.size ?: 0),
+                        )
+                    }
+                    Log.i("HlthBLE", "syncSportSessions: ${sessions.size} session(s)")
+                    mainHandler.post {
+                        result.success(mapOf("sessions" to sessions))
+                    }
+                },
+            )
+            handle.cmdSummary(0)
+        } catch (e: Exception) {
+            Log.e("HlthBLE", "syncSportSessions failed", e)
+            result.error("SYNC_SPORT_FAILED", e.message, null)
+        }
+    }
+
+    /**
      * Write the user's personal info + BP/HR baseline to the band.
      *
      * Wraps `TimeFormatReq.getWriteInstance(is24, metric, sex, age, height,
@@ -770,6 +995,75 @@ class BleManager(
         } catch (e: Exception) {
             Log.e("HlthBLE", "stopPpgRawCapture failed: ${e.message}", e)
             result.error("PPG_STOP_FAILED", e.message, null)
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Blood-oxygen raw streaming (red + IR LEDs)
+    //
+    // Identical packet plumbing to startPpgRawCapture — same StopHeartRateRsp,
+    // same ppg_stream EventChannel, same sample shape — but driven by the SpO2
+    // measurement command, which lights the red + IR LEDs. This is the path
+    // that should populate redLightPpg / infraredPpg (the HR raw mode is
+    // green-only). Whether the H59 firmware actually delivers it is what the
+    // test capture confirms.
+    // ──────────────────────────────────────────────────────────────────────
+    private fun startSpo2RawCapture(seconds: Int, result: MethodChannel.Result) {
+        try {
+            BleOperateManager.getInstance().manualModeBloodOxygenRawData(
+                object : ICommandResponse<StopHeartRateRsp> {
+                    override fun onDataResponse(rsp: StopHeartRateRsp) {
+                        if (rsp.errCode != 0x00.toByte()) {
+                            Log.w("HlthBLE", "SpO2-raw packet err: ${rsp.errCode}")
+                            return
+                        }
+                        val ax = signedInt16(rsp.getXH(), rsp.getXL())
+                        val ay = signedInt16(rsp.getYH(), rsp.getYL())
+                        val az = signedInt16(rsp.getZH(), rsp.getZL())
+                        val sample = mapOf(
+                            "timestamp_ms" to System.currentTimeMillis(),
+                            "ppg_count" to rsp.ppgCount,
+                            "green" to rsp.greenLightPpg,
+                            "red" to rsp.redLightPpg,
+                            "infrared" to rsp.infraredPpg,
+                            "heart" to rsp.heart,
+                            "rri" to rsp.rri,
+                            "hrv" to rsp.hrv,
+                            "accel_x" to ax,
+                            "accel_y" to ay,
+                            "accel_z" to az
+                        )
+                        mainHandler.post {
+                            ppgEventSink?.success(listOf(sample))
+                        }
+                    }
+                },
+                seconds,
+                false // false = start measurement
+            )
+            Log.i("HlthBLE", "SpO2 raw capture started for $seconds seconds")
+            result.success(mapOf("started" to true, "seconds" to seconds))
+        } catch (e: Exception) {
+            Log.e("HlthBLE", "startSpo2RawCapture failed: ${e.message}", e)
+            result.error("SPO2_RAW_START_FAILED", e.message, null)
+        }
+    }
+
+    private fun stopSpo2RawCapture(result: MethodChannel.Result) {
+        try {
+            BleOperateManager.getInstance().manualModeBloodOxygenRawData(
+                object : ICommandResponse<StopHeartRateRsp> {
+                    override fun onDataResponse(rsp: StopHeartRateRsp) {
+                        Log.i("HlthBLE", "SpO2-raw stop response: type=${rsp.type} err=${rsp.errCode}")
+                    }
+                },
+                0,
+                true // true = stop
+            )
+            result.success(null)
+        } catch (e: Exception) {
+            Log.e("HlthBLE", "stopSpo2RawCapture failed: ${e.message}", e)
+            result.error("SPO2_RAW_STOP_FAILED", e.message, null)
         }
     }
 
@@ -1278,6 +1572,167 @@ class BleManager(
             })
         } catch (e: Exception) {
             result.error("SYNC_SPO2_FAILED", e.message, null)
+        }
+    }
+
+    /**
+     * Read the device capability bitmap (`DeviceSupportReq` →
+     * `DeviceSupportFunctionRsp`) — the AUTHORITATIVE answer to "does this
+     * firmware support per-minute interval SpO2". This is a different bitmap
+     * from the SetTimeRsp.mSupport* flags read at bootstrap: the interval-*
+     * capabilities only live here. A read timeout / bad status replies
+     * `{ok:false}` so the Dart side never hangs.
+     */
+    private fun getSpO2Capability(result: MethodChannel.Result) {
+        val replied = java.util.concurrent.atomic.AtomicBoolean(false)
+        mainHandler.postDelayed({
+            if (replied.compareAndSet(false, true)) {
+                Log.w("HlthBLE", "getSpO2Capability: no response within 6s")
+                result.success(mapOf("ok" to false, "timedOut" to true))
+            }
+        }, 6000)
+        try {
+            CommandHandle.getInstance().executeReqCmd(
+                DeviceSupportReq.getReadInstance(),
+                ICommandResponse<DeviceSupportFunctionRsp> { rsp ->
+                    if (!replied.compareAndSet(false, true)) return@ICommandResponse
+                    val ok = rsp != null && rsp.status == BaseRspCmd.RESULT_OK
+                    Log.i(
+                        "HlthBLE",
+                        "getSpO2Capability: ok=$ok intervalSpO2=${rsp?.supportIntervalBloodOxygen} " +
+                            "intervalHr=${rsp?.supportIntervalHeartRate} intervalTemp=${rsp?.supportIntervalTemperature}"
+                    )
+                    result.success(
+                        mapOf(
+                            "ok" to ok,
+                            "supportIntervalBloodOxygen" to (rsp?.supportIntervalBloodOxygen ?: false),
+                            "supportIntervalHeartRate" to (rsp?.supportIntervalHeartRate ?: false),
+                            "supportIntervalTemperature" to (rsp?.supportIntervalTemperature ?: false),
+                            "timedOut" to false
+                        )
+                    )
+                }
+            )
+        } catch (e: Exception) {
+            if (replied.compareAndSet(false, true)) {
+                result.error("SPO2_CAPABILITY_FAILED", e.message, null)
+            }
+        }
+    }
+
+    /**
+     * Enable (or disable) periodic interval SpO2 monitoring on the band, at
+     * `intervalMinutes` cadence. Per sdk_ring.pdf §2.3.2:
+     *   BloodOxygenSettingReq.getWriteInstance(isEnable, interval /* minutes */)
+     * Once enabled, the band records one SpO2 reading per interval (the doc's
+     * "one data point per minute, 1,440/day" model) which `getSpO2Interval`
+     * then reads back. NOTE: on H59 the WRITE ack's `isEnable` is unreliable
+     * (returns false even when accepted, same quirk as HR/HRV) — so we follow
+     * the write with a 1.5s READ-BACK and report that as ground truth.
+     */
+    private fun enableSpO2Interval(
+        enable: Boolean,
+        intervalMinutes: Int,
+        result: MethodChannel.Result
+    ) {
+        val replied = java.util.concurrent.atomic.AtomicBoolean(false)
+        mainHandler.postDelayed({
+            if (replied.compareAndSet(false, true)) {
+                Log.w("HlthBLE", "enableSpO2Interval: no read-back within 6s")
+                result.success(mapOf("ok" to false, "timedOut" to true))
+            }
+        }, 6000)
+        try {
+            CommandHandle.getInstance().executeReqCmd(
+                BloodOxygenSettingReq.getWriteInstance(enable, intervalMinutes.toByte()),
+                ICommandResponse<BloodOxygenSettingRsp> { rsp ->
+                    Log.i("HlthBLE", "enableSpO2Interval write ack: isEnable=${rsp?.isEnable} interval=${rsp?.interval}")
+                }
+            )
+            // Read-back is ground truth on H59.
+            mainHandler.postDelayed({
+                try {
+                    CommandHandle.getInstance().executeReqCmd(
+                        BloodOxygenSettingReq.getReadInstance(),
+                        ICommandResponse<BloodOxygenSettingRsp> { rsp ->
+                            if (!replied.compareAndSet(false, true)) return@ICommandResponse
+                            Log.i("HlthBLE", "enableSpO2Interval read-back: isEnable=${rsp?.isEnable} interval=${rsp?.interval}")
+                            result.success(
+                                mapOf(
+                                    "ok" to (rsp != null),
+                                    "isEnable" to (rsp?.isEnable ?: false),
+                                    "interval" to (rsp?.interval?.toInt() ?: 0),
+                                    "timedOut" to false
+                                )
+                            )
+                        }
+                    )
+                } catch (e: Exception) {
+                    if (replied.compareAndSet(false, true)) {
+                        result.error("SPO2_ENABLE_READBACK_FAILED", e.message, null)
+                    }
+                }
+            }, 1500)
+        } catch (e: Exception) {
+            if (replied.compareAndSet(false, true)) {
+                result.error("SPO2_ENABLE_FAILED", e.message, null)
+            }
+        }
+    }
+
+    /**
+     * SpO2 interval (per-minute) sync — the granularity a breathing-
+     * disruption alert needs. Mirrors the QRing demo's
+     * `LargeDataHandler.syncIntervalBloodOxygenWithCallback` (MainActivity
+     * btnIntervalOxygen). Capability-gated by `supportIntervalBloodOxygen`;
+     * the H59 may or may not support it — this is the probe to find out.
+     *
+     * Returns `{samples: List<Int>, total, nonZero, min, max, timedOut}`.
+     * On an unsupported device the SDK callback simply never fires, which
+     * would hang the channel — so a 8s safety net replies `timedOut=true`.
+     */
+    private fun syncSpO2Interval(dayOffset: Int, result: MethodChannel.Result) {
+        val replied = java.util.concurrent.atomic.AtomicBoolean(false)
+        mainHandler.postDelayed({
+            if (replied.compareAndSet(false, true)) {
+                Log.w("HlthBLE", "syncSpO2Interval: no callback within 8s (likely unsupported)")
+                result.success(
+                    mapOf("samples" to emptyList<Int>(), "total" to 0, "timedOut" to true)
+                )
+            }
+        }, 8000)
+        try {
+            LargeDataHandler.getInstance().syncIntervalBloodOxygenWithCallback(
+                dayOffset,
+                fun(entity: IntervalBloodOxygenEntity) {
+                    if (!replied.compareAndSet(false, true)) return
+                    val samples = mutableListOf<Int>()
+                    for (v in entity.array) {
+                        samples.add(v)
+                    }
+                    val nonZero = samples.count { it > 0 }
+                    val nz = samples.filter { it > 0 }
+                    Log.i(
+                        "HlthBLE",
+                        "syncSpO2Interval: day=$dayOffset total=${samples.size} nonZero=$nonZero"
+                    )
+                    result.success(
+                        mapOf(
+                            "samples" to samples,
+                            "total" to samples.size,
+                            "nonZero" to nonZero,
+                            "min" to (nz.minOrNull() ?: 0),
+                            "max" to (nz.maxOrNull() ?: 0),
+                            "timedOut" to false
+                        )
+                    )
+                    markSync()
+                }
+            )
+        } catch (e: Exception) {
+            if (replied.compareAndSet(false, true)) {
+                result.error("SYNC_SPO2_INTERVAL_FAILED", e.message, null)
+            }
         }
     }
 
