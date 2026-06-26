@@ -393,6 +393,27 @@ class Scores extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+/// Ryan's Vascular Load NightlyRecord (NIGHTLY_RECORD_SCHEMA.md §1) —
+/// the tiny per-session struct the score reads. Persisted because the
+/// retention sweep deletes the raw hr/hrv/stress samples it's reduced
+/// from, so old nights can't be re-reduced. `localDate` is the sleep
+/// (wake) date as YYYY-MM-DD text, same convention as daily_metrics.
+class NightlyRecords extends Table {
+  TextColumn get id => text()();
+  TextColumn get userId => text()();
+  TextColumn get localDate => text()(); // YYYY-MM-DD (wake date)
+  RealColumn get hrP5 => real().nullable()();
+  RealColumn get rmssdMedian => real().nullable()();
+  RealColumn get stressMean => real().nullable()();
+  RealColumn get coverage => real().withDefault(const Constant(0))();
+  BoolColumn get valid => boolean().withDefault(const Constant(false))();
+  IntColumn get computedAtUtc => integer()();
+  TextColumn get algorithmVersion => text()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 // ─── Section 8 — Operational ────────────────────────────────────────────────
 
 /// Cloud sync outbox — queued upserts waiting to be pushed to Supabase.

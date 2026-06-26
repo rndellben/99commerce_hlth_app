@@ -78,4 +78,5 @@ enum ScoreType {
   longevity,            // 2 — body age
   stress,               // 3 — daily composite (distinct from per-sample stress)
   fitness,              // 4 — VO2-max-derived
+  cardioLoad,           // 5 — Vascular Load (Engine A), one per sleep
 }

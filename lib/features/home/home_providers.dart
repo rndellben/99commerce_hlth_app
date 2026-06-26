@@ -61,6 +61,15 @@ final latestRecoveryScoreProvider = StreamProvider<Score?>((ref) {
   );
 });
 
+/// Latest computed Cardio Load score (null until the baseline has matured).
+final latestCardioLoadScoreProvider = StreamProvider<Score?>((ref) {
+  final repo = ref.watch(scoreRepositoryProvider);
+  return repo.watchLatest(
+    userId: ActiveSession.defaultUserId,
+    scoreType: ScoreType.cardioLoad,
+  );
+});
+
 // ─── Sparkline (last-24h sample series) providers for the home cards.
 //
 // Each one returns a plain `List<double>` for HealthMetricCard's

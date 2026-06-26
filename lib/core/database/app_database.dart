@@ -40,6 +40,7 @@ part 'app_database.g.dart';
     SyncState,
     CloudSyncOutbox,
     NotificationLog,
+    NightlyRecords,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -48,7 +49,7 @@ class AppDatabase extends _$AppDatabase {
   /// Bump on every schema change. Add a migration step in
   /// `migration` below. See hlth-db-schema.md §"Schema versioning".
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -116,6 +117,14 @@ class AppDatabase extends _$AppDatabase {
               'CREATE UNIQUE INDEX IF NOT EXISTS idx_scores_user_type_date ON scores(user_id, score_type, computed_for_date)',
             );
           }
+          // v8 → v9: add nightly_records for Vascular Load (Cardio Load)
+          if (from < 9) {
+            await m.createTable(nightlyRecords);
+            await customStatement(
+              'CREATE UNIQUE INDEX IF NOT EXISTS idx_nightly_records_user_date '
+              'ON nightly_records(user_id, local_date)',
+            );
+          }
         },
       );
 
@@ -169,6 +178,8 @@ class AppDatabase extends _$AppDatabase {
       'CREATE UNIQUE INDEX IF NOT EXISTS idx_sync_state_unique ON sync_state(device_id, metric_key)',
       // notification_log
       'CREATE INDEX IF NOT EXISTS idx_notiflog_user_type_time ON notification_log(user_id, type, fired_at_utc_sec DESC)',
+      // nightly_records
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_nightly_records_user_date ON nightly_records(user_id, local_date)',
       // devices
       'CREATE INDEX IF NOT EXISTS idx_devices_user_id ON devices(user_id)',
       'CREATE INDEX IF NOT EXISTS idx_devices_mac ON devices(mac_address) WHERE mac_address IS NOT NULL',

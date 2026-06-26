@@ -61,6 +61,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final latestBpPair = ref.watch(calibratedLatestBpProvider).valueOrNull;
     final latestStress = ref.watch(latestStressSampleProvider).valueOrNull;
     final recoveryScore = ref.watch(latestRecoveryScoreProvider).valueOrNull;
+    final cardioLoadScore =
+        ref.watch(latestCardioLoadScoreProvider).valueOrNull;
     final hrSpark = ref.watch(hrSparklineProvider).valueOrNull ?? const [];
     final spo2Spark =
         ref.watch(spo2SparklineProvider).valueOrNull ?? const [];
@@ -267,6 +269,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   lockedMessage:
                       'Available in ${gate.daysUntilRecovery} days',
                   onTap: () => context.push('/recovery'),
+                ),
+                HealthMetricCard(
+                  title: 'Cardio Load',
+                  value: cardioLoadScore?.score.round().toString() ?? '--',
+                  unit: cardioLoadScore == null ? '' : '/100',
+                  icon: Icons.monitor_heart_outlined,
+                  color: AppColors.heartRate,
+                  // Engine emits "Lower than usual" / "Normal" / "Higher than
+                  // usual"; show that once a real score exists, otherwise a
+                  // baseline-building subtitle while it's still maturing.
+                  date: cardioLoadScore == null
+                      ? 'Building your cardio load baseline'
+                      : (cardioLoadScore.provisional
+                          ? 'Calibrating'
+                          : cardioLoadScore.label),
                 ),
                 HealthMetricCard(
                   title: 'Body Age',

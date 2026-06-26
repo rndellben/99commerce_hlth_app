@@ -16511,6 +16511,625 @@ class NotificationLogCompanion extends UpdateCompanion<NotificationLogData> {
   }
 }
 
+class $NightlyRecordsTable extends NightlyRecords
+    with TableInfo<$NightlyRecordsTable, NightlyRecord> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $NightlyRecordsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+    'user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _localDateMeta = const VerificationMeta(
+    'localDate',
+  );
+  @override
+  late final GeneratedColumn<String> localDate = GeneratedColumn<String>(
+    'local_date',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _hrP5Meta = const VerificationMeta('hrP5');
+  @override
+  late final GeneratedColumn<double> hrP5 = GeneratedColumn<double>(
+    'hr_p5',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _rmssdMedianMeta = const VerificationMeta(
+    'rmssdMedian',
+  );
+  @override
+  late final GeneratedColumn<double> rmssdMedian = GeneratedColumn<double>(
+    'rmssd_median',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _stressMeanMeta = const VerificationMeta(
+    'stressMean',
+  );
+  @override
+  late final GeneratedColumn<double> stressMean = GeneratedColumn<double>(
+    'stress_mean',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _coverageMeta = const VerificationMeta(
+    'coverage',
+  );
+  @override
+  late final GeneratedColumn<double> coverage = GeneratedColumn<double>(
+    'coverage',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _validMeta = const VerificationMeta('valid');
+  @override
+  late final GeneratedColumn<bool> valid = GeneratedColumn<bool>(
+    'valid',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("valid" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _computedAtUtcMeta = const VerificationMeta(
+    'computedAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> computedAtUtc = GeneratedColumn<int>(
+    'computed_at_utc',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _algorithmVersionMeta = const VerificationMeta(
+    'algorithmVersion',
+  );
+  @override
+  late final GeneratedColumn<String> algorithmVersion = GeneratedColumn<String>(
+    'algorithm_version',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    userId,
+    localDate,
+    hrP5,
+    rmssdMedian,
+    stressMean,
+    coverage,
+    valid,
+    computedAtUtc,
+    algorithmVersion,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'nightly_records';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<NightlyRecord> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('user_id')) {
+      context.handle(
+        _userIdMeta,
+        userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_userIdMeta);
+    }
+    if (data.containsKey('local_date')) {
+      context.handle(
+        _localDateMeta,
+        localDate.isAcceptableOrUnknown(data['local_date']!, _localDateMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_localDateMeta);
+    }
+    if (data.containsKey('hr_p5')) {
+      context.handle(
+        _hrP5Meta,
+        hrP5.isAcceptableOrUnknown(data['hr_p5']!, _hrP5Meta),
+      );
+    }
+    if (data.containsKey('rmssd_median')) {
+      context.handle(
+        _rmssdMedianMeta,
+        rmssdMedian.isAcceptableOrUnknown(
+          data['rmssd_median']!,
+          _rmssdMedianMeta,
+        ),
+      );
+    }
+    if (data.containsKey('stress_mean')) {
+      context.handle(
+        _stressMeanMeta,
+        stressMean.isAcceptableOrUnknown(data['stress_mean']!, _stressMeanMeta),
+      );
+    }
+    if (data.containsKey('coverage')) {
+      context.handle(
+        _coverageMeta,
+        coverage.isAcceptableOrUnknown(data['coverage']!, _coverageMeta),
+      );
+    }
+    if (data.containsKey('valid')) {
+      context.handle(
+        _validMeta,
+        valid.isAcceptableOrUnknown(data['valid']!, _validMeta),
+      );
+    }
+    if (data.containsKey('computed_at_utc')) {
+      context.handle(
+        _computedAtUtcMeta,
+        computedAtUtc.isAcceptableOrUnknown(
+          data['computed_at_utc']!,
+          _computedAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_computedAtUtcMeta);
+    }
+    if (data.containsKey('algorithm_version')) {
+      context.handle(
+        _algorithmVersionMeta,
+        algorithmVersion.isAcceptableOrUnknown(
+          data['algorithm_version']!,
+          _algorithmVersionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_algorithmVersionMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  NightlyRecord map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return NightlyRecord(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      userId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}user_id'],
+      )!,
+      localDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}local_date'],
+      )!,
+      hrP5: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}hr_p5'],
+      ),
+      rmssdMedian: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}rmssd_median'],
+      ),
+      stressMean: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}stress_mean'],
+      ),
+      coverage: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}coverage'],
+      )!,
+      valid: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}valid'],
+      )!,
+      computedAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}computed_at_utc'],
+      )!,
+      algorithmVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}algorithm_version'],
+      )!,
+    );
+  }
+
+  @override
+  $NightlyRecordsTable createAlias(String alias) {
+    return $NightlyRecordsTable(attachedDatabase, alias);
+  }
+}
+
+class NightlyRecord extends DataClass implements Insertable<NightlyRecord> {
+  final String id;
+  final String userId;
+  final String localDate;
+  final double? hrP5;
+  final double? rmssdMedian;
+  final double? stressMean;
+  final double coverage;
+  final bool valid;
+  final int computedAtUtc;
+  final String algorithmVersion;
+  const NightlyRecord({
+    required this.id,
+    required this.userId,
+    required this.localDate,
+    this.hrP5,
+    this.rmssdMedian,
+    this.stressMean,
+    required this.coverage,
+    required this.valid,
+    required this.computedAtUtc,
+    required this.algorithmVersion,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['user_id'] = Variable<String>(userId);
+    map['local_date'] = Variable<String>(localDate);
+    if (!nullToAbsent || hrP5 != null) {
+      map['hr_p5'] = Variable<double>(hrP5);
+    }
+    if (!nullToAbsent || rmssdMedian != null) {
+      map['rmssd_median'] = Variable<double>(rmssdMedian);
+    }
+    if (!nullToAbsent || stressMean != null) {
+      map['stress_mean'] = Variable<double>(stressMean);
+    }
+    map['coverage'] = Variable<double>(coverage);
+    map['valid'] = Variable<bool>(valid);
+    map['computed_at_utc'] = Variable<int>(computedAtUtc);
+    map['algorithm_version'] = Variable<String>(algorithmVersion);
+    return map;
+  }
+
+  NightlyRecordsCompanion toCompanion(bool nullToAbsent) {
+    return NightlyRecordsCompanion(
+      id: Value(id),
+      userId: Value(userId),
+      localDate: Value(localDate),
+      hrP5: hrP5 == null && nullToAbsent ? const Value.absent() : Value(hrP5),
+      rmssdMedian: rmssdMedian == null && nullToAbsent
+          ? const Value.absent()
+          : Value(rmssdMedian),
+      stressMean: stressMean == null && nullToAbsent
+          ? const Value.absent()
+          : Value(stressMean),
+      coverage: Value(coverage),
+      valid: Value(valid),
+      computedAtUtc: Value(computedAtUtc),
+      algorithmVersion: Value(algorithmVersion),
+    );
+  }
+
+  factory NightlyRecord.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return NightlyRecord(
+      id: serializer.fromJson<String>(json['id']),
+      userId: serializer.fromJson<String>(json['userId']),
+      localDate: serializer.fromJson<String>(json['localDate']),
+      hrP5: serializer.fromJson<double?>(json['hrP5']),
+      rmssdMedian: serializer.fromJson<double?>(json['rmssdMedian']),
+      stressMean: serializer.fromJson<double?>(json['stressMean']),
+      coverage: serializer.fromJson<double>(json['coverage']),
+      valid: serializer.fromJson<bool>(json['valid']),
+      computedAtUtc: serializer.fromJson<int>(json['computedAtUtc']),
+      algorithmVersion: serializer.fromJson<String>(json['algorithmVersion']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'userId': serializer.toJson<String>(userId),
+      'localDate': serializer.toJson<String>(localDate),
+      'hrP5': serializer.toJson<double?>(hrP5),
+      'rmssdMedian': serializer.toJson<double?>(rmssdMedian),
+      'stressMean': serializer.toJson<double?>(stressMean),
+      'coverage': serializer.toJson<double>(coverage),
+      'valid': serializer.toJson<bool>(valid),
+      'computedAtUtc': serializer.toJson<int>(computedAtUtc),
+      'algorithmVersion': serializer.toJson<String>(algorithmVersion),
+    };
+  }
+
+  NightlyRecord copyWith({
+    String? id,
+    String? userId,
+    String? localDate,
+    Value<double?> hrP5 = const Value.absent(),
+    Value<double?> rmssdMedian = const Value.absent(),
+    Value<double?> stressMean = const Value.absent(),
+    double? coverage,
+    bool? valid,
+    int? computedAtUtc,
+    String? algorithmVersion,
+  }) => NightlyRecord(
+    id: id ?? this.id,
+    userId: userId ?? this.userId,
+    localDate: localDate ?? this.localDate,
+    hrP5: hrP5.present ? hrP5.value : this.hrP5,
+    rmssdMedian: rmssdMedian.present ? rmssdMedian.value : this.rmssdMedian,
+    stressMean: stressMean.present ? stressMean.value : this.stressMean,
+    coverage: coverage ?? this.coverage,
+    valid: valid ?? this.valid,
+    computedAtUtc: computedAtUtc ?? this.computedAtUtc,
+    algorithmVersion: algorithmVersion ?? this.algorithmVersion,
+  );
+  NightlyRecord copyWithCompanion(NightlyRecordsCompanion data) {
+    return NightlyRecord(
+      id: data.id.present ? data.id.value : this.id,
+      userId: data.userId.present ? data.userId.value : this.userId,
+      localDate: data.localDate.present ? data.localDate.value : this.localDate,
+      hrP5: data.hrP5.present ? data.hrP5.value : this.hrP5,
+      rmssdMedian: data.rmssdMedian.present
+          ? data.rmssdMedian.value
+          : this.rmssdMedian,
+      stressMean: data.stressMean.present
+          ? data.stressMean.value
+          : this.stressMean,
+      coverage: data.coverage.present ? data.coverage.value : this.coverage,
+      valid: data.valid.present ? data.valid.value : this.valid,
+      computedAtUtc: data.computedAtUtc.present
+          ? data.computedAtUtc.value
+          : this.computedAtUtc,
+      algorithmVersion: data.algorithmVersion.present
+          ? data.algorithmVersion.value
+          : this.algorithmVersion,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('NightlyRecord(')
+          ..write('id: $id, ')
+          ..write('userId: $userId, ')
+          ..write('localDate: $localDate, ')
+          ..write('hrP5: $hrP5, ')
+          ..write('rmssdMedian: $rmssdMedian, ')
+          ..write('stressMean: $stressMean, ')
+          ..write('coverage: $coverage, ')
+          ..write('valid: $valid, ')
+          ..write('computedAtUtc: $computedAtUtc, ')
+          ..write('algorithmVersion: $algorithmVersion')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    userId,
+    localDate,
+    hrP5,
+    rmssdMedian,
+    stressMean,
+    coverage,
+    valid,
+    computedAtUtc,
+    algorithmVersion,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is NightlyRecord &&
+          other.id == this.id &&
+          other.userId == this.userId &&
+          other.localDate == this.localDate &&
+          other.hrP5 == this.hrP5 &&
+          other.rmssdMedian == this.rmssdMedian &&
+          other.stressMean == this.stressMean &&
+          other.coverage == this.coverage &&
+          other.valid == this.valid &&
+          other.computedAtUtc == this.computedAtUtc &&
+          other.algorithmVersion == this.algorithmVersion);
+}
+
+class NightlyRecordsCompanion extends UpdateCompanion<NightlyRecord> {
+  final Value<String> id;
+  final Value<String> userId;
+  final Value<String> localDate;
+  final Value<double?> hrP5;
+  final Value<double?> rmssdMedian;
+  final Value<double?> stressMean;
+  final Value<double> coverage;
+  final Value<bool> valid;
+  final Value<int> computedAtUtc;
+  final Value<String> algorithmVersion;
+  final Value<int> rowid;
+  const NightlyRecordsCompanion({
+    this.id = const Value.absent(),
+    this.userId = const Value.absent(),
+    this.localDate = const Value.absent(),
+    this.hrP5 = const Value.absent(),
+    this.rmssdMedian = const Value.absent(),
+    this.stressMean = const Value.absent(),
+    this.coverage = const Value.absent(),
+    this.valid = const Value.absent(),
+    this.computedAtUtc = const Value.absent(),
+    this.algorithmVersion = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  NightlyRecordsCompanion.insert({
+    required String id,
+    required String userId,
+    required String localDate,
+    this.hrP5 = const Value.absent(),
+    this.rmssdMedian = const Value.absent(),
+    this.stressMean = const Value.absent(),
+    this.coverage = const Value.absent(),
+    this.valid = const Value.absent(),
+    required int computedAtUtc,
+    required String algorithmVersion,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       userId = Value(userId),
+       localDate = Value(localDate),
+       computedAtUtc = Value(computedAtUtc),
+       algorithmVersion = Value(algorithmVersion);
+  static Insertable<NightlyRecord> custom({
+    Expression<String>? id,
+    Expression<String>? userId,
+    Expression<String>? localDate,
+    Expression<double>? hrP5,
+    Expression<double>? rmssdMedian,
+    Expression<double>? stressMean,
+    Expression<double>? coverage,
+    Expression<bool>? valid,
+    Expression<int>? computedAtUtc,
+    Expression<String>? algorithmVersion,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (userId != null) 'user_id': userId,
+      if (localDate != null) 'local_date': localDate,
+      if (hrP5 != null) 'hr_p5': hrP5,
+      if (rmssdMedian != null) 'rmssd_median': rmssdMedian,
+      if (stressMean != null) 'stress_mean': stressMean,
+      if (coverage != null) 'coverage': coverage,
+      if (valid != null) 'valid': valid,
+      if (computedAtUtc != null) 'computed_at_utc': computedAtUtc,
+      if (algorithmVersion != null) 'algorithm_version': algorithmVersion,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  NightlyRecordsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? userId,
+    Value<String>? localDate,
+    Value<double?>? hrP5,
+    Value<double?>? rmssdMedian,
+    Value<double?>? stressMean,
+    Value<double>? coverage,
+    Value<bool>? valid,
+    Value<int>? computedAtUtc,
+    Value<String>? algorithmVersion,
+    Value<int>? rowid,
+  }) {
+    return NightlyRecordsCompanion(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      localDate: localDate ?? this.localDate,
+      hrP5: hrP5 ?? this.hrP5,
+      rmssdMedian: rmssdMedian ?? this.rmssdMedian,
+      stressMean: stressMean ?? this.stressMean,
+      coverage: coverage ?? this.coverage,
+      valid: valid ?? this.valid,
+      computedAtUtc: computedAtUtc ?? this.computedAtUtc,
+      algorithmVersion: algorithmVersion ?? this.algorithmVersion,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
+    }
+    if (localDate.present) {
+      map['local_date'] = Variable<String>(localDate.value);
+    }
+    if (hrP5.present) {
+      map['hr_p5'] = Variable<double>(hrP5.value);
+    }
+    if (rmssdMedian.present) {
+      map['rmssd_median'] = Variable<double>(rmssdMedian.value);
+    }
+    if (stressMean.present) {
+      map['stress_mean'] = Variable<double>(stressMean.value);
+    }
+    if (coverage.present) {
+      map['coverage'] = Variable<double>(coverage.value);
+    }
+    if (valid.present) {
+      map['valid'] = Variable<bool>(valid.value);
+    }
+    if (computedAtUtc.present) {
+      map['computed_at_utc'] = Variable<int>(computedAtUtc.value);
+    }
+    if (algorithmVersion.present) {
+      map['algorithm_version'] = Variable<String>(algorithmVersion.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('NightlyRecordsCompanion(')
+          ..write('id: $id, ')
+          ..write('userId: $userId, ')
+          ..write('localDate: $localDate, ')
+          ..write('hrP5: $hrP5, ')
+          ..write('rmssdMedian: $rmssdMedian, ')
+          ..write('stressMean: $stressMean, ')
+          ..write('coverage: $coverage, ')
+          ..write('valid: $valid, ')
+          ..write('computedAtUtc: $computedAtUtc, ')
+          ..write('algorithmVersion: $algorithmVersion, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -16542,6 +17161,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $NotificationLogTable notificationLog = $NotificationLogTable(
     this,
   );
+  late final $NightlyRecordsTable nightlyRecords = $NightlyRecordsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -16567,6 +17187,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     syncState,
     cloudSyncOutbox,
     notificationLog,
+    nightlyRecords,
   ];
 }
 
@@ -29152,6 +29773,311 @@ typedef $$NotificationLogTableProcessedTableManager =
       NotificationLogData,
       PrefetchHooks Function()
     >;
+typedef $$NightlyRecordsTableCreateCompanionBuilder =
+    NightlyRecordsCompanion Function({
+      required String id,
+      required String userId,
+      required String localDate,
+      Value<double?> hrP5,
+      Value<double?> rmssdMedian,
+      Value<double?> stressMean,
+      Value<double> coverage,
+      Value<bool> valid,
+      required int computedAtUtc,
+      required String algorithmVersion,
+      Value<int> rowid,
+    });
+typedef $$NightlyRecordsTableUpdateCompanionBuilder =
+    NightlyRecordsCompanion Function({
+      Value<String> id,
+      Value<String> userId,
+      Value<String> localDate,
+      Value<double?> hrP5,
+      Value<double?> rmssdMedian,
+      Value<double?> stressMean,
+      Value<double> coverage,
+      Value<bool> valid,
+      Value<int> computedAtUtc,
+      Value<String> algorithmVersion,
+      Value<int> rowid,
+    });
+
+class $$NightlyRecordsTableFilterComposer
+    extends Composer<_$AppDatabase, $NightlyRecordsTable> {
+  $$NightlyRecordsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get localDate => $composableBuilder(
+    column: $table.localDate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get hrP5 => $composableBuilder(
+    column: $table.hrP5,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get rmssdMedian => $composableBuilder(
+    column: $table.rmssdMedian,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get stressMean => $composableBuilder(
+    column: $table.stressMean,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get coverage => $composableBuilder(
+    column: $table.coverage,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get valid => $composableBuilder(
+    column: $table.valid,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get computedAtUtc => $composableBuilder(
+    column: $table.computedAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get algorithmVersion => $composableBuilder(
+    column: $table.algorithmVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$NightlyRecordsTableOrderingComposer
+    extends Composer<_$AppDatabase, $NightlyRecordsTable> {
+  $$NightlyRecordsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get localDate => $composableBuilder(
+    column: $table.localDate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get hrP5 => $composableBuilder(
+    column: $table.hrP5,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get rmssdMedian => $composableBuilder(
+    column: $table.rmssdMedian,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get stressMean => $composableBuilder(
+    column: $table.stressMean,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get coverage => $composableBuilder(
+    column: $table.coverage,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get valid => $composableBuilder(
+    column: $table.valid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get computedAtUtc => $composableBuilder(
+    column: $table.computedAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get algorithmVersion => $composableBuilder(
+    column: $table.algorithmVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$NightlyRecordsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $NightlyRecordsTable> {
+  $$NightlyRecordsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get userId =>
+      $composableBuilder(column: $table.userId, builder: (column) => column);
+
+  GeneratedColumn<String> get localDate =>
+      $composableBuilder(column: $table.localDate, builder: (column) => column);
+
+  GeneratedColumn<double> get hrP5 =>
+      $composableBuilder(column: $table.hrP5, builder: (column) => column);
+
+  GeneratedColumn<double> get rmssdMedian => $composableBuilder(
+    column: $table.rmssdMedian,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get stressMean => $composableBuilder(
+    column: $table.stressMean,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get coverage =>
+      $composableBuilder(column: $table.coverage, builder: (column) => column);
+
+  GeneratedColumn<bool> get valid =>
+      $composableBuilder(column: $table.valid, builder: (column) => column);
+
+  GeneratedColumn<int> get computedAtUtc => $composableBuilder(
+    column: $table.computedAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get algorithmVersion => $composableBuilder(
+    column: $table.algorithmVersion,
+    builder: (column) => column,
+  );
+}
+
+class $$NightlyRecordsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $NightlyRecordsTable,
+          NightlyRecord,
+          $$NightlyRecordsTableFilterComposer,
+          $$NightlyRecordsTableOrderingComposer,
+          $$NightlyRecordsTableAnnotationComposer,
+          $$NightlyRecordsTableCreateCompanionBuilder,
+          $$NightlyRecordsTableUpdateCompanionBuilder,
+          (
+            NightlyRecord,
+            BaseReferences<_$AppDatabase, $NightlyRecordsTable, NightlyRecord>,
+          ),
+          NightlyRecord,
+          PrefetchHooks Function()
+        > {
+  $$NightlyRecordsTableTableManager(
+    _$AppDatabase db,
+    $NightlyRecordsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$NightlyRecordsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$NightlyRecordsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$NightlyRecordsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> userId = const Value.absent(),
+                Value<String> localDate = const Value.absent(),
+                Value<double?> hrP5 = const Value.absent(),
+                Value<double?> rmssdMedian = const Value.absent(),
+                Value<double?> stressMean = const Value.absent(),
+                Value<double> coverage = const Value.absent(),
+                Value<bool> valid = const Value.absent(),
+                Value<int> computedAtUtc = const Value.absent(),
+                Value<String> algorithmVersion = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => NightlyRecordsCompanion(
+                id: id,
+                userId: userId,
+                localDate: localDate,
+                hrP5: hrP5,
+                rmssdMedian: rmssdMedian,
+                stressMean: stressMean,
+                coverage: coverage,
+                valid: valid,
+                computedAtUtc: computedAtUtc,
+                algorithmVersion: algorithmVersion,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String userId,
+                required String localDate,
+                Value<double?> hrP5 = const Value.absent(),
+                Value<double?> rmssdMedian = const Value.absent(),
+                Value<double?> stressMean = const Value.absent(),
+                Value<double> coverage = const Value.absent(),
+                Value<bool> valid = const Value.absent(),
+                required int computedAtUtc,
+                required String algorithmVersion,
+                Value<int> rowid = const Value.absent(),
+              }) => NightlyRecordsCompanion.insert(
+                id: id,
+                userId: userId,
+                localDate: localDate,
+                hrP5: hrP5,
+                rmssdMedian: rmssdMedian,
+                stressMean: stressMean,
+                coverage: coverage,
+                valid: valid,
+                computedAtUtc: computedAtUtc,
+                algorithmVersion: algorithmVersion,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$NightlyRecordsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $NightlyRecordsTable,
+      NightlyRecord,
+      $$NightlyRecordsTableFilterComposer,
+      $$NightlyRecordsTableOrderingComposer,
+      $$NightlyRecordsTableAnnotationComposer,
+      $$NightlyRecordsTableCreateCompanionBuilder,
+      $$NightlyRecordsTableUpdateCompanionBuilder,
+      (
+        NightlyRecord,
+        BaseReferences<_$AppDatabase, $NightlyRecordsTable, NightlyRecord>,
+      ),
+      NightlyRecord,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -29196,4 +30122,6 @@ class $AppDatabaseManager {
       $$CloudSyncOutboxTableTableManager(_db, _db.cloudSyncOutbox);
   $$NotificationLogTableTableManager get notificationLog =>
       $$NotificationLogTableTableManager(_db, _db.notificationLog);
+  $$NightlyRecordsTableTableManager get nightlyRecords =>
+      $$NightlyRecordsTableTableManager(_db, _db.nightlyRecords);
 }

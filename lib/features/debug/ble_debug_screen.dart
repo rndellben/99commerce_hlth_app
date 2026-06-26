@@ -28,6 +28,8 @@ import 'package:hlth_app/core/repositories/battery_telemetry_repository.dart';
 import 'package:hlth_app/core/repositories/bp_repository.dart';
 import 'package:hlth_app/core/services/baseline_service.dart';
 import 'package:hlth_app/core/services/cloud_sync_service.dart';
+import 'package:hlth_app/core/repositories/nightly_record_repository.dart';
+import 'package:hlth_app/core/services/cardio_load_service.dart';
 import 'package:hlth_app/core/services/daily_aggregator.dart';
 import 'package:hlth_app/core/services/nightly_bp_capture_service.dart';
 import 'package:hlth_app/core/services/recovery_score_service.dart';
@@ -922,6 +924,7 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
     }
     final svc = ref.read(recoveryScoreServiceProvider);
     final today = DateTime.now();
+    var recoveryShown = false;
     for (final d in [today, today.subtract(const Duration(days: 1))]) {
       final dk = d.toIso8601String().substring(0, 10);
       final score = await svc.computeForDay(userId: _activeUserId!, localDate: d);
@@ -930,12 +933,64 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
             '${score.label ?? "?"}'
             '${score.provisional ? " (provisional)" : ""} '
             'conf=${score.confidence?.toStringAsFixed(2) ?? "?"}');
-        _push('  → open Home; the Recovery card now shows this.');
-        return;
+        recoveryShown = true;
+        break;
       }
       _push('Recovery ($dk): no score — no valid sleep night / not enough data');
     }
-    _push('  → run Sync All Sleep first, then Compute Scores again.');
+
+    // Cardio Load (Vascular Load) — reduce the latest night + score it, then
+    // read back the persisted NightlyRecord so the reduced signals are
+    // visible (the physiological sanity check: trough HR < daytime resting,
+    // RMSSD finite, etc.). Runs regardless of the Recovery outcome above.
+    try {
+      final vl =
+          await ref.read(cardioLoadServiceProvider).computeForLatestNight(
+                userId: _activeUserId!,
+              );
+      if (vl == null) {
+        _push('Cardio Load: no night session to reduce');
+      } else {
+        final scoreStr = vl.score != null
+            ? ' ${vl.score!.toStringAsFixed(1)}/100 — ${vl.label ?? "?"}'
+            : '';
+        _push('Cardio Load: ${vl.status.name}$scoreStr');
+        if (vl.message.isNotEmpty) _push('  ${vl.message}');
+        if (vl.components.isNotEmpty) {
+          final comps = vl.components.entries
+              .map((e) => '${e.key}=${e.value}')
+              .join(', ');
+          _push('  components: $comps');
+        }
+        // Read back tonight's reduced record (persisted by the service).
+        final session = await ref
+            .read(sleepRepositoryProvider)
+            .watchMostRecentNight(_activeUserId!)
+            .first;
+        if (session != null) {
+          final w = session.endedAt.toLocal();
+          final wakeDate = DateTime(w.year, w.month, w.day);
+          final rec = await ref.read(nightlyRecordRepositoryProvider).getForDate(
+                userId: _activeUserId!,
+                localDate: wakeDate,
+              );
+          if (rec != null) {
+            _push('  NightlyRecord ${wakeDate.toIso8601String().substring(0, 10)}: '
+                'hrP5=${rec.hrP5?.toStringAsFixed(1) ?? "—"} bpm, '
+                'rmssdMedian=${rec.rmssdMedian?.toStringAsFixed(1) ?? "—"} ms, '
+                'stressMean=${rec.stressMean?.toStringAsFixed(1) ?? "—"}, '
+                'coverage=${(rec.coverage * 100).toStringAsFixed(0)}%, '
+                'valid=${rec.valid}');
+          }
+        }
+      }
+    } catch (e) {
+      _push('Cardio Load: failed — $e');
+    }
+
+    _push(recoveryShown
+        ? '  → open Home; the Recovery + Cardio Load cards now show this.'
+        : '  → run Sync All Sleep first, then Compute Scores again.');
   }
 
   /// Pull every sleep session the band still has buffered (it retains ~7

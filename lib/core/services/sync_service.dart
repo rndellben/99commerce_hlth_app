@@ -14,6 +14,7 @@ import 'package:hlth_app/core/repositories/spo2_repository.dart';
 import 'package:hlth_app/core/repositories/step_bucket_repository.dart';
 import 'package:hlth_app/core/repositories/stress_repository.dart';
 import 'package:hlth_app/core/processing/fall_detector.dart';
+import 'package:hlth_app/core/services/cardio_load_service.dart';
 import 'package:hlth_app/core/services/daily_aggregator.dart';
 import 'package:hlth_app/core/services/recovery_score_service.dart';
 import 'package:hlth_app/core/auth/current_user_provider.dart';
@@ -105,6 +106,7 @@ class SyncService {
     required this.dailyRepo,
     required this.aggregator,
     required this.recoveryScore,
+    required this.cardioLoad,
     required this.cloudSync,
   });
 
@@ -119,6 +121,7 @@ class SyncService {
   final DailyMetricsRepository dailyRepo;
   final DailyAggregator aggregator;
   final RecoveryScoreService recoveryScore;
+  final CardioLoadService cardioLoad;
   final CloudSyncService cloudSync;
 
   /// Runs every band sync in sequence, then re-aggregates the last 14
@@ -168,6 +171,15 @@ class SyncService {
           userId: userId,
           localDate: DateTime.now(),
         );
+      } catch (_) {}
+    }
+
+    // Recompute Cardio Load off the latest night session (post-sleep
+    // trigger), mirroring the Recovery score above. Non-fatal: a scoring
+    // failure never breaks sync.
+    if (aggregated) {
+      try {
+        await cardioLoad.computeForLatestNight(userId: userId);
       } catch (_) {}
     }
 
@@ -517,6 +529,7 @@ final syncServiceProvider = Provider<SyncService>((ref) {
     dailyRepo: ref.watch(dailyMetricsRepositoryProvider),
     aggregator: ref.watch(dailyAggregatorProvider),
     recoveryScore: ref.watch(recoveryScoreServiceProvider),
+    cardioLoad: ref.watch(cardioLoadServiceProvider),
     cloudSync: ref.watch(cloudSyncServiceProvider),
   );
 });
