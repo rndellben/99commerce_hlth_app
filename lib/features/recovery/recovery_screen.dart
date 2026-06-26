@@ -1,47 +1,66 @@
 import 'package:flutter/material.dart';
 import 'package:hlth_app/ui/theme/app_colors.dart';
+import 'package:hlth_app/ui/widgets/metric_trend_scaffold.dart';
 import 'package:hlth_app/ui/widgets/score_gauge.dart';
+import 'package:hlth_app/ui/widgets/trend_view_sections.dart';
 
 class RecoveryScreen extends StatelessWidget {
   const RecoveryScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Recovery'),
-        leading: const BackButton(),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            const SizedBox(height: 16),
-            const ScoreGauge(score: 0, label: 'Recovery', size: 160),
-            const SizedBox(height: 8),
-            Text(
-              'Waiting for baseline data...',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 32),
-            // Contributing factors
-            Text(
-              'Contributing Factors',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 16),
-            _FactorRow(label: 'HRV vs baseline', value: '--', icon: Icons.show_chart),
-            _FactorRow(label: 'Resting HR', value: '--', icon: Icons.favorite),
-            _FactorRow(label: 'Sleep quality', value: '--', icon: Icons.bedtime),
-            _FactorRow(label: 'SpO2 overnight', value: '--', icon: Icons.air),
-            _FactorRow(label: 'Activity load', value: '--', icon: Icons.directions_walk),
-            const Spacer(),
-            Text(
-              'This is a wellness feature, not a medical device.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 9),
-              textAlign: TextAlign.center,
-            ),
-          ],
+    return MetricTrendScaffold(
+      metricName: 'Stability',
+      allowAddEdit: false,
+      aboutTitle: 'Stability',
+      aboutText: 'The stability score reflects how consistently your body is recovering based on resting heart rate, HRV, and sleep patterns over the past 14 days.',
+      extraActions: const [],
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: [
+              const SizedBox(height: 16),
+              const ScoreGauge(score: 0, label: 'Recovery', size: 160),
+              const SizedBox(height: 8),
+              Text(
+                'Waiting for baseline data...',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 32),
+              // Contributing factors
+              Text(
+                'Contributing Factors',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 16),
+              _FactorRow(label: 'HRV vs baseline', value: '--', icon: Icons.show_chart),
+              _FactorRow(label: 'Resting HR', value: '--', icon: Icons.favorite),
+              _FactorRow(label: 'Sleep quality', value: '--', icon: Icons.bedtime),
+              _FactorRow(label: 'SpO2 overnight', value: '--', icon: Icons.air),
+              _FactorRow(label: 'Activity load', value: '--', icon: Icons.directions_walk),
+              const SizedBox(height: 32),
+              DataDetailsCard(metric: 'recovery'),
+              const SizedBox(height: 16),
+              Last7DaysTile(
+                metric: 'recovery',
+                averageValue: null,
+                unit: '/100',
+                color: AppColors.recovery,
+              ),
+              const SizedBox(height: 16),
+              AboutMetricSection(
+                title: 'About Stability',
+                body: 'The stability score reflects how consistently your body is recovering based on resting heart rate, HRV, and sleep patterns over the past 14 days.',
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'This is a wellness feature, not a medical device.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 9),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
         ),
       ),
     );

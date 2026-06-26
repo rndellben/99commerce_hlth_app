@@ -11,8 +11,10 @@ import 'package:hlth_app/features/spo2/spo2_providers.dart';
 import 'package:hlth_app/ui/theme/app_colors.dart';
 import 'package:hlth_app/ui/widgets/date_selector.dart';
 import 'package:hlth_app/ui/widgets/metric_tile.dart';
+import 'package:hlth_app/ui/widgets/metric_trend_scaffold.dart';
 import 'package:hlth_app/ui/widgets/period_toggle.dart';
 import 'package:hlth_app/ui/widgets/trend_chart_card.dart';
+import 'package:hlth_app/ui/widgets/trend_view_sections.dart';
 
 /// Blood Oxygen detail screen. The H59 doesn't push SpO2 continuously
 /// (the band only measures when scheduled or actively triggered), so
@@ -188,6 +190,8 @@ class _SpO2ScreenState extends ConsumerState<SpO2Screen> {
       case Period.month:
         // Band only retains ~7 days; older days come from local SQLite.
         return List.generate(8, (i) => i);
+      case Period.threeMonths:
+        return List.generate(8, (i) => i); // band only retains ~7 days
     }
   }
 
@@ -208,6 +212,8 @@ class _SpO2ScreenState extends ConsumerState<SpO2Screen> {
               _anchor.day,
             );
             break;
+          case Period.threeMonths:
+            _anchor = DateTime(_anchor.year, _anchor.month + (3 * direction), _anchor.day);
         }
       });
       _refreshFromBand();
@@ -240,27 +246,25 @@ class _SpO2ScreenState extends ConsumerState<SpO2Screen> {
                 ? 'Tap Measure Now to get a reading'
                 : 'Connect your band to measure SpO2'));
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        title: const Text('Blood Oxygen'),
-        leading: const BackButton(),
-        actions: [
-          IconButton(
-            icon: _syncing
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white),
-                  )
-                : const Icon(Icons.refresh),
-            onPressed: _syncing ? null : _refreshFromBand,
-            tooltip: 'Sync from band',
-          ),
-        ],
-      ),
+    return MetricTrendScaffold(
+      metricName: 'SpO2',
+      allowAddEdit: false,
+      aboutTitle: 'SpO2',
+      aboutText: 'Blood oxygen saturation (SpO2) measures the percentage of haemoglobin carrying oxygen. Healthy adults typically maintain levels of 95% or above.',
+      extraActions: [
+        IconButton(
+          icon: _syncing
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white),
+                )
+              : const Icon(Icons.refresh),
+          onPressed: _syncing ? null : _refreshFromBand,
+          tooltip: 'Sync from band',
+        ),
+      ],
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _refreshFromBand,
@@ -581,6 +585,20 @@ class _DayView extends ConsumerWidget {
               ),
             ],
             const SizedBox(height: 16),
+            DataDetailsCard(metric: 'spo2'),
+            const SizedBox(height: 16),
+            Last7DaysTile(
+              metric: 'spo2',
+              averageValue: null,
+              unit: '%',
+              color: AppColors.spo2,
+            ),
+            const SizedBox(height: 16),
+            AboutMetricSection(
+              title: 'About SpO2',
+              body: 'Blood oxygen saturation (SpO2) measures the percentage of haemoglobin carrying oxygen. Healthy adults typically maintain levels of 95% or above.',
+            ),
+            const SizedBox(height: 16),
             _DisclaimerCard(),
           ],
         );
@@ -634,13 +652,17 @@ class _RangeView extends ConsumerWidget {
             .where((r) => r.spo2OvernightAvg! < 95)
             .length;
 
+        final title = period == Period.threeMonths
+            ? 'Overnight SpO2 — 3 months'
+            : period == Period.week
+                ? 'Overnight SpO2 — this week'
+                : 'Overnight SpO2 — this month';
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             TrendChartCard(
-              title: period == Period.week
-                  ? 'Overnight SpO2 — this week'
-                  : 'Overnight SpO2 — this month',
+              title: title,
               points: points,
               color: AppColors.spo2,
               axis: const TrendAxis.bounded(
@@ -705,6 +727,20 @@ class _RangeView extends ConsumerWidget {
               ),
             ],
             const SizedBox(height: 16),
+            DataDetailsCard(metric: 'spo2'),
+            const SizedBox(height: 16),
+            Last7DaysTile(
+              metric: 'spo2',
+              averageValue: null,
+              unit: '%',
+              color: AppColors.spo2,
+            ),
+            const SizedBox(height: 16),
+            AboutMetricSection(
+              title: 'About SpO2',
+              body: 'Blood oxygen saturation (SpO2) measures the percentage of haemoglobin carrying oxygen. Healthy adults typically maintain levels of 95% or above.',
+            ),
+            const SizedBox(height: 16),
             _DisclaimerCard(),
           ],
         );
@@ -728,6 +764,10 @@ class _RangeView extends ConsumerWidget {
         final first = DateTime(a.year, a.month, 1);
         final lastDay = DateTime(a.year, a.month + 1, 0);
         return Spo2DateRange(fromDate: first, toDate: lastDay);
+      case Period.threeMonths:
+        final first = DateTime(a.year, a.month - 2, 1);
+        final lastDay = DateTime(a.year, a.month + 1, 0);
+        return Spo2DateRange(fromDate: first, toDate: lastDay);
     }
   }
 
@@ -746,6 +786,13 @@ class _RangeView extends ConsumerWidget {
         return [
           for (final day in [1, 7, 13, 19, 25, days])
             md(DateTime(first.year, first.month, day)),
+        ];
+      case Period.threeMonths:
+        final first = DateTime(anchor.year, anchor.month - 2, 1);
+        return [
+          md(first),
+          md(DateTime(first.year, first.month + 1, 1)),
+          md(DateTime(first.year, first.month + 2, 1)),
         ];
     }
   }

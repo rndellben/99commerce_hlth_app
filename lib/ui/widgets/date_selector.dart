@@ -35,7 +35,12 @@ class DateSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final canGoNext = anchor.isBefore(_today());
+    // For 3M the anchor is the END month — disable next when anchor month
+    // is the current month (no future data).
+    final today = _today();
+    final canGoNext = period == Period.threeMonths
+        ? anchor.isBefore(DateTime(today.year, today.month, 1))
+        : anchor.isBefore(today);
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -72,6 +77,10 @@ class DateSelector extends StatelessWidget {
         return '${md(monday)} ~ ${md(sunday)}';
       case Period.month:
         return '${anchor.year}-${pad(anchor.month)}';
+      case Period.threeMonths:
+        // Show the start month of the 3-month window.
+        final start = DateTime(anchor.year, anchor.month - 2, 1);
+        return '${start.year}-${pad(start.month)} ~ ${anchor.year}-${pad(anchor.month)}';
     }
   }
 }

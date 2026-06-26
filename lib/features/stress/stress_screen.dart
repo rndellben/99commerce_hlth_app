@@ -7,6 +7,8 @@ import 'package:hlth_app/core/repositories/device_repository.dart';
 import 'package:hlth_app/core/services/sync_service.dart';
 import 'package:hlth_app/features/home/home_providers.dart';
 import 'package:hlth_app/ui/theme/app_colors.dart';
+import 'package:hlth_app/ui/widgets/metric_trend_scaffold.dart';
+import 'package:hlth_app/ui/widgets/trend_view_sections.dart';
 
 /// Stress detail screen.
 ///
@@ -125,49 +127,65 @@ class _StressScreenState extends ConsumerState<StressScreen> {
     final latest = ref.watch(latestStressSampleProvider).valueOrNull;
     final today = ref.watch(todayStressSamplesProvider).valueOrNull ?? const [];
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Strain'),
-        leading: const BackButton(),
-        actions: [
-          IconButton(
-            icon: _syncing
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.refresh),
-            tooltip: 'Sync strain from band',
-            onPressed: _syncing ? null : _refreshFromBand,
+    return MetricTrendScaffold(
+      metricName: 'Stress',
+      allowAddEdit: false,
+      aboutTitle: 'Stress',
+      aboutText: 'The stress score reflects your body\'s physiological stress level based on heart rate variability patterns. Lower scores indicate a more relaxed state.',
+      extraActions: [
+        IconButton(
+          icon: _syncing
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.refresh),
+          tooltip: 'Sync strain from band',
+          onPressed: _syncing ? null : _refreshFromBand,
+        ),
+      ],
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: _refreshFromBand,
+          child: ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              const SizedBox(height: 16),
+              _Headline(latest: latest),
+              const SizedBox(height: 28),
+              _DayChart(samples: today),
+              const SizedBox(height: 20),
+              _ZoneBreakdown(samples: today),
+              const SizedBox(height: 20),
+              _ScheduledCard(
+                enabled: _scheduledEnabled,
+                busy: _scheduledBusy,
+                onToggle: _toggleScheduled,
+              ),
+              const SizedBox(height: 20),
+              DataDetailsCard(metric: 'stress'),
+              const SizedBox(height: 16),
+              Last7DaysTile(
+                metric: 'stress',
+                averageValue: null,
+                unit: '',
+                color: AppColors.warning,
+              ),
+              const SizedBox(height: 16),
+              AboutMetricSection(
+                title: 'About Stress',
+                body: 'The stress score reflects your body\'s physiological stress level based on heart rate variability patterns. Lower scores indicate a more relaxed state.',
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'The band measures strain automatically using HRV. Wear it during '
+                'the day for a full picture.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
+              ),
+            ],
           ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: _refreshFromBand,
-        child: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          const SizedBox(height: 16),
-          _Headline(latest: latest),
-          const SizedBox(height: 28),
-          _DayChart(samples: today),
-          const SizedBox(height: 20),
-          _ZoneBreakdown(samples: today),
-          const SizedBox(height: 20),
-          _ScheduledCard(
-            enabled: _scheduledEnabled,
-            busy: _scheduledBusy,
-            onToggle: _toggleScheduled,
-          ),
-          const SizedBox(height: 20),
-          const Text(
-            'The band measures strain automatically using HRV. Wear it during '
-            'the day for a full picture.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
-          ),
-        ],
         ),
       ),
     );
