@@ -29,6 +29,8 @@ import 'package:hlth_app/core/repositories/bp_repository.dart';
 import 'package:hlth_app/core/services/baseline_service.dart';
 import 'package:hlth_app/core/services/cloud_sync_service.dart';
 import 'package:hlth_app/core/services/daily_aggregator.dart';
+import 'package:hlth_app/core/services/nightly_bp_capture_service.dart';
+import 'package:hlth_app/core/services/recovery_score_service.dart';
 import 'package:hlth_app/features/home/home_providers.dart';
 import 'package:hlth_app/core/services/sync_service.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -892,6 +894,50 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
     }
   }
 
+  /// Re-aggregate the recent window then compute the daily scores on demand,
+  /// so the Recovery card can be verified without waiting for a sync tick.
+  /// Tries today first, falls back to yesterday, and logs the result/reason.
+  Future<void> _computeScores() async {
+    if (!_requireSession()) return;
+    _push('Compute Scores: aggregating last 20 days...');
+    try {
+      await ref
+          .read(dailyAggregatorProvider)
+          .aggregateRecent(userId: _activeUserId!, days: 20);
+    } catch (e) {
+      _push('  aggregate failed: $e');
+    }
+    // Annotated re-aggregation of today so the HRV sleep-window gating is
+    // visible: window bounds, in-window sample count, sleep vs morning HRV.
+    try {
+      final now = DateTime.now();
+      await ref.read(dailyAggregatorProvider).aggregateDay(
+            userId: _activeUserId!,
+            localDate: DateTime(now.year, now.month, now.day),
+            tzOffsetMin: now.timeZoneOffset.inMinutes,
+            log: _push,
+          );
+    } catch (e) {
+      _push('  HRV window check failed: $e');
+    }
+    final svc = ref.read(recoveryScoreServiceProvider);
+    final today = DateTime.now();
+    for (final d in [today, today.subtract(const Duration(days: 1))]) {
+      final dk = d.toIso8601String().substring(0, 10);
+      final score = await svc.computeForDay(userId: _activeUserId!, localDate: d);
+      if (score != null) {
+        _push('Recovery ($dk): ${score.score.toStringAsFixed(1)}/100 — '
+            '${score.label ?? "?"}'
+            '${score.provisional ? " (provisional)" : ""} '
+            'conf=${score.confidence?.toStringAsFixed(2) ?? "?"}');
+        _push('  → open Home; the Recovery card now shows this.');
+        return;
+      }
+      _push('Recovery ($dk): no score — no valid sleep night / not enough data');
+    }
+    _push('  → run Sync All Sleep first, then Compute Scores again.');
+  }
+
   /// Pull every sleep session the band still has buffered (it retains ~7
   /// days) in one go, persist them all, then re-aggregate the window so
   /// daily_metrics + the Home/Sleep screens reflect the full history.
@@ -1173,37 +1219,46 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
     final dayOffset = await _promptDayIndex(title: 'BP Specific Day');
     if (dayOffset == null) return;
     final label = dayOffset == 0 ? 'today' : 'day-$dayOffset';
-    _push('getBpDay ($label): requesting...');
-    try {
-      final r = await ref.read(bleServiceProvider).getBpDay(dayOffset: dayOffset);
-      final readings = (r['readings'] as List?) ?? const [];
-      if (readings.isEmpty) {
-        _push('  no BP readings for $label');
-        return;
-      }
-      _push('  ${readings.length} BP reading(s) (sbp/dbp pairs):');
-      for (var i = 0; i < readings.length && i < 12; i++) {
-        final m = readings[i] as Map;
-        _push('    [$i] time=${m['time']} sbp=${m['sbp']} dbp=${m['dbp']}');
-      }
-      if (readings.length > 12) _push('    ... +${readings.length - 12} more');
-    } catch (e) {
-      _push('getBpDay error: $e');
+    _push('syncBp ($label): requesting + persisting...');
+    final res = await ref.read(syncServiceProvider).syncBp(
+          userId: _activeUserId!,
+          deviceId: _activeDeviceId!,
+          dayOffset: dayOffset,
+        );
+    if (!res.ok) {
+      _push('syncBp error: ${res.error}');
+      return;
     }
+    final readings = (res.rawMap?['readings'] as List?) ?? const [];
+    if (readings.isEmpty) {
+      _push('  no BP readings for $label');
+      return;
+    }
+    _push('  ${readings.length} BP reading(s) (sbp/dbp pairs):');
+    for (var i = 0; i < readings.length && i < 12; i++) {
+      final m = readings[i] as Map;
+      _push('    [$i] time=${m['time']} sbp=${m['sbp']} dbp=${m['dbp']}');
+    }
+    if (readings.length > 12) _push('    ... +${readings.length - 12} more');
+    _push('  persisted ${res.count} BP reading(s) as bp_readings');
   }
 
   Future<void> _startBpMeasurement() async {
     if (!_requireSession()) return;
-    _push('startBpMeasurement: launching active measurement (~30s)...');
+    _push('nightly BP: firing active measurement (~30s) + persisting...');
     try {
-      final r = await ref.read(bleServiceProvider).startBpMeasurement();
-      final sbp = r['sbp'];
-      final dbp = r['dbp'];
-      final hr = r['hr'];
-      final errCode = r['errCode'];
-      _push('  result: $sbp/$dbp mmHg, HR=$hr bpm (errCode=$errCode)');
+      final res = await ref
+          .read(nightlyBpCaptureServiceProvider)
+          .captureAndPersist(userId: _activeUserId!);
+      if (res == null) {
+        _push('  no reading — band did not converge (ring snug?) '
+            'or not connected');
+        return;
+      }
+      _push('  persisted ${res.sbp}/${res.dbp} mmHg as bp_reading');
+      _push('  (run Scores / next sync to roll it into daily_metrics)');
     } catch (e) {
-      _push('startBpMeasurement error: $e');
+      _push('nightly BP error: $e');
     }
   }
 
@@ -1911,54 +1966,63 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
     }
   }
 
+  /// One labelled icon in the scrollable debug toolbar.
+  Widget _toolBtn(IconData icon, String label, VoidCallback onTap) {
+    final color = Theme.of(context).colorScheme.onSurface;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 22, color: color),
+            const SizedBox(height: 2),
+            Text(label, style: TextStyle(fontSize: 10, color: color)),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('BLE Debug'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.bloodtype_outlined),
-            onPressed: _probeSpo2Interval,
-            tooltip: 'Probe interval SpO2',
+        // The action icons outgrew the toolbar and got cramped. Move them into
+        // a full-width, horizontally-scrollable strip under the title, each
+        // labelled, so they're easy to find and tap during debugging.
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(58),
+          child: SizedBox(
+            height: 58,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              children: [
+                _toolBtn(Icons.bloodtype_outlined, 'SpO2', _probeSpo2Interval),
+                _toolBtn(Icons.timelapse, 'Capture', _scheduledCaptureNow),
+                _toolBtn(Icons.notifications_active_outlined, 'Notify',
+                    _sendTestNotification),
+                _toolBtn(Icons.fact_check_outlined, 'Alerts', _evaluateAlerts),
+                _toolBtn(Icons.battery_charging_full, 'Scores', _computeScores),
+                _toolBtn(Icons.monitor_heart_outlined, 'R-R',
+                    _exportRrToClipboard),
+                _toolBtn(
+                  _logMaximized ? Icons.fullscreen_exit : Icons.fullscreen,
+                  _logMaximized ? 'Min' : 'Max',
+                  () => setState(() => _logMaximized = !_logMaximized),
+                ),
+                _toolBtn(Icons.copy_all, 'Copy', _copyLogToClipboard),
+                _toolBtn(Icons.delete_outline, 'Clear',
+                    () => setState(_log.clear)),
+              ],
+            ),
           ),
-          IconButton(
-            icon: const Icon(Icons.timelapse),
-            onPressed: _scheduledCaptureNow,
-            tooltip: 'Scheduled capture now (~3 min)',
-          ),
-          IconButton(
-            icon: const Icon(Icons.notifications_active_outlined),
-            onPressed: _sendTestNotification,
-            tooltip: 'Send test notification',
-          ),
-          IconButton(
-            icon: const Icon(Icons.fact_check_outlined),
-            onPressed: _evaluateAlerts,
-            tooltip: 'Evaluate alert rules',
-          ),
-          IconButton(
-            icon: const Icon(Icons.monitor_heart_outlined),
-            onPressed: _exportRrToClipboard,
-            tooltip: 'Export R-R series (for cleaner tuning)',
-          ),
-          IconButton(
-            icon: Icon(_logMaximized ? Icons.fullscreen_exit : Icons.fullscreen),
-            onPressed: () =>
-                setState(() => _logMaximized = !_logMaximized),
-            tooltip: _logMaximized ? 'Show controls' : 'Maximize log',
-          ),
-          IconButton(
-            icon: const Icon(Icons.copy_all),
-            onPressed: _copyLogToClipboard,
-            tooltip: 'Copy log',
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
-            onPressed: () => setState(_log.clear),
-            tooltip: 'Clear log',
-          ),
-        ],
+        ),
       ),
       body: SafeArea(
         child: Column(

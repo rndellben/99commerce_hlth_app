@@ -60,6 +60,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final latestHrv = ref.watch(latestHrvSampleProvider).valueOrNull;
     final latestBpPair = ref.watch(calibratedLatestBpProvider).valueOrNull;
     final latestStress = ref.watch(latestStressSampleProvider).valueOrNull;
+    final recoveryScore = ref.watch(latestRecoveryScoreProvider).valueOrNull;
     final hrSpark = ref.watch(hrSparklineProvider).valueOrNull ?? const [];
     final spo2Spark =
         ref.watch(spo2SparklineProvider).valueOrNull ?? const [];
@@ -250,11 +251,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
                 HealthMetricCard(
                   title: 'Recovery',
-                  value: today?.recoveryScore?.toString() ?? '--',
+                  value: recoveryScore?.score.round().toString() ?? '--',
                   unit: '/100',
                   icon: Icons.battery_charging_full,
                   color: AppColors.recovery,
-                  isLocked: !gate.recoveryScore,
+                  // Once we have a real score, show it (with a Calibrating
+                  // subtitle while provisional); otherwise fall back to the
+                  // gated "unlocking" lock.
+                  date: recoveryScore == null
+                      ? null
+                      : (recoveryScore.provisional
+                          ? 'Calibrating'
+                          : recoveryScore.label),
+                  isLocked: recoveryScore == null && !gate.recoveryScore,
                   lockedMessage:
                       'Available in ${gate.daysUntilRecovery} days',
                   onTap: () => context.push('/recovery'),

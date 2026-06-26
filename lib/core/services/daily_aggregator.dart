@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hlth_app/core/database/enums.dart';
 import 'package:hlth_app/core/models/daily_metrics.dart';
 import 'package:hlth_app/core/models/health_samples.dart';
+import 'package:hlth_app/core/repositories/bp_repository.dart';
 import 'package:hlth_app/core/repositories/daily_metrics_repository.dart';
 import 'package:hlth_app/core/repositories/hr_repository.dart';
 import 'package:hlth_app/core/repositories/hrv_repository.dart';
@@ -17,10 +18,16 @@ import 'package:uuid/uuid.dart';
 /// Conventions (hlth-db-schema.md §4.2, hlth-engineering-primer.md §Phase 1):
 /// * **Resting HR** = lowest 10-minute moving average during sleep window;
 ///   falls back to lowest morning HR (04:00–10:00 local); else median HR.
-/// * **HRV (RMSSD / SDNN)** = earliest non-zero reading between 04:00–09:00
-///   local; consumers expect "morning resting" semantics.
+/// * **HRV (RMSSD / SDNN)** = median of the samples inside the most recent
+///   sleep window `[bedtime, wake)`; falls back to the morning-resting reading
+///   (04:00–09:00 local) only when the night has no HRV samples. Sleep-window
+///   HRV per Ryan 2026-06-23 — daytime HRV is a motion-contaminated signal.
 /// * **SpO2 overnight** = mean/min of samples inside the most recent sleep
 ///   session window; falls back to 00:00–06:00 local if no session yet.
+/// * **Blood pressure** = the median-systolic reading (with its own
+///   diastolic) from the sleep window; falls back to the day's hourly
+///   snapshots. Stored raw — cuff calibration is applied at the display
+///   layer, not here.
 /// * **Sleep** = direct copy of the most recent SleepSession that ended on
 ///   `localDate` (or earlier same morning).
 /// * **Activity** = preserved from any existing row (step sync writes those
@@ -33,6 +40,7 @@ class DailyAggregator {
     required this.sleepRepo,
     required this.dailyRepo,
     required this.stepBucketRepo,
+    required this.bpRepo,
     ActivityClassifier? classifier,
   }) : classifier = classifier ?? ActivityClassifier();
 
@@ -42,6 +50,7 @@ class DailyAggregator {
   final SleepRepository sleepRepo;
   final DailyMetricsRepository dailyRepo;
   final StepBucketRepository stepBucketRepo;
+  final BpRepository bpRepo;
   final ActivityClassifier classifier;
 
   static const _uuid = Uuid();
@@ -51,6 +60,7 @@ class DailyAggregator {
     required String userId,
     required DateTime localDate,
     required int tzOffsetMin,
+    void Function(String message)? log,
   }) async {
     // Treat the y/m/d as a local date and resolve its midnight as a UTC
     // instant. Using DateTime.utc + manual subtract keeps the math
@@ -109,11 +119,38 @@ class DailyAggregator {
     }
     restingHr ??= _median(hrSamples.map((s) => s.bpm).toList());
 
-    // ── HRV (morning resting) ────────────────────────────────────────────
-    final morningHrv = await hrvRepo.getMorningResting(
-      userId: userId,
-      forDate: localMidnight,
-    );
+    // ── HRV — over the SLEEP WINDOW ──────────────────────────────────────
+    // Ryan 2026-06-23: nighttime HRV, not daytime. "daytime HRV is not
+    // representative … HRV can be impacted by drinking, smoking, walking,
+    // exercise … take the intervals for HRV during sleep." So we take the
+    // median RMSSD/SDNN of the samples inside [bedtime, wake]; the morning-
+    // resting reading is only a fallback for nights with no HRV samples.
+    double? hrvRmssd;
+    double? hrvSdnn;
+    if (session != null) {
+      final hrvInSleep = await hrvRepo.getInRange(
+        userId: userId,
+        from: session.startedAt,
+        to: session.endedAt,
+      );
+      hrvRmssd = sleepWindowMedianRmssd(
+          hrvInSleep, session.startedAt, session.endedAt);
+      hrvSdnn = sleepWindowMedianSdnn(
+          hrvInSleep, session.startedAt, session.endedAt);
+      log?.call('HRV sleep-window '
+          '[${_hm(session.startedAt)}–${_hm(session.endedAt)}]: '
+          '${hrvInSleep.length} samples → median RMSSD '
+          '${hrvRmssd?.toStringAsFixed(1) ?? "—"} ms');
+    }
+    // Morning-resting fallback — also fetched when logging so the debug A/B
+    // can show what the old morning-window value would have been.
+    final morningHrv = (hrvRmssd == null || log != null)
+        ? await hrvRepo.getMorningResting(userId: userId, forDate: localMidnight)
+        : null;
+    log?.call('  morning-window HRV (compare/fallback): '
+        '${morningHrv?.rmssdMs.toStringAsFixed(1) ?? "—"} ms');
+    hrvRmssd ??= morningHrv?.rmssdMs;
+    hrvSdnn ??= morningHrv?.sdnnMs;
 
     // ── SpO2 overnight ───────────────────────────────────────────────────
     double? spo2Avg;
@@ -142,6 +179,37 @@ class DailyAggregator {
         spo2Min = stats.min;
       }
     }
+
+    // ── Blood pressure ───────────────────────────────────────────────────
+    // The sleep screen frames BP as "measured during sleep", so prefer the
+    // reading inside the sleep window; fall back to the day's readings.
+    // getHourlySnapshots collapses the user-selectable scheduled cadence
+    // (15/30/60 min) to ≤1 reading/hour so density doesn't skew the median.
+    // Stored raw — the cuff calibration is applied at the display layer
+    // (calibratedLatestBpProvider), not here.
+    int? systolic;
+    int? diastolic;
+    if (session != null) {
+      final bpInSleep = await bpRepo.getHourlySnapshots(
+        userId: userId,
+        from: session.startedAt,
+        to: session.endedAt,
+      );
+      final pair = _medianBp(bpInSleep);
+      systolic = pair?.sbp;
+      diastolic = pair?.dbp;
+    }
+    if (systolic == null) {
+      final bpDay = await bpRepo.getHourlySnapshots(
+        userId: userId,
+        from: dayStartUtc,
+        to: dayEndUtc,
+      );
+      final pair = _medianBp(bpDay);
+      systolic = pair?.sbp;
+      diastolic = pair?.dbp;
+    }
+    log?.call('BP: ${systolic != null ? "$systolic/$diastolic mmHg" : "—"}');
 
     // ── Sleep totals ─────────────────────────────────────────────────────
     int? sleepTotalMin;
@@ -204,10 +272,12 @@ class DailyAggregator {
         .copyWith(
       tzOffsetMin: tzOffsetMin,
       restingHrBpm: restingHr ?? existing?.restingHrBpm,
-      hrvRmssdMs: morningHrv?.rmssdMs ?? existing?.hrvRmssdMs,
-      hrvSdnnMs: morningHrv?.sdnnMs ?? existing?.hrvSdnnMs,
+      hrvRmssdMs: hrvRmssd ?? existing?.hrvRmssdMs,
+      hrvSdnnMs: hrvSdnn ?? existing?.hrvSdnnMs,
       spo2OvernightAvg: spo2Avg ?? existing?.spo2OvernightAvg,
       spo2OvernightMin: spo2Min ?? existing?.spo2OvernightMin,
+      systolicMmhg: systolic ?? existing?.systolicMmhg,
+      diastolicMmhg: diastolic ?? existing?.diastolicMmhg,
       sleepTotalMin: sleepTotalMin ?? existing?.sleepTotalMin,
       sleepDeepPct: sleepDeepPct ?? existing?.sleepDeepPct,
       sleepRemPct: sleepRemPct ?? existing?.sleepRemPct,
@@ -303,6 +373,52 @@ class DailyAggregator {
     return sorted[sorted.length ~/ 2];
   }
 
+  /// Representative BP pair for a set of readings: the reading whose
+  /// systolic is the median, returned with its own diastolic so the pair
+  /// stays a real measured pair (rather than median-of-sbp paired with an
+  /// unrelated median-of-dbp). Null when there are no readings.
+  ({int sbp, int dbp})? _medianBp(List<BpReading> readings) {
+    if (readings.isEmpty) return null;
+    final sorted = [...readings]
+      ..sort((a, b) => a.systolicMmhg.compareTo(b.systolicMmhg));
+    final mid = sorted[sorted.length ~/ 2];
+    return (sbp: mid.systolicMmhg, dbp: mid.diastolicMmhg);
+  }
+
+  String _hm(DateTime dt) {
+    final l = dt.toLocal();
+    return '${l.hour.toString().padLeft(2, '0')}:'
+        '${l.minute.toString().padLeft(2, '0')}';
+  }
+
+  /// Median RMSSD of the HRV samples that fall inside the sleep window
+  /// `[start, end)`. Returns null when no sample lies in the window — the
+  /// engine then leaves HRV absent rather than fabricating one. Static + pure
+  /// so the windowing/median is unit-testable without a database.
+  static double? sleepWindowMedianRmssd(
+          List<HrvSample> samples, DateTime start, DateTime end) =>
+      _medianD([
+        for (final s in samples)
+          if (_inWindow(s.capturedAt, start, end)) s.rmssdMs
+      ]);
+
+  static double? sleepWindowMedianSdnn(
+          List<HrvSample> samples, DateTime start, DateTime end) =>
+      _medianD([
+        for (final s in samples)
+          if (_inWindow(s.capturedAt, start, end) && s.sdnnMs != null) s.sdnnMs!
+      ]);
+
+  static bool _inWindow(DateTime t, DateTime start, DateTime end) =>
+      !t.isBefore(start) && t.isBefore(end);
+
+  static double? _medianD(List<double> xs) {
+    if (xs.isEmpty) return null;
+    final s = [...xs]..sort();
+    final m = s.length ~/ 2;
+    return s.length.isOdd ? s[m] : (s[m - 1] + s[m]) / 2.0;
+  }
+
   Future<void> _markRestingDuringSleep({
     required String userId,
     required DateTime sleepStart,
@@ -343,5 +459,6 @@ final dailyAggregatorProvider = Provider<DailyAggregator>((ref) {
     sleepRepo: ref.watch(sleepRepositoryProvider),
     dailyRepo: ref.watch(dailyMetricsRepositoryProvider),
     stepBucketRepo: ref.watch(stepBucketRepositoryProvider),
+    bpRepo: ref.watch(bpRepositoryProvider),
   );
 });

@@ -90,6 +90,61 @@ List<Spo2Sample> spo2FromNative(
   return out;
 }
 
+/// BP per-day — native shape `{readings: [{time, sbp, dbp}]}` from
+/// `getBpDay` (BleOperateManager.getBloodPressure / getTodayBloodPressure).
+///
+/// `time` is a unix timestamp the SDK has already TZ-corrected to UTC:
+/// `ReadBlePressureRsp.acceptData` subtracts `Calendar.ZONE_OFFSET` from the
+/// band's local-encoded value, so we treat it as a true UTC instant and do
+/// NOT re-apply the tz shift (unlike the SpO2/stress day adapters, which get
+/// the raw band value). Seconds vs milliseconds is auto-detected by
+/// magnitude. Readings with sbp<=0 or dbp<=0 are the band's
+/// non-convergence sentinel and are dropped.
+///
+/// **Idempotency:** `getBpDay` returns the FULL day on every call (not just
+/// un-synced samples like the HR history pointer), so a fresh uuid per row
+/// would duplicate every reading on the 10-minute sync cadence. Each row
+/// instead gets a deterministic id `bpsync:<deviceId>:<epochSec>` so a
+/// re-pull of the same reading overwrites via `insertOnConflictUpdate`.
+/// Scheduled rows can't collide with manual readings (uuid v4 + a different
+/// `source`).
+///
+/// H59 caveat: the band's BP is an HR-derived estimate; the cuff calibration
+/// applied downstream (`calibratedLatestBpProvider`) is what makes the
+/// displayed value meaningful. We still store the raw band pair here.
+List<BpReading> bpFromNative(
+  Map<String, dynamic> native, {
+  required String userId,
+  required String deviceId,
+  int? tzOffsetMin,
+}) {
+  final readings = (native['readings'] as List?) ?? const [];
+  final tz = tzOffsetMin ?? _localTzOffsetMin();
+  final out = <BpReading>[];
+  for (final raw in readings) {
+    final m = Map<String, dynamic>.from(raw as Map);
+    final t = (m['time'] as num?)?.toInt() ?? 0;
+    final sbp = (m['sbp'] as num?)?.toInt() ?? 0;
+    final dbp = (m['dbp'] as num?)?.toInt() ?? 0;
+    if (t <= 0 || sbp <= 0 || dbp <= 0) continue;
+    final ms = t > 1000000000000 ? t : t * 1000;
+    final epochSec = ms ~/ 1000;
+    out.add(BpReading(
+      id: 'bpsync:$deviceId:$epochSec',
+      userId: userId,
+      deviceId: deviceId,
+      capturedAt: _utcFromMs(ms),
+      tzOffsetMin: tz,
+      systolicMmhg: sbp,
+      diastolicMmhg: dbp,
+      derivation: BpDerivation.bandSensor,
+      source: DataSource.bandScheduled,
+      algorithmVersion: _algoVersion,
+    ));
+  }
+  return out;
+}
+
 /// HRV — native shape `{values: [N samples], intervalMinutes, rawArray}`.
 /// Values are placed every `intervalMinutes` from the start of `forDate`.
 List<HrvSample> hrvFromNative(

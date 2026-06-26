@@ -4,6 +4,7 @@ import 'package:hlth_app/core/ble/ble_service.dart';
 import 'package:hlth_app/core/ble/sync_adapters.dart' as adapters;
 import 'package:hlth_app/core/bootstrap/active_session.dart';
 import 'package:hlth_app/core/repositories/battery_telemetry_repository.dart';
+import 'package:hlth_app/core/repositories/bp_repository.dart';
 import 'package:hlth_app/core/repositories/daily_metrics_repository.dart';
 import 'package:hlth_app/core/repositories/device_repository.dart';
 import 'package:hlth_app/core/repositories/hr_repository.dart';
@@ -14,11 +15,13 @@ import 'package:hlth_app/core/repositories/step_bucket_repository.dart';
 import 'package:hlth_app/core/repositories/stress_repository.dart';
 import 'package:hlth_app/core/processing/fall_detector.dart';
 import 'package:hlth_app/core/services/daily_aggregator.dart';
+import 'package:hlth_app/core/services/recovery_score_service.dart';
 import 'package:hlth_app/core/auth/current_user_provider.dart';
 import 'package:hlth_app/core/services/alerts/alert_evaluator.dart';
 import 'package:hlth_app/core/services/cloud_sync_service.dart';
 import 'package:hlth_app/core/services/retention_sweep_service.dart';
 import 'package:hlth_app/core/services/scheduled_ppg_capture_service.dart';
+import 'package:hlth_app/core/services/nightly_bp_capture_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math' as math;
 
@@ -98,8 +101,10 @@ class SyncService {
     required this.hrvRepo,
     required this.stressRepo,
     required this.stepBucketRepo,
+    required this.bpRepo,
     required this.dailyRepo,
     required this.aggregator,
+    required this.recoveryScore,
     required this.cloudSync,
   });
 
@@ -110,8 +115,10 @@ class SyncService {
   final HrvRepository hrvRepo;
   final StressRepository stressRepo;
   final StepBucketRepository stepBucketRepo;
+  final BpRepository bpRepo;
   final DailyMetricsRepository dailyRepo;
   final DailyAggregator aggregator;
+  final RecoveryScoreService recoveryScore;
   final CloudSyncService cloudSync;
 
   /// Runs every band sync in sequence, then re-aggregates the last 14
@@ -135,6 +142,14 @@ class SyncService {
     steps.add(await syncHrv(userId: userId, deviceId: deviceId, dayOffset: 1));
     steps.add(await syncStress(userId: userId, deviceId: deviceId, dayOffset: 0));
     steps.add(await syncStress(userId: userId, deviceId: deviceId, dayOffset: 1));
+    // NOTE: BP history is intentionally NOT pulled here. On H59 the SDK's
+    // per-day BP API (`getBpDay` → BleOperateManager.getBloodPressure) just
+    // times out (-4001, ~15s) — the firmware has no retrievable stored-BP
+    // history (the only other path, getBpHistory, returns hourly HR, not BP).
+    // Calling it on every tick would add ~30s of dead wait per sync. The
+    // only real BP on H59 is on-demand `startBpMeasurement` ("Measure Now"),
+    // which the BP screen persists directly. `syncBp` stays available for the
+    // debug screen + future firmware/hardware that supports the day API.
 
     var aggregated = false;
     try {
@@ -143,6 +158,17 @@ class SyncService {
     } catch (_) {
       // Aggregation failures are logged as a non-fatal step result
       // rather than thrown; the next run will retry.
+    }
+
+    // Recompute the daily Recovery score off the freshly-aggregated rollup
+    // (post-sleep trigger). Non-fatal: a scoring failure never breaks sync.
+    if (aggregated) {
+      try {
+        await recoveryScore.computeForDay(
+          userId: userId,
+          localDate: DateTime.now(),
+        );
+      } catch (_) {}
     }
 
     // Enqueue recent metrics for cloud sync (non-fatal).
@@ -437,6 +463,45 @@ class SyncService {
       );
     }
   }
+
+  /// Pulls the band's stored BP readings for a day-offset via the SDK's
+  /// per-day API and persists them as `bp_readings` (source bandScheduled).
+  ///
+  /// Synced for both `dayOffset=0` (today) and `dayOffset=1` (yesterday)
+  /// from `syncAll`, mirroring HRV — overnight scheduled readings are pulled
+  /// the next morning under the wear-day index.
+  ///
+  /// Idempotent: `bpFromNative` assigns each reading a deterministic id, so
+  /// re-pulling the full day every sync tick overwrites rather than
+  /// duplicates.
+  Future<SyncStepResult> syncBp({
+    required String userId,
+    required String deviceId,
+    int dayOffset = 0,
+  }) async {
+    try {
+      final r = await ble.getBpDay(dayOffset: dayOffset);
+      final samples = adapters.bpFromNative(
+        r,
+        userId: userId,
+        deviceId: deviceId,
+      );
+      if (samples.isNotEmpty) {
+        await bpRepo.insertMany(samples);
+      }
+      return SyncStepResult(
+        metric: 'bp(d=$dayOffset)',
+        count: samples.length,
+        rawMap: r,
+      );
+    } catch (e) {
+      return SyncStepResult(
+        metric: 'bp(d=$dayOffset)',
+        count: 0,
+        error: e.toString(),
+      );
+    }
+  }
 }
 
 final syncServiceProvider = Provider<SyncService>((ref) {
@@ -448,8 +513,10 @@ final syncServiceProvider = Provider<SyncService>((ref) {
     hrvRepo: ref.watch(hrvRepositoryProvider),
     stressRepo: ref.watch(stressRepositoryProvider),
     stepBucketRepo: ref.watch(stepBucketRepositoryProvider),
+    bpRepo: ref.watch(bpRepositoryProvider),
     dailyRepo: ref.watch(dailyMetricsRepositoryProvider),
     aggregator: ref.watch(dailyAggregatorProvider),
+    recoveryScore: ref.watch(recoveryScoreServiceProvider),
     cloudSync: ref.watch(cloudSyncServiceProvider),
   );
 });
@@ -474,6 +541,7 @@ class PeriodicSyncCoordinator {
     required this.cloudSync,
     required this.alertEvaluator,
     required this.scheduledPpgCapture,
+    required this.nightlyBpCapture,
     required this.authUserIdReader,
     required Stream<int> tickStream,
     this.fallSweepDuration = const Duration(seconds: 30),
@@ -499,6 +567,7 @@ class PeriodicSyncCoordinator {
   final CloudSyncService cloudSync;
   final AlertEvaluator alertEvaluator;
   final ScheduledPpgCaptureService scheduledPpgCapture;
+  final NightlyBpCaptureService nightlyBpCapture;
   final String? Function() authUserIdReader;
   final Duration fallSweepDuration;
   final FallDetector _fallDetector;
@@ -591,6 +660,15 @@ class PeriodicSyncCoordinator {
       // captures never overlap. Daily-gated internally + non-fatal.
       try {
         await scheduledPpgCapture.maybeRunDaily(
+          userId: ActiveSession.defaultUserId,
+        );
+      } catch (_) {}
+      // Nightly resting BP: H59 has no retrievable scheduled-BP history, so
+      // we fire our own on-demand measurement once per night inside the
+      // night window. Sequenced last (after the raw-PPG captures) so the
+      // band-side active measurements never overlap. Gated + non-fatal.
+      try {
+        await nightlyBpCapture.maybeRunNightly(
           userId: ActiveSession.defaultUserId,
         );
       } catch (_) {}
@@ -809,6 +887,7 @@ final periodicSyncCoordinatorProvider =
     cloudSync: ref.watch(cloudSyncServiceProvider),
     alertEvaluator: ref.watch(alertEvaluatorProvider),
     scheduledPpgCapture: ref.watch(scheduledPpgCaptureServiceProvider),
+    nightlyBpCapture: ref.watch(nightlyBpCaptureServiceProvider),
     authUserIdReader: () => ref.read(currentUserIdProvider),
     tickStream: ble.periodicSyncTick,
     // Battery-drain telemetry — one row per tick. Fire-and-forget; we

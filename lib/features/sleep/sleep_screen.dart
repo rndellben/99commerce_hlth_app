@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hlth_app/core/bootstrap/active_session.dart';
 import 'package:hlth_app/core/database/enums.dart';
+import 'package:hlth_app/core/models/daily_metrics.dart';
 import 'package:hlth_app/core/models/sleep.dart';
 import 'package:hlth_app/core/repositories/device_repository.dart';
 import 'package:hlth_app/core/services/sync_service.dart';
@@ -229,6 +230,9 @@ class _DaySessionContent extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final epochsAsync = ref.watch(sleepEpochsProvider(session.id));
+    final nightMetrics = ref
+        .watch(sleepNightMetricsProvider(session.endedAt.toLocal()))
+        .valueOrNull;
     final totalMin = session.totalMin;
     final deepPct = totalMin > 0 ? (session.deepMin * 100 / totalMin) : 0.0;
     final lightPct = totalMin > 0 ? (session.lightMin * 100 / totalMin) : 0.0;
@@ -313,8 +317,90 @@ class _DaySessionContent extends ConsumerWidget {
             ),
           ],
         ),
+        const SizedBox(height: 24),
+        _SleepVitalsSection(metrics: nightMetrics),
         const SizedBox(height: 16),
         _DisclaimerCard(),
+      ],
+    );
+  }
+}
+
+/// "Measured during sleep" — the night's resting HR, SpO2, HRV and BP, read
+/// from the wake-day `daily_metrics` row (all computed over the sleep window).
+/// Ryan, 2026-06-23: "in the sleep screen … while you were sleeping, this is
+/// your resting heart rate … your SpO2 … sleeping blood pressure average."
+class _SleepVitalsSection extends StatelessWidget {
+  const _SleepVitalsSection({required this.metrics});
+  final DailyMetrics? metrics;
+
+  @override
+  Widget build(BuildContext context) {
+    final m = metrics;
+    final hr = m?.restingHrBpm;
+    final spo2 = m?.spo2OvernightAvg;
+    final hrv = m?.hrvRmssdMs;
+    final resp = m?.restingRespRateBpm;
+    final sys = m?.systolicMmhg;
+    final dia = m?.diastolicMmhg;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(left: 4, bottom: 12),
+          child: Text(
+            'Measured during sleep',
+            style: TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        MetricGrid(
+          tiles: [
+            MetricTile(
+              label: 'Resting heart rate',
+              reference: 'Reference: 40~100',
+              value: hr?.toString() ?? '--',
+              valueUnit: 'bpm',
+              status: hr == null
+                  ? MetricStatus.none
+                  : statusFor(value: hr.toDouble(), ok: const MetricRange(40, 100)),
+            ),
+            MetricTile(
+              label: 'Blood oxygen',
+              reference: 'Reference: ≥95%',
+              value: spo2 == null ? '--' : spo2.toStringAsFixed(0),
+              valueUnit: '%',
+              status: spo2 == null
+                  ? MetricStatus.none
+                  : statusFor(value: spo2, ok: const MetricRange(95, 100)),
+            ),
+            MetricTile(
+              label: 'Respiratory rate',
+              reference: 'Reference: 12~20',
+              value: resp == null ? '--' : resp.toStringAsFixed(0),
+              valueUnit: 'bpm',
+              status: resp == null
+                  ? MetricStatus.none
+                  : statusFor(value: resp, ok: const MetricRange(12, 20)),
+            ),
+            MetricTile(
+              label: 'HRV',
+              reference: 'Overnight average',
+              value: hrv == null ? '--' : hrv.toStringAsFixed(0),
+              valueUnit: 'ms',
+            ),
+            MetricTile(
+              label: 'Blood pressure',
+              reference: 'Average during sleep',
+              value: (sys == null || dia == null) ? '--' : '$sys/$dia',
+              valueUnit: (sys == null || dia == null) ? null : 'mmHg',
+            ),
+          ],
+        ),
       ],
     );
   }

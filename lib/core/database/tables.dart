@@ -372,6 +372,27 @@ class Baselines extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+/// hlth-db-schema.md §6.3 — computed daily scores (recovery, wellness,
+/// cardio load, …). One row per (user, score_type, day). `components` holds the
+/// per-input breakdown as a JSON string for debug/telemetry.
+class Scores extends Table {
+  TextColumn get id => text()(); // deterministic: "$userId:$scoreType:$date"
+  TextColumn get userId => text().references(Users, #id)();
+  IntColumn get scoreType => intEnum<ScoreType>()();
+  TextColumn get computedForDate => text()(); // YYYY-MM-DD
+  RealColumn get score => real()(); // 0..100 (one decimal)
+  RealColumn get rawScore => real().nullable()();
+  TextColumn get label => text().nullable()();
+  RealColumn get confidence => real().nullable()();
+  BoolColumn get provisional => boolean().withDefault(const Constant(false))();
+  TextColumn get components => text().nullable()(); // JSON breakdown
+  IntColumn get computedAtUtc => integer()();
+  TextColumn get algorithmVersion => text()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 // ─── Section 8 — Operational ────────────────────────────────────────────────
 
 /// Cloud sync outbox — queued upserts waiting to be pushed to Supabase.

@@ -11673,6 +11673,740 @@ class BaselinesCompanion extends UpdateCompanion<Baseline> {
   }
 }
 
+class $ScoresTable extends Scores with TableInfo<$ScoresTable, Score> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ScoresTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+    'user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES users (id)',
+    ),
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<ScoreType, int> scoreType =
+      GeneratedColumn<int>(
+        'score_type',
+        aliasedName,
+        false,
+        type: DriftSqlType.int,
+        requiredDuringInsert: true,
+      ).withConverter<ScoreType>($ScoresTable.$converterscoreType);
+  static const VerificationMeta _computedForDateMeta = const VerificationMeta(
+    'computedForDate',
+  );
+  @override
+  late final GeneratedColumn<String> computedForDate = GeneratedColumn<String>(
+    'computed_for_date',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _scoreMeta = const VerificationMeta('score');
+  @override
+  late final GeneratedColumn<double> score = GeneratedColumn<double>(
+    'score',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _rawScoreMeta = const VerificationMeta(
+    'rawScore',
+  );
+  @override
+  late final GeneratedColumn<double> rawScore = GeneratedColumn<double>(
+    'raw_score',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _labelMeta = const VerificationMeta('label');
+  @override
+  late final GeneratedColumn<String> label = GeneratedColumn<String>(
+    'label',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _confidenceMeta = const VerificationMeta(
+    'confidence',
+  );
+  @override
+  late final GeneratedColumn<double> confidence = GeneratedColumn<double>(
+    'confidence',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _provisionalMeta = const VerificationMeta(
+    'provisional',
+  );
+  @override
+  late final GeneratedColumn<bool> provisional = GeneratedColumn<bool>(
+    'provisional',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("provisional" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _componentsMeta = const VerificationMeta(
+    'components',
+  );
+  @override
+  late final GeneratedColumn<String> components = GeneratedColumn<String>(
+    'components',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _computedAtUtcMeta = const VerificationMeta(
+    'computedAtUtc',
+  );
+  @override
+  late final GeneratedColumn<int> computedAtUtc = GeneratedColumn<int>(
+    'computed_at_utc',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _algorithmVersionMeta = const VerificationMeta(
+    'algorithmVersion',
+  );
+  @override
+  late final GeneratedColumn<String> algorithmVersion = GeneratedColumn<String>(
+    'algorithm_version',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    userId,
+    scoreType,
+    computedForDate,
+    score,
+    rawScore,
+    label,
+    confidence,
+    provisional,
+    components,
+    computedAtUtc,
+    algorithmVersion,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'scores';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Score> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('user_id')) {
+      context.handle(
+        _userIdMeta,
+        userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_userIdMeta);
+    }
+    if (data.containsKey('computed_for_date')) {
+      context.handle(
+        _computedForDateMeta,
+        computedForDate.isAcceptableOrUnknown(
+          data['computed_for_date']!,
+          _computedForDateMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_computedForDateMeta);
+    }
+    if (data.containsKey('score')) {
+      context.handle(
+        _scoreMeta,
+        score.isAcceptableOrUnknown(data['score']!, _scoreMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_scoreMeta);
+    }
+    if (data.containsKey('raw_score')) {
+      context.handle(
+        _rawScoreMeta,
+        rawScore.isAcceptableOrUnknown(data['raw_score']!, _rawScoreMeta),
+      );
+    }
+    if (data.containsKey('label')) {
+      context.handle(
+        _labelMeta,
+        label.isAcceptableOrUnknown(data['label']!, _labelMeta),
+      );
+    }
+    if (data.containsKey('confidence')) {
+      context.handle(
+        _confidenceMeta,
+        confidence.isAcceptableOrUnknown(data['confidence']!, _confidenceMeta),
+      );
+    }
+    if (data.containsKey('provisional')) {
+      context.handle(
+        _provisionalMeta,
+        provisional.isAcceptableOrUnknown(
+          data['provisional']!,
+          _provisionalMeta,
+        ),
+      );
+    }
+    if (data.containsKey('components')) {
+      context.handle(
+        _componentsMeta,
+        components.isAcceptableOrUnknown(data['components']!, _componentsMeta),
+      );
+    }
+    if (data.containsKey('computed_at_utc')) {
+      context.handle(
+        _computedAtUtcMeta,
+        computedAtUtc.isAcceptableOrUnknown(
+          data['computed_at_utc']!,
+          _computedAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_computedAtUtcMeta);
+    }
+    if (data.containsKey('algorithm_version')) {
+      context.handle(
+        _algorithmVersionMeta,
+        algorithmVersion.isAcceptableOrUnknown(
+          data['algorithm_version']!,
+          _algorithmVersionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_algorithmVersionMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  Score map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Score(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      userId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}user_id'],
+      )!,
+      scoreType: $ScoresTable.$converterscoreType.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.int,
+          data['${effectivePrefix}score_type'],
+        )!,
+      ),
+      computedForDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}computed_for_date'],
+      )!,
+      score: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}score'],
+      )!,
+      rawScore: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}raw_score'],
+      ),
+      label: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}label'],
+      ),
+      confidence: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}confidence'],
+      ),
+      provisional: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}provisional'],
+      )!,
+      components: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}components'],
+      ),
+      computedAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}computed_at_utc'],
+      )!,
+      algorithmVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}algorithm_version'],
+      )!,
+    );
+  }
+
+  @override
+  $ScoresTable createAlias(String alias) {
+    return $ScoresTable(attachedDatabase, alias);
+  }
+
+  static JsonTypeConverter2<ScoreType, int, int> $converterscoreType =
+      const EnumIndexConverter<ScoreType>(ScoreType.values);
+}
+
+class Score extends DataClass implements Insertable<Score> {
+  final String id;
+  final String userId;
+  final ScoreType scoreType;
+  final String computedForDate;
+  final double score;
+  final double? rawScore;
+  final String? label;
+  final double? confidence;
+  final bool provisional;
+  final String? components;
+  final int computedAtUtc;
+  final String algorithmVersion;
+  const Score({
+    required this.id,
+    required this.userId,
+    required this.scoreType,
+    required this.computedForDate,
+    required this.score,
+    this.rawScore,
+    this.label,
+    this.confidence,
+    required this.provisional,
+    this.components,
+    required this.computedAtUtc,
+    required this.algorithmVersion,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['user_id'] = Variable<String>(userId);
+    {
+      map['score_type'] = Variable<int>(
+        $ScoresTable.$converterscoreType.toSql(scoreType),
+      );
+    }
+    map['computed_for_date'] = Variable<String>(computedForDate);
+    map['score'] = Variable<double>(score);
+    if (!nullToAbsent || rawScore != null) {
+      map['raw_score'] = Variable<double>(rawScore);
+    }
+    if (!nullToAbsent || label != null) {
+      map['label'] = Variable<String>(label);
+    }
+    if (!nullToAbsent || confidence != null) {
+      map['confidence'] = Variable<double>(confidence);
+    }
+    map['provisional'] = Variable<bool>(provisional);
+    if (!nullToAbsent || components != null) {
+      map['components'] = Variable<String>(components);
+    }
+    map['computed_at_utc'] = Variable<int>(computedAtUtc);
+    map['algorithm_version'] = Variable<String>(algorithmVersion);
+    return map;
+  }
+
+  ScoresCompanion toCompanion(bool nullToAbsent) {
+    return ScoresCompanion(
+      id: Value(id),
+      userId: Value(userId),
+      scoreType: Value(scoreType),
+      computedForDate: Value(computedForDate),
+      score: Value(score),
+      rawScore: rawScore == null && nullToAbsent
+          ? const Value.absent()
+          : Value(rawScore),
+      label: label == null && nullToAbsent
+          ? const Value.absent()
+          : Value(label),
+      confidence: confidence == null && nullToAbsent
+          ? const Value.absent()
+          : Value(confidence),
+      provisional: Value(provisional),
+      components: components == null && nullToAbsent
+          ? const Value.absent()
+          : Value(components),
+      computedAtUtc: Value(computedAtUtc),
+      algorithmVersion: Value(algorithmVersion),
+    );
+  }
+
+  factory Score.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Score(
+      id: serializer.fromJson<String>(json['id']),
+      userId: serializer.fromJson<String>(json['userId']),
+      scoreType: $ScoresTable.$converterscoreType.fromJson(
+        serializer.fromJson<int>(json['scoreType']),
+      ),
+      computedForDate: serializer.fromJson<String>(json['computedForDate']),
+      score: serializer.fromJson<double>(json['score']),
+      rawScore: serializer.fromJson<double?>(json['rawScore']),
+      label: serializer.fromJson<String?>(json['label']),
+      confidence: serializer.fromJson<double?>(json['confidence']),
+      provisional: serializer.fromJson<bool>(json['provisional']),
+      components: serializer.fromJson<String?>(json['components']),
+      computedAtUtc: serializer.fromJson<int>(json['computedAtUtc']),
+      algorithmVersion: serializer.fromJson<String>(json['algorithmVersion']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'userId': serializer.toJson<String>(userId),
+      'scoreType': serializer.toJson<int>(
+        $ScoresTable.$converterscoreType.toJson(scoreType),
+      ),
+      'computedForDate': serializer.toJson<String>(computedForDate),
+      'score': serializer.toJson<double>(score),
+      'rawScore': serializer.toJson<double?>(rawScore),
+      'label': serializer.toJson<String?>(label),
+      'confidence': serializer.toJson<double?>(confidence),
+      'provisional': serializer.toJson<bool>(provisional),
+      'components': serializer.toJson<String?>(components),
+      'computedAtUtc': serializer.toJson<int>(computedAtUtc),
+      'algorithmVersion': serializer.toJson<String>(algorithmVersion),
+    };
+  }
+
+  Score copyWith({
+    String? id,
+    String? userId,
+    ScoreType? scoreType,
+    String? computedForDate,
+    double? score,
+    Value<double?> rawScore = const Value.absent(),
+    Value<String?> label = const Value.absent(),
+    Value<double?> confidence = const Value.absent(),
+    bool? provisional,
+    Value<String?> components = const Value.absent(),
+    int? computedAtUtc,
+    String? algorithmVersion,
+  }) => Score(
+    id: id ?? this.id,
+    userId: userId ?? this.userId,
+    scoreType: scoreType ?? this.scoreType,
+    computedForDate: computedForDate ?? this.computedForDate,
+    score: score ?? this.score,
+    rawScore: rawScore.present ? rawScore.value : this.rawScore,
+    label: label.present ? label.value : this.label,
+    confidence: confidence.present ? confidence.value : this.confidence,
+    provisional: provisional ?? this.provisional,
+    components: components.present ? components.value : this.components,
+    computedAtUtc: computedAtUtc ?? this.computedAtUtc,
+    algorithmVersion: algorithmVersion ?? this.algorithmVersion,
+  );
+  Score copyWithCompanion(ScoresCompanion data) {
+    return Score(
+      id: data.id.present ? data.id.value : this.id,
+      userId: data.userId.present ? data.userId.value : this.userId,
+      scoreType: data.scoreType.present ? data.scoreType.value : this.scoreType,
+      computedForDate: data.computedForDate.present
+          ? data.computedForDate.value
+          : this.computedForDate,
+      score: data.score.present ? data.score.value : this.score,
+      rawScore: data.rawScore.present ? data.rawScore.value : this.rawScore,
+      label: data.label.present ? data.label.value : this.label,
+      confidence: data.confidence.present
+          ? data.confidence.value
+          : this.confidence,
+      provisional: data.provisional.present
+          ? data.provisional.value
+          : this.provisional,
+      components: data.components.present
+          ? data.components.value
+          : this.components,
+      computedAtUtc: data.computedAtUtc.present
+          ? data.computedAtUtc.value
+          : this.computedAtUtc,
+      algorithmVersion: data.algorithmVersion.present
+          ? data.algorithmVersion.value
+          : this.algorithmVersion,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Score(')
+          ..write('id: $id, ')
+          ..write('userId: $userId, ')
+          ..write('scoreType: $scoreType, ')
+          ..write('computedForDate: $computedForDate, ')
+          ..write('score: $score, ')
+          ..write('rawScore: $rawScore, ')
+          ..write('label: $label, ')
+          ..write('confidence: $confidence, ')
+          ..write('provisional: $provisional, ')
+          ..write('components: $components, ')
+          ..write('computedAtUtc: $computedAtUtc, ')
+          ..write('algorithmVersion: $algorithmVersion')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    userId,
+    scoreType,
+    computedForDate,
+    score,
+    rawScore,
+    label,
+    confidence,
+    provisional,
+    components,
+    computedAtUtc,
+    algorithmVersion,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Score &&
+          other.id == this.id &&
+          other.userId == this.userId &&
+          other.scoreType == this.scoreType &&
+          other.computedForDate == this.computedForDate &&
+          other.score == this.score &&
+          other.rawScore == this.rawScore &&
+          other.label == this.label &&
+          other.confidence == this.confidence &&
+          other.provisional == this.provisional &&
+          other.components == this.components &&
+          other.computedAtUtc == this.computedAtUtc &&
+          other.algorithmVersion == this.algorithmVersion);
+}
+
+class ScoresCompanion extends UpdateCompanion<Score> {
+  final Value<String> id;
+  final Value<String> userId;
+  final Value<ScoreType> scoreType;
+  final Value<String> computedForDate;
+  final Value<double> score;
+  final Value<double?> rawScore;
+  final Value<String?> label;
+  final Value<double?> confidence;
+  final Value<bool> provisional;
+  final Value<String?> components;
+  final Value<int> computedAtUtc;
+  final Value<String> algorithmVersion;
+  final Value<int> rowid;
+  const ScoresCompanion({
+    this.id = const Value.absent(),
+    this.userId = const Value.absent(),
+    this.scoreType = const Value.absent(),
+    this.computedForDate = const Value.absent(),
+    this.score = const Value.absent(),
+    this.rawScore = const Value.absent(),
+    this.label = const Value.absent(),
+    this.confidence = const Value.absent(),
+    this.provisional = const Value.absent(),
+    this.components = const Value.absent(),
+    this.computedAtUtc = const Value.absent(),
+    this.algorithmVersion = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ScoresCompanion.insert({
+    required String id,
+    required String userId,
+    required ScoreType scoreType,
+    required String computedForDate,
+    required double score,
+    this.rawScore = const Value.absent(),
+    this.label = const Value.absent(),
+    this.confidence = const Value.absent(),
+    this.provisional = const Value.absent(),
+    this.components = const Value.absent(),
+    required int computedAtUtc,
+    required String algorithmVersion,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       userId = Value(userId),
+       scoreType = Value(scoreType),
+       computedForDate = Value(computedForDate),
+       score = Value(score),
+       computedAtUtc = Value(computedAtUtc),
+       algorithmVersion = Value(algorithmVersion);
+  static Insertable<Score> custom({
+    Expression<String>? id,
+    Expression<String>? userId,
+    Expression<int>? scoreType,
+    Expression<String>? computedForDate,
+    Expression<double>? score,
+    Expression<double>? rawScore,
+    Expression<String>? label,
+    Expression<double>? confidence,
+    Expression<bool>? provisional,
+    Expression<String>? components,
+    Expression<int>? computedAtUtc,
+    Expression<String>? algorithmVersion,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (userId != null) 'user_id': userId,
+      if (scoreType != null) 'score_type': scoreType,
+      if (computedForDate != null) 'computed_for_date': computedForDate,
+      if (score != null) 'score': score,
+      if (rawScore != null) 'raw_score': rawScore,
+      if (label != null) 'label': label,
+      if (confidence != null) 'confidence': confidence,
+      if (provisional != null) 'provisional': provisional,
+      if (components != null) 'components': components,
+      if (computedAtUtc != null) 'computed_at_utc': computedAtUtc,
+      if (algorithmVersion != null) 'algorithm_version': algorithmVersion,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ScoresCompanion copyWith({
+    Value<String>? id,
+    Value<String>? userId,
+    Value<ScoreType>? scoreType,
+    Value<String>? computedForDate,
+    Value<double>? score,
+    Value<double?>? rawScore,
+    Value<String?>? label,
+    Value<double?>? confidence,
+    Value<bool>? provisional,
+    Value<String?>? components,
+    Value<int>? computedAtUtc,
+    Value<String>? algorithmVersion,
+    Value<int>? rowid,
+  }) {
+    return ScoresCompanion(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      scoreType: scoreType ?? this.scoreType,
+      computedForDate: computedForDate ?? this.computedForDate,
+      score: score ?? this.score,
+      rawScore: rawScore ?? this.rawScore,
+      label: label ?? this.label,
+      confidence: confidence ?? this.confidence,
+      provisional: provisional ?? this.provisional,
+      components: components ?? this.components,
+      computedAtUtc: computedAtUtc ?? this.computedAtUtc,
+      algorithmVersion: algorithmVersion ?? this.algorithmVersion,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
+    }
+    if (scoreType.present) {
+      map['score_type'] = Variable<int>(
+        $ScoresTable.$converterscoreType.toSql(scoreType.value),
+      );
+    }
+    if (computedForDate.present) {
+      map['computed_for_date'] = Variable<String>(computedForDate.value);
+    }
+    if (score.present) {
+      map['score'] = Variable<double>(score.value);
+    }
+    if (rawScore.present) {
+      map['raw_score'] = Variable<double>(rawScore.value);
+    }
+    if (label.present) {
+      map['label'] = Variable<String>(label.value);
+    }
+    if (confidence.present) {
+      map['confidence'] = Variable<double>(confidence.value);
+    }
+    if (provisional.present) {
+      map['provisional'] = Variable<bool>(provisional.value);
+    }
+    if (components.present) {
+      map['components'] = Variable<String>(components.value);
+    }
+    if (computedAtUtc.present) {
+      map['computed_at_utc'] = Variable<int>(computedAtUtc.value);
+    }
+    if (algorithmVersion.present) {
+      map['algorithm_version'] = Variable<String>(algorithmVersion.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ScoresCompanion(')
+          ..write('id: $id, ')
+          ..write('userId: $userId, ')
+          ..write('scoreType: $scoreType, ')
+          ..write('computedForDate: $computedForDate, ')
+          ..write('score: $score, ')
+          ..write('rawScore: $rawScore, ')
+          ..write('label: $label, ')
+          ..write('confidence: $confidence, ')
+          ..write('provisional: $provisional, ')
+          ..write('components: $components, ')
+          ..write('computedAtUtc: $computedAtUtc, ')
+          ..write('algorithmVersion: $algorithmVersion, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $BpCalibrationsTable extends BpCalibrations
     with TableInfo<$BpCalibrationsTable, BpCalibration> {
   @override
@@ -15793,6 +16527,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $SleepSessionsTable sleepSessions = $SleepSessionsTable(this);
   late final $SleepEpochsTable sleepEpochs = $SleepEpochsTable(this);
   late final $BaselinesTable baselines = $BaselinesTable(this);
+  late final $ScoresTable scores = $ScoresTable(this);
   late final $BpCalibrationsTable bpCalibrations = $BpCalibrationsTable(this);
   late final $BatteryTelemetryTable batteryTelemetry = $BatteryTelemetryTable(
     this,
@@ -15825,6 +16560,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     sleepSessions,
     sleepEpochs,
     baselines,
+    scores,
     bpCalibrations,
     batteryTelemetry,
     exerciseSessions,
@@ -16073,6 +16809,25 @@ final class $$UsersTableReferences
     ).filter((f) => f.userId.id.sqlEquals($_itemColumn<String>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_baselinesRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$ScoresTable, List<Score>> _scoresRefsTable(
+    _$AppDatabase db,
+  ) => MultiTypedResultKey.fromTable(
+    db.scores,
+    aliasName: $_aliasNameGenerator(db.users.id, db.scores.userId),
+  );
+
+  $$ScoresTableProcessedTableManager get scoresRefs {
+    final manager = $$ScoresTableTableManager(
+      $_db,
+      $_db.scores,
+    ).filter((f) => f.userId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_scoresRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -16451,6 +17206,31 @@ class $$UsersTableFilterComposer extends Composer<_$AppDatabase, $UsersTable> {
           }) => $$BaselinesTableFilterComposer(
             $db: $db,
             $table: $db.baselines,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> scoresRefs(
+    Expression<bool> Function($$ScoresTableFilterComposer f) f,
+  ) {
+    final $$ScoresTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.scores,
+      getReferencedColumn: (t) => t.userId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ScoresTableFilterComposer(
+            $db: $db,
+            $table: $db.scores,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -16894,6 +17674,31 @@ class $$UsersTableAnnotationComposer
     return f(composer);
   }
 
+  Expression<T> scoresRefs<T extends Object>(
+    Expression<T> Function($$ScoresTableAnnotationComposer a) f,
+  ) {
+    final $$ScoresTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.scores,
+      getReferencedColumn: (t) => t.userId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ScoresTableAnnotationComposer(
+            $db: $db,
+            $table: $db.scores,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
   Expression<T> bpCalibrationsRefs<T extends Object>(
     Expression<T> Function($$BpCalibrationsTableAnnotationComposer a) f,
   ) {
@@ -16971,6 +17776,7 @@ class $$UsersTableTableManager
             bool sleepSessionsRefs,
             bool sleepEpochsRefs,
             bool baselinesRefs,
+            bool scoresRefs,
             bool bpCalibrationsRefs,
             bool exerciseSessionsRefs,
           })
@@ -17046,6 +17852,7 @@ class $$UsersTableTableManager
                 sleepSessionsRefs = false,
                 sleepEpochsRefs = false,
                 baselinesRefs = false,
+                scoresRefs = false,
                 bpCalibrationsRefs = false,
                 exerciseSessionsRefs = false,
               }) {
@@ -17064,6 +17871,7 @@ class $$UsersTableTableManager
                     if (sleepSessionsRefs) db.sleepSessions,
                     if (sleepEpochsRefs) db.sleepEpochs,
                     if (baselinesRefs) db.baselines,
+                    if (scoresRefs) db.scores,
                     if (bpCalibrationsRefs) db.bpCalibrations,
                     if (exerciseSessionsRefs) db.exerciseSessions,
                   ],
@@ -17298,6 +18106,19 @@ class $$UsersTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (scoresRefs)
+                        await $_getPrefetchedData<User, $UsersTable, Score>(
+                          currentTable: table,
+                          referencedTable: $$UsersTableReferences
+                              ._scoresRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$UsersTableReferences(db, table, p0).scoresRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.userId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                       if (bpCalibrationsRefs)
                         await $_getPrefetchedData<
                           User,
@@ -17373,6 +18194,7 @@ typedef $$UsersTableProcessedTableManager =
         bool sleepSessionsRefs,
         bool sleepEpochsRefs,
         bool baselinesRefs,
+        bool scoresRefs,
         bool bpCalibrationsRefs,
         bool exerciseSessionsRefs,
       })
@@ -25452,6 +26274,467 @@ typedef $$BaselinesTableProcessedTableManager =
       Baseline,
       PrefetchHooks Function({bool userId})
     >;
+typedef $$ScoresTableCreateCompanionBuilder =
+    ScoresCompanion Function({
+      required String id,
+      required String userId,
+      required ScoreType scoreType,
+      required String computedForDate,
+      required double score,
+      Value<double?> rawScore,
+      Value<String?> label,
+      Value<double?> confidence,
+      Value<bool> provisional,
+      Value<String?> components,
+      required int computedAtUtc,
+      required String algorithmVersion,
+      Value<int> rowid,
+    });
+typedef $$ScoresTableUpdateCompanionBuilder =
+    ScoresCompanion Function({
+      Value<String> id,
+      Value<String> userId,
+      Value<ScoreType> scoreType,
+      Value<String> computedForDate,
+      Value<double> score,
+      Value<double?> rawScore,
+      Value<String?> label,
+      Value<double?> confidence,
+      Value<bool> provisional,
+      Value<String?> components,
+      Value<int> computedAtUtc,
+      Value<String> algorithmVersion,
+      Value<int> rowid,
+    });
+
+final class $$ScoresTableReferences
+    extends BaseReferences<_$AppDatabase, $ScoresTable, Score> {
+  $$ScoresTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $UsersTable _userIdTable(_$AppDatabase db) =>
+      db.users.createAlias($_aliasNameGenerator(db.scores.userId, db.users.id));
+
+  $$UsersTableProcessedTableManager get userId {
+    final $_column = $_itemColumn<String>('user_id')!;
+
+    final manager = $$UsersTableTableManager(
+      $_db,
+      $_db.users,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_userIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$ScoresTableFilterComposer
+    extends Composer<_$AppDatabase, $ScoresTable> {
+  $$ScoresTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<ScoreType, ScoreType, int> get scoreType =>
+      $composableBuilder(
+        column: $table.scoreType,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
+
+  ColumnFilters<String> get computedForDate => $composableBuilder(
+    column: $table.computedForDate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get score => $composableBuilder(
+    column: $table.score,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get rawScore => $composableBuilder(
+    column: $table.rawScore,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get label => $composableBuilder(
+    column: $table.label,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get confidence => $composableBuilder(
+    column: $table.confidence,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get provisional => $composableBuilder(
+    column: $table.provisional,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get components => $composableBuilder(
+    column: $table.components,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get computedAtUtc => $composableBuilder(
+    column: $table.computedAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get algorithmVersion => $composableBuilder(
+    column: $table.algorithmVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$UsersTableFilterComposer get userId {
+    final $$UsersTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableFilterComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ScoresTableOrderingComposer
+    extends Composer<_$AppDatabase, $ScoresTable> {
+  $$ScoresTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get scoreType => $composableBuilder(
+    column: $table.scoreType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get computedForDate => $composableBuilder(
+    column: $table.computedForDate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get score => $composableBuilder(
+    column: $table.score,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get rawScore => $composableBuilder(
+    column: $table.rawScore,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get label => $composableBuilder(
+    column: $table.label,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get confidence => $composableBuilder(
+    column: $table.confidence,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get provisional => $composableBuilder(
+    column: $table.provisional,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get components => $composableBuilder(
+    column: $table.components,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get computedAtUtc => $composableBuilder(
+    column: $table.computedAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get algorithmVersion => $composableBuilder(
+    column: $table.algorithmVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$UsersTableOrderingComposer get userId {
+    final $$UsersTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableOrderingComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ScoresTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ScoresTable> {
+  $$ScoresTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<ScoreType, int> get scoreType =>
+      $composableBuilder(column: $table.scoreType, builder: (column) => column);
+
+  GeneratedColumn<String> get computedForDate => $composableBuilder(
+    column: $table.computedForDate,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get score =>
+      $composableBuilder(column: $table.score, builder: (column) => column);
+
+  GeneratedColumn<double> get rawScore =>
+      $composableBuilder(column: $table.rawScore, builder: (column) => column);
+
+  GeneratedColumn<String> get label =>
+      $composableBuilder(column: $table.label, builder: (column) => column);
+
+  GeneratedColumn<double> get confidence => $composableBuilder(
+    column: $table.confidence,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get provisional => $composableBuilder(
+    column: $table.provisional,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get components => $composableBuilder(
+    column: $table.components,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get computedAtUtc => $composableBuilder(
+    column: $table.computedAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get algorithmVersion => $composableBuilder(
+    column: $table.algorithmVersion,
+    builder: (column) => column,
+  );
+
+  $$UsersTableAnnotationComposer get userId {
+    final $$UsersTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableAnnotationComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ScoresTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ScoresTable,
+          Score,
+          $$ScoresTableFilterComposer,
+          $$ScoresTableOrderingComposer,
+          $$ScoresTableAnnotationComposer,
+          $$ScoresTableCreateCompanionBuilder,
+          $$ScoresTableUpdateCompanionBuilder,
+          (Score, $$ScoresTableReferences),
+          Score,
+          PrefetchHooks Function({bool userId})
+        > {
+  $$ScoresTableTableManager(_$AppDatabase db, $ScoresTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ScoresTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ScoresTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ScoresTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> userId = const Value.absent(),
+                Value<ScoreType> scoreType = const Value.absent(),
+                Value<String> computedForDate = const Value.absent(),
+                Value<double> score = const Value.absent(),
+                Value<double?> rawScore = const Value.absent(),
+                Value<String?> label = const Value.absent(),
+                Value<double?> confidence = const Value.absent(),
+                Value<bool> provisional = const Value.absent(),
+                Value<String?> components = const Value.absent(),
+                Value<int> computedAtUtc = const Value.absent(),
+                Value<String> algorithmVersion = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ScoresCompanion(
+                id: id,
+                userId: userId,
+                scoreType: scoreType,
+                computedForDate: computedForDate,
+                score: score,
+                rawScore: rawScore,
+                label: label,
+                confidence: confidence,
+                provisional: provisional,
+                components: components,
+                computedAtUtc: computedAtUtc,
+                algorithmVersion: algorithmVersion,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String userId,
+                required ScoreType scoreType,
+                required String computedForDate,
+                required double score,
+                Value<double?> rawScore = const Value.absent(),
+                Value<String?> label = const Value.absent(),
+                Value<double?> confidence = const Value.absent(),
+                Value<bool> provisional = const Value.absent(),
+                Value<String?> components = const Value.absent(),
+                required int computedAtUtc,
+                required String algorithmVersion,
+                Value<int> rowid = const Value.absent(),
+              }) => ScoresCompanion.insert(
+                id: id,
+                userId: userId,
+                scoreType: scoreType,
+                computedForDate: computedForDate,
+                score: score,
+                rawScore: rawScore,
+                label: label,
+                confidence: confidence,
+                provisional: provisional,
+                components: components,
+                computedAtUtc: computedAtUtc,
+                algorithmVersion: algorithmVersion,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) =>
+                    (e.readTable(table), $$ScoresTableReferences(db, table, e)),
+              )
+              .toList(),
+          prefetchHooksCallback: ({userId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (userId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.userId,
+                                referencedTable: $$ScoresTableReferences
+                                    ._userIdTable(db),
+                                referencedColumn: $$ScoresTableReferences
+                                    ._userIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$ScoresTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ScoresTable,
+      Score,
+      $$ScoresTableFilterComposer,
+      $$ScoresTableOrderingComposer,
+      $$ScoresTableAnnotationComposer,
+      $$ScoresTableCreateCompanionBuilder,
+      $$ScoresTableUpdateCompanionBuilder,
+      (Score, $$ScoresTableReferences),
+      Score,
+      PrefetchHooks Function({bool userId})
+    >;
 typedef $$BpCalibrationsTableCreateCompanionBuilder =
     BpCalibrationsCompanion Function({
       required String id,
@@ -27899,6 +29182,8 @@ class $AppDatabaseManager {
       $$SleepEpochsTableTableManager(_db, _db.sleepEpochs);
   $$BaselinesTableTableManager get baselines =>
       $$BaselinesTableTableManager(_db, _db.baselines);
+  $$ScoresTableTableManager get scores =>
+      $$ScoresTableTableManager(_db, _db.scores);
   $$BpCalibrationsTableTableManager get bpCalibrations =>
       $$BpCalibrationsTableTableManager(_db, _db.bpCalibrations);
   $$BatteryTelemetryTableTableManager get batteryTelemetry =>

@@ -33,6 +33,7 @@ part 'app_database.g.dart';
     SleepSessions,
     SleepEpochs,
     Baselines,
+    Scores,
     BpCalibrations,
     BatteryTelemetry,
     ExerciseSessions,
@@ -47,7 +48,7 @@ class AppDatabase extends _$AppDatabase {
   /// Bump on every schema change. Add a migration step in
   /// `migration` below. See hlth-db-schema.md §"Schema versioning".
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -108,6 +109,13 @@ class AppDatabase extends _$AppDatabase {
             await m.addColumn(dailyMetrics, dailyMetrics.rrIrregularityPct);
             await m.addColumn(dailyMetrics, dailyMetrics.ectopicBeatPct);
           }
+          // v7 → v8: add scores table (recovery / cardio load / …)
+          if (from < 8) {
+            await m.createTable(scores);
+            await customStatement(
+              'CREATE UNIQUE INDEX IF NOT EXISTS idx_scores_user_type_date ON scores(user_id, score_type, computed_for_date)',
+            );
+          }
         },
       );
 
@@ -147,6 +155,8 @@ class AppDatabase extends _$AppDatabase {
       // baselines
       'CREATE INDEX IF NOT EXISTS idx_baseline_user_metric ON baselines(user_id, metric_key, window_days, computed_for_date DESC)',
       'CREATE UNIQUE INDEX IF NOT EXISTS idx_baseline_dedup ON baselines(user_id, metric_key, window_days, computed_for_date)',
+      // scores
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_scores_user_type_date ON scores(user_id, score_type, computed_for_date)',
       // bp_calibrations
       'CREATE INDEX IF NOT EXISTS idx_bpcal_user_time ON bp_calibrations(user_id, captured_at_utc DESC)',
       'CREATE INDEX IF NOT EXISTS idx_bpcal_user_active ON bp_calibrations(user_id, is_active, captured_at_utc DESC)',

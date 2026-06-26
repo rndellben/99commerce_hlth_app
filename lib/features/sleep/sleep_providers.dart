@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hlth_app/core/bootstrap/active_session.dart';
 import 'package:hlth_app/core/database/enums.dart';
+import 'package:hlth_app/core/models/daily_metrics.dart';
 import 'package:hlth_app/core/models/sleep.dart';
+import 'package:hlth_app/core/repositories/daily_metrics_repository.dart';
 import 'package:hlth_app/core/repositories/sleep_repository.dart';
 
 /// Most-recent night sleep session for the active user. Streams so the
@@ -52,6 +54,26 @@ final sleepSessionForDateProvider =
     }
   }
   return match ?? sessions.last;
+});
+
+/// The night's derived vitals — resting HR, SpO2, HRV, BP measured over the
+/// sleep window — keyed by the session's WAKE date. The DailyAggregator
+/// attributes each night's rollup to the morning the user woke, so the
+/// `daily_metrics` row for the wake date carries the "during sleep" values
+/// (per Ryan's 2026-06-23 sleep-screen spec).
+///
+/// Streams (not a one-shot read) so the tiles update the moment a sync
+/// re-aggregates the row. The aggregator fills the vitals across several
+/// sync ticks — HR, HRV, SpO2 and BP can land in different passes — so a
+/// cached one-shot read would freeze whatever subset existed when the screen
+/// first opened (e.g. HRV present but resting HR not yet).
+final sleepNightMetricsProvider =
+    StreamProvider.family<DailyMetrics?, DateTime>((ref, wakeDate) {
+  final repo = ref.watch(dailyMetricsRepositoryProvider);
+  return repo.watchForDay(
+    userId: ActiveSession.defaultUserId,
+    localDate: DateTime(wakeDate.year, wakeDate.month, wakeDate.day),
+  );
 });
 
 /// Range request — used by Week + Month tabs.

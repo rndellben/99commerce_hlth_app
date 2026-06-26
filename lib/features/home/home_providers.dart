@@ -1,11 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hlth_app/core/bootstrap/active_session.dart';
+import 'package:hlth_app/core/database/enums.dart';
 import 'package:hlth_app/core/models/daily_metrics.dart';
 import 'package:hlth_app/core/models/health_samples.dart';
+import 'package:hlth_app/core/models/score.dart';
 import 'package:hlth_app/core/repositories/bp_repository.dart';
 import 'package:hlth_app/core/repositories/daily_metrics_repository.dart';
 import 'package:hlth_app/core/repositories/hr_repository.dart';
 import 'package:hlth_app/core/repositories/hrv_repository.dart';
+import 'package:hlth_app/core/repositories/score_repository.dart';
 import 'package:hlth_app/core/repositories/spo2_repository.dart';
 import 'package:hlth_app/core/repositories/stress_repository.dart';
 
@@ -47,6 +50,15 @@ final latestBpReadingProvider = StreamProvider<BpReading?>((ref) {
 final latestStressSampleProvider = StreamProvider<StressSample?>((ref) {
   final repo = ref.watch(stressRepositoryProvider);
   return repo.watchLatest(userId: ActiveSession.defaultUserId);
+});
+
+/// Latest computed Recovery / Stability score (null until ≥4 valid nights).
+final latestRecoveryScoreProvider = StreamProvider<Score?>((ref) {
+  final repo = ref.watch(scoreRepositoryProvider);
+  return repo.watchLatest(
+    userId: ActiveSession.defaultUserId,
+    scoreType: ScoreType.recovery,
+  );
 });
 
 // ─── Sparkline (last-24h sample series) providers for the home cards.
