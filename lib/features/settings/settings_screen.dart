@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:hlth_app/core/auth/current_user_provider.dart';
+import 'package:hlth_app/features/auth/auth_screen.dart';
 import 'package:hlth_app/core/auth/supabase_client_provider.dart';
 import 'package:hlth_app/core/ble/ble_service.dart';
 import 'package:hlth_app/core/bootstrap/active_session.dart';
@@ -273,12 +274,58 @@ class _SettingsTile extends StatelessWidget {
 // Profile View
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _ProfileViewScreen extends ConsumerWidget {
+class _ProfileViewScreen extends ConsumerStatefulWidget {
   const _ProfileViewScreen();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final profileAsync = ref.watch(userProfileProvider);
+  ConsumerState<_ProfileViewScreen> createState() =>
+      _ProfileViewScreenState();
+}
+
+class _ProfileViewScreenState extends ConsumerState<_ProfileViewScreen> {
+  UserProfile? _profile;
+  bool _loading = true;
+  bool _isSignedIn = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    final profile = await ref.read(userProfileProvider.future);
+    final user = ref.read(currentUserProvider);
+    if (mounted) {
+      setState(() {
+        _profile = profile;
+        _isSignedIn = user != null;
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _updateField(UserProfile updated) async {
+    try {
+      await ref.read(userRepositoryProvider).upsertProfile(updated);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save: $e')),
+        );
+      }
+      return;
+    }
+    // Delay setState slightly so any dialog dismiss animation completes
+    // before we rebuild the widget tree. This avoids the
+    // '_dependents.isEmpty' assertion in framework.dart.
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    if (mounted) setState(() => _profile = updated);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final profile = _profile;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -289,369 +336,421 @@ class _ProfileViewScreen extends ConsumerWidget {
         leading: const BackButton(),
       ),
       body: SafeArea(
-        child: profileAsync.when(
-          loading: () =>
-              const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(
-            child: Text('Failed to load profile: $e',
-                style: const TextStyle(color: AppColors.textSecondary)),
-          ),
-          data: (profile) {
-            if (profile == null) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.person_outline,
-                          size: 48, color: AppColors.textTertiary),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'No profile set up yet.',
-                        style: TextStyle(color: AppColors.textSecondary),
-                      ),
-                      const SizedBox(height: 20),
-                      FilledButton(
-                        onPressed: () => context.push('/onboarding'),
-                        child: const Text('Set up profile'),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }
-            final age = _ageFromDob(profile.dateOfBirth);
-            return ListView(
-              padding: const EdgeInsets.all(20),
-              children: [
-                // ── Avatar ──────────────────────────────────────────
-                Center(
-                  child: GestureDetector(
-                    onTap: () => _showAvatarSheet(context),
-                    child: Stack(
-                      children: [
-                        const CircleAvatar(
-                          radius: 40,
-                          backgroundColor: AppColors.surface,
-                          child: Icon(Icons.person,
-                              size: 40, color: AppColors.primary),
-                        ),
-                        Positioned(
-                          bottom: 0,
-                          right: 0,
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: const BoxDecoration(
-                              color: AppColors.primary,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(Icons.edit,
-                                size: 14, color: Colors.white),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                // ── Nickname ────────────────────────────────────────
-                _EditableProfileRow(
-                  icon: Icons.badge_outlined,
-                  label: 'Nickname',
-                  value: '--',
-                  onTap: () async {
-                    final ctrl = TextEditingController();
-                    final name = await showDialog<String>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        backgroundColor: AppColors.surface,
-                        title: const Text('Nickname'),
-                        content: TextField(
-                          controller: ctrl,
-                          autofocus: true,
-                          decoration: const InputDecoration(
-                            hintText: 'Enter nickname',
-                          ),
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx),
-                            child: const Text('Cancel'),
-                          ),
-                          FilledButton(
-                            onPressed: () {
-                              final n = ctrl.text.trim();
-                              Navigator.pop(ctx, n.isEmpty ? null : n);
-                            },
-                            child: const Text('Change'),
-                          ),
-                        ],
-                      ),
-                    );
-                    ctrl.dispose();
-                    if (name != null && context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Nickname set to "$name"')),
-                      );
-                    }
-                  },
-                ),
-
-                // ── DOB ─────────────────────────────────────────────
-                _EditableProfileRow(
-                  icon: Icons.cake_outlined,
-                  label: 'Date of Birth',
-                  value: profile.dateOfBirth != null
-                      ? '${profile.dateOfBirth!.year}-${profile.dateOfBirth!.month.toString().padLeft(2, '0')}-${profile.dateOfBirth!.day.toString().padLeft(2, '0')}'
-                      : '--',
-                  onTap: () async {
-                    final picked = await showDatePicker(
-                      context: context,
-                      initialDate:
-                          profile.dateOfBirth ?? DateTime(1990, 1, 1),
-                      firstDate: DateTime(1920),
-                      lastDate: DateTime.now(),
-                    );
-                    if (picked != null) {
-                      await _saveProfile(ref, profile.copyWith(
-                          dateOfBirth: picked));
-                      ref.invalidate(userProfileProvider);
-                    }
-                  },
-                ),
-
-                // ── Age (read-only, derived from DOB) ───────────────
-                _EditableProfileRow(
-                  icon: Icons.calendar_today_outlined,
-                  label: 'Age',
-                  value: age != null ? '$age years' : '--',
-                  showChevron: false,
-                  onTap: () {},
-                ),
-
-                // ── Gender ──────────────────────────────────────────
-                _EditableProfileRow(
-                  icon: Icons.wc_outlined,
-                  label: 'Gender',
-                  value: _sexLabel(profile.sexAtBirth),
-                  onTap: () async {
-                    final picked = await showDialog<SexAtBirth>(
-                      context: context,
-                      builder: (ctx) => SimpleDialog(
-                        backgroundColor: AppColors.surface,
-                        title: const Text('Gender'),
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : profile == null
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          for (final sex in SexAtBirth.values)
-                            SimpleDialogOption(
-                              onPressed: () => Navigator.pop(ctx, sex),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    vertical: 6),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      sex == profile.sexAtBirth
-                                          ? Icons.radio_button_checked
-                                          : Icons.radio_button_unchecked,
-                                      color: AppColors.primary,
-                                      size: 20,
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Text(_sexLabel(sex)),
-                                  ],
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    );
-                    if (picked != null) {
-                      await _saveProfile(ref, profile.copyWith(
-                          sexAtBirth: picked));
-                      ref.invalidate(userProfileProvider);
-                    }
-                  },
-                ),
-
-                // ── Height ──────────────────────────────────────────
-                _EditableProfileRow(
-                  icon: Icons.height,
-                  label: 'Height',
-                  value: profile.heightCm != null
-                      ? '${profile.heightCm!.round()} cm'
-                      : '--',
-                  onTap: () async {
-                    final ctrl = TextEditingController(
-                        text: profile.heightCm?.round().toString() ?? '');
-                    final result = await showDialog<double>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        backgroundColor: AppColors.surface,
-                        title: const Text('Height'),
-                        content: TextField(
-                          controller: ctrl,
-                          autofocus: true,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            suffixText: 'cm',
-                            hintText: '170',
+                          const Icon(Icons.person_outline,
+                              size: 48, color: AppColors.textTertiary),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'No profile set up yet.',
+                            style: TextStyle(color: AppColors.textSecondary),
                           ),
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx),
-                            child: const Text('Cancel'),
-                          ),
+                          const SizedBox(height: 20),
                           FilledButton(
-                            onPressed: () {
-                              final v = double.tryParse(ctrl.text);
-                              Navigator.pop(ctx, v);
-                            },
-                            child: const Text('Change'),
+                            onPressed: () => context.push('/onboarding'),
+                            child: const Text('Set up profile'),
                           ),
                         ],
                       ),
-                    );
-                    ctrl.dispose();
-                    if (result != null && result > 0) {
-                      await _saveProfile(ref, profile.copyWith(
-                          heightCm: result));
-                      ref.invalidate(userProfileProvider);
-                    }
-                  },
-                ),
-
-                // ── Weight ──────────────────────────────────────────
-                _EditableProfileRow(
-                  icon: Icons.monitor_weight_outlined,
-                  label: 'Weight',
-                  value: profile.weightKg != null
-                      ? '${profile.weightKg!.round()} kg'
-                      : '--',
-                  onTap: () async {
-                    final ctrl = TextEditingController(
-                        text: profile.weightKg?.round().toString() ?? '');
-                    final result = await showDialog<double>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        backgroundColor: AppColors.surface,
-                        title: const Text('Weight'),
-                        content: TextField(
-                          controller: ctrl,
-                          autofocus: true,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            suffixText: 'kg',
-                            hintText: '70',
-                          ),
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx),
-                            child: const Text('Cancel'),
-                          ),
-                          FilledButton(
-                            onPressed: () {
-                              final v = double.tryParse(ctrl.text);
-                              Navigator.pop(ctx, v);
-                            },
-                            child: const Text('Change'),
-                          ),
-                        ],
-                      ),
-                    );
-                    ctrl.dispose();
-                    if (result != null && result > 0) {
-                      await _saveProfile(ref, profile.copyWith(
-                          weightKg: result));
-                      ref.invalidate(userProfileProvider);
-                    }
-                  },
-                ),
-
-                const SizedBox(height: 8),
-                const Divider(color: AppColors.divider, height: 32),
-                Padding(
-                  padding: const EdgeInsets.only(left: 4, bottom: 12),
-                  child: Text(
-                    'Account & Data',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w600),
-                  ),
-                ),
-
-                // ── Monitoring ────────────────────────────────────────
-                _EditableProfileRow(
-                  icon: Icons.speed_outlined,
-                  label: 'Monitoring',
-                  value: 'Sample rates',
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(
-                      builder: (_) => const MonitoringScreen(),
                     ),
-                  ),
-                ),
+                  )
+                : _buildProfileList(context, profile, _isSignedIn),
+      ),
+    );
+  }
 
-                // ── Notifications ─────────────────────────────────────
-                _EditableProfileRow(
-                  icon: Icons.notifications_outlined,
-                  label: 'Notifications',
-                  value: '',
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(
-                      builder: (_) => const NotificationsScreen(),
-                    ),
-                  ),
-                ),
-
-                // ── Change Credential ─────────────────────────────────
-                _EditableProfileRow(
-                  icon: Icons.key_outlined,
-                  label: 'Change Credential',
-                  value: '',
-                  onTap: () => _showChangeCredentialDialog(context),
-                ),
-
-                // ── Delete Profile ────────────────────────────────────
-                _EditableProfileRow(
-                  icon: Icons.delete_forever_outlined,
-                  iconColor: AppColors.error,
-                  label: 'Delete Profile',
-                  value: '',
-                  onTap: () => _showDeleteProfileDialog(context, ref),
-                ),
-
-                // ── CSV Export ────────────────────────────────────────
-                _EditableProfileRow(
-                  icon: Icons.file_download_outlined,
-                  label: 'Export Data (CSV)',
-                  value: '',
-                  onTap: () => _showCsvExportDialog(context),
-                ),
-
-                // ── Clear Cache ───────────────────────────────────────
-                _EditableProfileRow(
-                  icon: Icons.cleaning_services_outlined,
-                  label: 'Clear Cache',
-                  value: '',
-                  onTap: () => _showClearCacheDialog(context),
-                ),
-              ],
-            );
-          },
+  void _showSignInRequired() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Please sign in to edit your profile.'),
+        action: SnackBarAction(
+          label: 'Sign in',
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const AuthScreen(),
+            ),
+          ).then((_) => _loadProfile()),
         ),
       ),
     );
   }
 
-  Future<void> _saveProfile(WidgetRef ref, UserProfile profile) async {
-    await ref.read(userRepositoryProvider).upsertProfile(profile);
+  Widget _buildProfileList(
+      BuildContext context, UserProfile profile, bool isSignedIn) {
+    final age = _ageFromDob(profile.dateOfBirth);
+
+    // When not signed in, all edit taps show the sign-in prompt instead.
+    VoidCallback guardedTap(VoidCallback action) {
+      return isSignedIn ? action : _showSignInRequired;
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        // ── Sign-in notice ────────────────────────────────────
+        if (!isSignedIn)
+          Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.warning.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                  color: AppColors.warning.withValues(alpha: 0.4)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.lock_outline,
+                    color: AppColors.warning, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Sign in to edit your profile and sync across devices.',
+                    style: TextStyle(
+                      color: AppColors.warning.withValues(alpha: 0.9),
+                      fontSize: 12,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const AuthScreen(),
+                    ),
+                  ).then((_) => _loadProfile()),
+                  child: const Text(
+                    'Sign in',
+                    style: TextStyle(
+                      color: AppColors.warning,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+        // ── Avatar ──────────────────────────────────────────
+        Center(
+          child: GestureDetector(
+            onTap: () => _showAvatarSheet(context),
+            child: Stack(
+              children: [
+                const CircleAvatar(
+                  radius: 40,
+                  backgroundColor: AppColors.surface,
+                  child: Icon(Icons.person,
+                      size: 40, color: AppColors.primary),
+                ),
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: AppColors.primary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.edit,
+                        size: 14, color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        // ── Nickname ────────────────────────────────────────
+        _EditableProfileRow(
+          icon: Icons.badge_outlined,
+          label: 'Nickname',
+          value: '--',
+          onTap: guardedTap(() async {
+            final ctrl = TextEditingController();
+            final name = await showDialog<String>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                backgroundColor: AppColors.surface,
+                title: const Text('Nickname'),
+                content: TextField(
+                  controller: ctrl,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    hintText: 'Enter nickname',
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: () {
+                      final n = ctrl.text.trim();
+                      Navigator.pop(ctx, n.isEmpty ? null : n);
+                    },
+                    child: const Text('Change'),
+                  ),
+                ],
+              ),
+            );
+            ctrl.dispose();
+            if (name != null && context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Nickname set to "$name"')),
+              );
+            }
+          }),
+        ),
+
+        // ── DOB ─────────────────────────────────────────────
+        _EditableProfileRow(
+          icon: Icons.cake_outlined,
+          label: 'Date of Birth',
+          value: profile.dateOfBirth != null
+              ? '${profile.dateOfBirth!.year}-${profile.dateOfBirth!.month.toString().padLeft(2, '0')}-${profile.dateOfBirth!.day.toString().padLeft(2, '0')}'
+              : '--',
+          onTap: guardedTap(() async {
+            final picked = await showDatePicker(
+              context: context,
+              initialDate:
+                  profile.dateOfBirth ?? DateTime(1990, 1, 1),
+              firstDate: DateTime(1920),
+              lastDate: DateTime.now(),
+            );
+            if (picked != null && mounted) {
+              await _updateField(profile.copyWith(dateOfBirth: picked));
+            }
+          }),
+        ),
+
+        // ── Age (read-only, derived from DOB) ───────────────
+        _EditableProfileRow(
+          icon: Icons.calendar_today_outlined,
+          label: 'Age',
+          value: age != null ? '$age years' : '--',
+          showChevron: false,
+          onTap: () {},
+        ),
+
+        // ── Gender ──────────────────────────────────────────
+        _EditableProfileRow(
+          icon: Icons.wc_outlined,
+          label: 'Gender',
+          value: _sexLabel(profile.sexAtBirth),
+          onTap: guardedTap(() async {
+            final picked = await showDialog<SexAtBirth>(
+              context: context,
+              builder: (ctx) => SimpleDialog(
+                backgroundColor: AppColors.surface,
+                title: const Text('Gender'),
+                children: [
+                  for (final sex in SexAtBirth.values)
+                    SimpleDialogOption(
+                      onPressed: () => Navigator.pop(ctx, sex),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 6),
+                        child: Row(
+                          children: [
+                            Icon(
+                              sex == profile.sexAtBirth
+                                  ? Icons.radio_button_checked
+                                  : Icons.radio_button_unchecked,
+                              color: AppColors.primary,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(_sexLabel(sex)),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            );
+            if (picked != null && mounted) {
+              await _updateField(profile.copyWith(sexAtBirth: picked));
+            }
+          }),
+        ),
+
+        // ── Height ──────────────────────────────────────────
+        _EditableProfileRow(
+          icon: Icons.height,
+          label: 'Height',
+          value: profile.heightCm != null
+              ? '${profile.heightCm!.round()} cm'
+              : '--',
+          onTap: guardedTap(() async {
+            final ctrl = TextEditingController(
+                text: profile.heightCm?.round().toString() ?? '');
+            final result = await showDialog<double>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                backgroundColor: AppColors.surface,
+                title: const Text('Height'),
+                content: TextField(
+                  controller: ctrl,
+                  autofocus: true,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    suffixText: 'cm',
+                    hintText: '170',
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: () {
+                      final v = double.tryParse(ctrl.text);
+                      Navigator.pop(ctx, v);
+                    },
+                    child: const Text('Change'),
+                  ),
+                ],
+              ),
+            );
+            ctrl.dispose();
+            if (result != null && result > 0 && mounted) {
+              await _updateField(profile.copyWith(heightCm: result));
+            }
+          }),
+        ),
+
+        // ── Weight ──────────────────────────────────────────
+        _EditableProfileRow(
+          icon: Icons.monitor_weight_outlined,
+          label: 'Weight',
+          value: profile.weightKg != null
+              ? '${profile.weightKg!.round()} kg'
+              : '--',
+          onTap: guardedTap(() async {
+            final ctrl = TextEditingController(
+                text: profile.weightKg?.round().toString() ?? '');
+            final result = await showDialog<double>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                backgroundColor: AppColors.surface,
+                title: const Text('Weight'),
+                content: TextField(
+                  controller: ctrl,
+                  autofocus: true,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    suffixText: 'kg',
+                    hintText: '70',
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: () {
+                      final v = double.tryParse(ctrl.text);
+                      Navigator.pop(ctx, v);
+                    },
+                    child: const Text('Change'),
+                  ),
+                ],
+              ),
+            );
+            ctrl.dispose();
+            if (result != null && result > 0 && mounted) {
+              await _updateField(profile.copyWith(weightKg: result));
+            }
+          }),
+        ),
+
+        const SizedBox(height: 8),
+        const Divider(color: AppColors.divider, height: 32),
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 12),
+          child: Text(
+            'Account & Data',
+            style: Theme.of(context)
+                .textTheme
+                .titleSmall
+                ?.copyWith(fontWeight: FontWeight.w600),
+          ),
+        ),
+
+        // ── Monitoring ────────────────────────────────────────
+        _EditableProfileRow(
+          icon: Icons.speed_outlined,
+          label: 'Monitoring',
+          value: 'Sample rates',
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute<void>(
+              builder: (_) => const MonitoringScreen(),
+            ),
+          ),
+        ),
+
+        // ── Notifications ─────────────────────────────────────
+        _EditableProfileRow(
+          icon: Icons.notifications_outlined,
+          label: 'Notifications',
+          value: '',
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute<void>(
+              builder: (_) => const NotificationsScreen(),
+            ),
+          ),
+        ),
+
+        // ── Change Credential ─────────────────────────────────
+        _EditableProfileRow(
+          icon: Icons.key_outlined,
+          label: 'Change Credential',
+          value: '',
+          onTap: guardedTap(() => _showChangeCredentialDialog(context)),
+        ),
+
+        // ── Delete Profile ────────────────────────────────────
+        _EditableProfileRow(
+          icon: Icons.delete_forever_outlined,
+          iconColor: AppColors.error,
+          label: 'Delete Profile',
+          value: '',
+          onTap: guardedTap(() => _showDeleteProfileDialog(context)),
+        ),
+
+        // ── CSV Export ────────────────────────────────────────
+        _EditableProfileRow(
+          icon: Icons.file_download_outlined,
+          label: 'Export Data (CSV)',
+          value: '',
+          onTap: () => _showCsvExportDialog(context),
+        ),
+
+        // ── Clear Cache ───────────────────────────────────────
+        _EditableProfileRow(
+          icon: Icons.cleaning_services_outlined,
+          label: 'Clear Cache',
+          value: '',
+          onTap: () => _showClearCacheDialog(context),
+        ),
+      ],
+    );
   }
 
   String _sexLabel(SexAtBirth sex) => switch (sex) {
@@ -747,8 +846,7 @@ class _ProfileViewScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _showDeleteProfileDialog(
-      BuildContext context, WidgetRef ref) async {
+  Future<void> _showDeleteProfileDialog(BuildContext context) async {
     final first = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
