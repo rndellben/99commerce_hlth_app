@@ -9,8 +9,10 @@ import 'package:hlth_app/features/hrv/hrv_providers.dart';
 import 'package:hlth_app/ui/theme/app_colors.dart';
 import 'package:hlth_app/ui/widgets/date_selector.dart';
 import 'package:hlth_app/ui/widgets/metric_tile.dart';
+import 'package:hlth_app/ui/widgets/metric_trend_scaffold.dart';
 import 'package:hlth_app/ui/widgets/period_toggle.dart';
 import 'package:hlth_app/ui/widgets/trend_chart_card.dart';
+import 'package:hlth_app/ui/widgets/trend_view_sections.dart';
 
 /// HRV detail screen.
 ///
@@ -116,33 +118,32 @@ class _HrvScreenState extends ConsumerState<HrvScreen> {
       case Period.month:
         // Band only retains ~7 days; older days fall back to SQLite.
         return List.generate(8, (i) => i);
+      case Period.threeMonths:
+        return List.generate(8, (i) => i); // band only retains ~7 days
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        title: const Text('HRV'),
-        centerTitle: true,
-        leading: const BackButton(),
-        actions: [
-          IconButton(
-            icon: _syncing
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white),
-                  )
-                : const Icon(Icons.refresh),
-            onPressed: _syncing ? null : _refreshFromBand,
-            tooltip: 'Sync from band',
-          ),
-        ],
-      ),
+    return MetricTrendScaffold(
+      metricName: 'HRV',
+      allowAddEdit: false,
+      aboutTitle: 'HRV',
+      aboutText: 'Heart rate variability measures the variation in time between heartbeats. Higher HRV generally reflects better recovery and autonomic nervous system balance.',
+      extraActions: [
+        IconButton(
+          icon: _syncing
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white),
+                )
+              : const Icon(Icons.refresh),
+          onPressed: _syncing ? null : _refreshFromBand,
+          tooltip: 'Sync from band',
+        ),
+      ],
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _refreshFromBand,
@@ -174,6 +175,8 @@ class _HrvScreenState extends ConsumerState<HrvScreen> {
                   _RangeView(period: _period, anchor: _anchor),
                 if (_period == Period.month)
                   _RangeView(period: _period, anchor: _anchor),
+                if (_period == Period.threeMonths)
+                  _RangeView(period: _period, anchor: _anchor),
               ],
             ),
           ),
@@ -199,6 +202,8 @@ class _HrvScreenState extends ConsumerState<HrvScreen> {
               _anchor.day,
             );
             break;
+          case Period.threeMonths:
+            _anchor = DateTime(_anchor.year, _anchor.month + (3 * direction), _anchor.day);
         }
       });
       _refreshFromBand();
@@ -276,9 +281,30 @@ class _DayView extends ConsumerWidget {
       error: (e, _) => _EmptyState(message: 'Failed to load HRV: $e'),
       data: (samples) {
         if (samples.isEmpty) {
-          return const _EmptyState(
-              message:
-                  'No HRV data for this day. The band records one slot every ~30 minutes while worn.');
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const _EmptyState(
+                  message:
+                      'No HRV data for this day. The band records one slot every ~30 minutes while worn.'),
+              const SizedBox(height: 16),
+              DataDetailsCard(metric: 'hrv'),
+              const SizedBox(height: 16),
+              Last7DaysTile(
+                metric: 'hrv',
+                averageValue: null,
+                unit: 'ms',
+                color: AppColors.respiratory,
+              ),
+              const SizedBox(height: 16),
+              AboutMetricSection(
+                title: 'About HRV',
+                body: 'Heart rate variability measures the variation in time between heartbeats. Higher HRV generally reflects better recovery and autonomic nervous system balance.',
+              ),
+              const SizedBox(height: 16),
+              const _DisclaimerCard(),
+            ],
+          );
         }
         final points = samples
             .map((s) => TrendPoint(
@@ -361,6 +387,20 @@ class _DayView extends ConsumerWidget {
             const SizedBox(height: 16),
             const _RangeLegend(),
             const SizedBox(height: 16),
+            DataDetailsCard(metric: 'hrv'),
+            const SizedBox(height: 16),
+            Last7DaysTile(
+              metric: 'hrv',
+              averageValue: null,
+              unit: 'ms',
+              color: AppColors.respiratory,
+            ),
+            const SizedBox(height: 16),
+            AboutMetricSection(
+              title: 'About HRV',
+              body: 'Heart rate variability measures the variation in time between heartbeats. Higher HRV generally reflects better recovery and autonomic nervous system balance.',
+            ),
+            const SizedBox(height: 16),
             const _DisclaimerCard(),
           ],
         );
@@ -389,8 +429,29 @@ class _RangeView extends ConsumerWidget {
       error: (e, _) => _EmptyState(message: 'Failed to load HRV: $e'),
       data: (samples) {
         if (samples.isEmpty) {
-          return const _EmptyState(
-              message: 'No HRV recorded in this period.');
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const _EmptyState(
+                  message: 'No HRV recorded in this period.'),
+              const SizedBox(height: 16),
+              DataDetailsCard(metric: 'hrv'),
+              const SizedBox(height: 16),
+              Last7DaysTile(
+                metric: 'hrv',
+                averageValue: null,
+                unit: 'ms',
+                color: AppColors.respiratory,
+              ),
+              const SizedBox(height: 16),
+              AboutMetricSection(
+                title: 'About HRV',
+                body: 'Heart rate variability measures the variation in time between heartbeats. Higher HRV generally reflects better recovery and autonomic nervous system balance.',
+              ),
+              const SizedBox(height: 16),
+              const _DisclaimerCard(),
+            ],
+          );
         }
         final daily = _dailyAverages(samples, period, anchor);
         final points = daily.entries
@@ -414,14 +475,18 @@ class _RangeView extends ConsumerWidget {
         final daysRecorded =
             daily.values.where((b) => b.count > 0).length;
 
+        final subtitle = period == Period.threeMonths
+            ? 'Daily average across 3 months (RMSSD)'
+            : period == Period.week
+                ? 'Daily average across the week (RMSSD)'
+                : 'Daily average across the month (RMSSD)';
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             TrendChartCard(
               title: 'Heart Rate Variability',
-              subtitle: period == Period.week
-                  ? 'Daily average across the week (RMSSD)'
-                  : 'Daily average across the month (RMSSD)',
+              subtitle: subtitle,
               points: points,
               color: AppColors.respiratory,
               axis: const TrendAxis.bounded(
@@ -466,6 +531,20 @@ class _RangeView extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
             const _RangeLegend(),
+            const SizedBox(height: 16),
+            DataDetailsCard(metric: 'hrv'),
+            const SizedBox(height: 16),
+            Last7DaysTile(
+              metric: 'hrv',
+              averageValue: null,
+              unit: 'ms',
+              color: AppColors.respiratory,
+            ),
+            const SizedBox(height: 16),
+            AboutMetricSection(
+              title: 'About HRV',
+              body: 'Heart rate variability measures the variation in time between heartbeats. Higher HRV generally reflects better recovery and autonomic nervous system balance.',
+            ),
             const SizedBox(height: 16),
             const _DisclaimerCard(),
           ],
@@ -590,6 +669,10 @@ HrvRange _resolveRange(Period p, DateTime a) {
       final first = DateTime(a.year, a.month, 1);
       final next = DateTime(a.year, a.month + 1, 1);
       return HrvRange(from: first.toUtc(), to: next.toUtc());
+    case Period.threeMonths:
+      final start = DateTime(a.year, a.month - 2, 1);
+      final end = DateTime(a.year, a.month + 1, 1);
+      return HrvRange(from: start.toUtc(), to: end.toUtc());
   }
 }
 
@@ -625,6 +708,11 @@ Map<DateTime, _DailyAvg> _dailyAverages(
       final dayCount = next.difference(first).inDays;
       days = List.generate(dayCount, (i) => first.add(Duration(days: i)));
       break;
+    case Period.threeMonths:
+      final first = DateTime(anchor.year, anchor.month - 2, 1);
+      final next = DateTime(anchor.year, anchor.month + 1, 1);
+      final dayCount = next.difference(first).inDays;
+      days = List.generate(dayCount, (i) => first.add(Duration(days: i)));
   }
   for (final d in days) {
     out[d] = _DailyAvg();
@@ -656,6 +744,13 @@ List<String> _axisLabels(Period period, DateTime anchor) {
       return [
         for (final day in [1, 7, 13, 19, 25, days])
           md(DateTime(first.year, first.month, day)),
+      ];
+    case Period.threeMonths:
+      final first = DateTime(anchor.year, anchor.month - 2, 1);
+      return [
+        md(first),
+        md(DateTime(first.year, first.month + 1, 1)),
+        md(DateTime(first.year, first.month + 2, 1)),
       ];
   }
 }

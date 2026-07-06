@@ -17,6 +17,7 @@ abstract class ExerciseSessionRepository {
   });
 
   Future<ExerciseSession?> getById(String id);
+  Future<void> softDelete(String id);
   Stream<List<ExerciseSession>> watchForUser({required String userId, int limit = 50});
   Stream<ExerciseSession?> watchLatest({required String userId});
 
@@ -90,6 +91,15 @@ class ExerciseSessionRepositoryImpl implements ExerciseSessionRepository {
           ..limit(1))
         .getSingleOrNull();
     return row?.id;
+  }
+
+  @override
+  Future<void> softDelete(String id) async {
+    final nowSec = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
+    await (_db.update(_db.exerciseSessions)
+          ..where((t) => t.id.equals(id)))
+        .write(db.ExerciseSessionsCompanion(
+            deletedAtUtc: Value(nowSec)));
   }
 
   @override

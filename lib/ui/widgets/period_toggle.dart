@@ -1,21 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:hlth_app/ui/theme/app_colors.dart';
 
-/// Time-window granularity used by detail screens that show Day / Week /
-/// Month tabs (Sleep, Heart Rate, SpO2, Activity).
-enum Period { day, week, month }
+/// Time-window granularity used by detail screens.
+enum Period { day, week, month, threeMonths }
 
 extension PeriodX on Period {
   String get label => switch (this) {
-        Period.day => 'Day',
-        Period.week => 'Week',
-        Period.month => 'Month',
+        Period.day => 'D',
+        Period.week => 'W',
+        Period.month => 'M',
+        Period.threeMonths => '3M',
       };
 }
 
-/// Three-segment pill toggle (Day / Week / Month) used on every metric
-/// detail screen. Matches the QWatch Pro Sleep tab styling so the app
-/// stays visually consistent across HR, SpO2, Sleep, Activity, etc.
+/// Four-segment pill toggle (D / W / M / 3M) used on every metric
+/// detail screen. Matches the spec timeframe selector layout.
 class PeriodToggle extends StatelessWidget {
   const PeriodToggle({
     super.key,
@@ -45,8 +44,9 @@ class PeriodToggle extends StatelessWidget {
                   alignment: Alignment.center,
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   decoration: BoxDecoration(
-                    color:
-                        p == value ? AppColors.primary : Colors.transparent,
+                    color: p == value
+                        ? AppColors.primary
+                        : Colors.transparent,
                     borderRadius: BorderRadius.circular(24),
                   ),
                   child: Text(
@@ -56,6 +56,7 @@ class PeriodToggle extends StatelessWidget {
                           ? Colors.white
                           : AppColors.textSecondary,
                       fontWeight: FontWeight.w600,
+                      fontSize: 13,
                     ),
                   ),
                 ),

@@ -10,7 +10,9 @@ import 'package:hlth_app/features/sleep/sleep_providers.dart';
 import 'package:hlth_app/ui/theme/app_colors.dart';
 import 'package:hlth_app/ui/widgets/date_selector.dart';
 import 'package:hlth_app/ui/widgets/metric_tile.dart';
+import 'package:hlth_app/ui/widgets/metric_trend_scaffold.dart';
 import 'package:hlth_app/ui/widgets/period_toggle.dart';
+import 'package:hlth_app/ui/widgets/trend_view_sections.dart';
 
 /// Sleep detail screen mirroring QWatch Pro's Day / Week / Month layout.
 ///
@@ -108,32 +110,32 @@ class _SleepScreenState extends ConsumerState<SleepScreen> {
         // The band only retains ~7 days. Pull what it has; older days
         // come from local SQLite.
         return List.generate(8, (i) => i);
+      case Period.threeMonths:
+        return List.generate(8, (i) => i); // band only retains ~7 days
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        title: const Text('Sleep'),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: _syncing
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child:
-                        CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
-                : const Icon(Icons.refresh),
-            onPressed: _syncing ? null : _refreshFromBand,
-            tooltip: 'Sync from band',
-          ),
-        ],
-      ),
+    return MetricTrendScaffold(
+      metricName: 'Sleep',
+      allowAddEdit: false,
+      aboutTitle: 'Sleep',
+      aboutText: 'Sleep tracking monitors your total sleep duration and sleep stages. Consistent, quality sleep is essential for physical recovery and mental wellbeing.',
+      extraActions: [
+        IconButton(
+          icon: _syncing
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child:
+                      CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : const Icon(Icons.refresh),
+          onPressed: _syncing ? null : _refreshFromBand,
+          tooltip: 'Sync from band',
+        ),
+      ],
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _refreshFromBand,
@@ -163,6 +165,8 @@ class _SleepScreenState extends ConsumerState<SleepScreen> {
                   _WeekOrMonthView(period: _period, anchor: _anchor),
                 if (_period == Period.month)
                   _WeekOrMonthView(period: _period, anchor: _anchor),
+                if (_period == Period.threeMonths)
+                  _WeekOrMonthView(period: _period, anchor: _anchor),
               ],
             ),
           ),
@@ -188,6 +192,8 @@ class _SleepScreenState extends ConsumerState<SleepScreen> {
               _anchor.day,
             );
             break;
+          case Period.threeMonths:
+            _anchor = DateTime(_anchor.year, _anchor.month + (3 * direction), _anchor.day);
         }
       });
       // Pull the freshly-selected day from the band if it's within
@@ -214,8 +220,29 @@ class _DayView extends ConsumerWidget {
       error: (e, _) => _EmptyState(message: 'Failed to load sleep: $e'),
       data: (session) {
         if (session == null) {
-          return const _EmptyState(
-              message: 'No sleep data yet. Wear the band overnight to see your sleep stages.');
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const _EmptyState(
+                  message: 'No sleep data yet. Wear the band overnight to see your sleep stages.'),
+              const SizedBox(height: 16),
+              DataDetailsCard(metric: 'sleep'),
+              const SizedBox(height: 16),
+              Last7DaysTile(
+                metric: 'sleep',
+                averageValue: null,
+                unit: 'h',
+                color: AppColors.sleep,
+              ),
+              const SizedBox(height: 16),
+              AboutMetricSection(
+                title: 'About Sleep',
+                body: 'Sleep tracking monitors your total sleep duration and sleep stages. Consistent, quality sleep is essential for physical recovery and mental wellbeing.',
+              ),
+              const SizedBox(height: 16),
+              _DisclaimerCard(),
+            ],
+          );
         }
         return _DaySessionContent(session: session);
       },
@@ -319,6 +346,20 @@ class _DaySessionContent extends ConsumerWidget {
         ),
         const SizedBox(height: 24),
         _SleepVitalsSection(metrics: nightMetrics),
+        const SizedBox(height: 16),
+        DataDetailsCard(metric: 'sleep'),
+        const SizedBox(height: 16),
+        Last7DaysTile(
+          metric: 'sleep',
+          averageValue: null,
+          unit: 'h',
+          color: AppColors.sleep,
+        ),
+        const SizedBox(height: 16),
+        AboutMetricSection(
+          title: 'About Sleep',
+          body: 'Sleep tracking monitors your total sleep duration and sleep stages. Consistent, quality sleep is essential for physical recovery and mental wellbeing.',
+        ),
         const SizedBox(height: 16),
         _DisclaimerCard(),
       ],
@@ -695,8 +736,29 @@ class _WeekOrMonthView extends ConsumerWidget {
       error: (e, _) => _EmptyState(message: 'Failed to load: $e'),
       data: (sessions) {
         if (sessions.isEmpty) {
-          return const _EmptyState(
-              message: 'No sleep recorded in this period.');
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const _EmptyState(
+                  message: 'No sleep recorded in this period.'),
+              const SizedBox(height: 16),
+              DataDetailsCard(metric: 'sleep'),
+              const SizedBox(height: 16),
+              Last7DaysTile(
+                metric: 'sleep',
+                averageValue: null,
+                unit: 'h',
+                color: AppColors.sleep,
+              ),
+              const SizedBox(height: 16),
+              AboutMetricSection(
+                title: 'About Sleep',
+                body: 'Sleep tracking monitors your total sleep duration and sleep stages. Consistent, quality sleep is essential for physical recovery and mental wellbeing.',
+              ),
+              const SizedBox(height: 16),
+              _DisclaimerCard(),
+            ],
+          );
         }
         return _RangeContent(
           period: period,
@@ -728,6 +790,13 @@ class _WeekOrMonthView extends ConsumerWidget {
         return SleepRange(
           from: first.subtract(const Duration(hours: 18)).toUtc(),
           to: next.toUtc(),
+        );
+      case Period.threeMonths:
+        final first = DateTime(a.year, a.month - 2, 1);
+        final end = DateTime(a.year, a.month + 1, 1);
+        return SleepRange(
+          from: first.subtract(const Duration(hours: 18)).toUtc(),
+          to: end.toUtc(),
         );
     }
   }
@@ -805,6 +874,20 @@ class _RangeContent extends StatelessWidget {
                     highIfAbove: 60),
           ),
         ]),
+        const SizedBox(height: 16),
+        DataDetailsCard(metric: 'sleep'),
+        const SizedBox(height: 16),
+        Last7DaysTile(
+          metric: 'sleep',
+          averageValue: null,
+          unit: 'h',
+          color: AppColors.sleep,
+        ),
+        const SizedBox(height: 16),
+        AboutMetricSection(
+          title: 'About Sleep',
+          body: 'Sleep tracking monitors your total sleep duration and sleep stages. Consistent, quality sleep is essential for physical recovery and mental wellbeing.',
+        ),
         const SizedBox(height: 16),
         _DisclaimerCard(),
       ],
@@ -940,6 +1023,12 @@ class _StackedBarPainter extends CustomPainter {
         final days = next.difference(first).inDays;
         return List.generate(
             days, (i) => ymd(first.add(Duration(days: i))));
+      case Period.threeMonths:
+        final first = DateTime(anchor.year, anchor.month - 2, 1);
+        final next = DateTime(anchor.year, anchor.month + 1, 1);
+        final days = next.difference(first).inDays;
+        return List.generate(
+            days, (i) => ymd(first.add(Duration(days: i))));
     }
   }
 
@@ -982,6 +1071,19 @@ class _AxisLabels extends StatelessWidget {
                 style: const TextStyle(
                     color: AppColors.textSecondary, fontSize: 11),
               ),
+          ],
+        );
+      case Period.threeMonths:
+        final first = DateTime(anchor.year, anchor.month - 2, 1);
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(md(first),
+                style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+            Text(md(DateTime(first.year, first.month + 1, 1)),
+                style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+            Text(md(DateTime(first.year, first.month + 2, 1)),
+                style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
           ],
         );
     }

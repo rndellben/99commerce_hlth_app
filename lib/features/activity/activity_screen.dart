@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hlth_app/core/ble/ble_service.dart';
 import 'package:hlth_app/core/bootstrap/active_session.dart';
 import 'package:hlth_app/core/models/daily_metrics.dart';
 import 'package:hlth_app/core/models/step_bucket.dart';
@@ -13,6 +14,10 @@ import 'package:hlth_app/ui/widgets/date_selector.dart';
 import 'package:hlth_app/ui/widgets/metric_tile.dart';
 import 'package:hlth_app/ui/widgets/period_toggle.dart';
 import 'package:hlth_app/ui/widgets/trend_chart_card.dart';
+import 'package:hlth_app/ui/widgets/trend_view_sections.dart';
+import 'package:go_router/go_router.dart';
+import 'package:hlth_app/core/models/exercise_session.dart';
+import 'package:hlth_app/core/repositories/exercise_session_repository.dart';
 
 /// Activity detail screen mirroring the Sleep screen's Day / Week / Month
 /// layout: a steps headline with progress ring, a trend chart of the
@@ -151,6 +156,23 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                   ),
                 const SizedBox(height: 24),
                 const _RecentExercisesSection(),
+                const SizedBox(height: 16),
+                DataDetailsCard(metric: 'activity'),
+                const SizedBox(height: 16),
+                Last7DaysTile(
+                  metric: 'activity',
+                  averageValue: null,
+                  unit: 'steps',
+                  color: AppColors.activity,
+                ),
+                const SizedBox(height: 16),
+                AboutMetricSection(
+                  title: 'About Activity',
+                  body:
+                      'Activity tracking measures your daily steps, calories burned, distance walked, and active minutes. Staying active supports cardiovascular health and overall well-being.',
+                ),
+                const SizedBox(height: 16),
+                const _DisclaimerCard(),
               ],
             ),
           ),
@@ -174,6 +196,13 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
               _anchor.year,
               _anchor.month + direction,
               _anchor.day,
+            );
+            break;
+          case Period.threeMonths:
+            _anchor = DateTime(
+              _anchor.year,
+              _anchor.month + (3 * direction),
+              1,
             );
             break;
         }
@@ -429,7 +458,9 @@ class _RangeView extends ConsumerWidget {
               color: AppColors.activity,
               title: period == Period.week
                   ? 'Daily steps this week'
-                  : 'Daily steps this month',
+                  : period == Period.threeMonths
+                      ? 'Daily steps (3 months)'
+                      : 'Daily steps this month',
               subtitle: 'Daily average: ${_formatSteps(avgSteps)}',
               bottomLabels: bottomLabels,
             ),
@@ -457,6 +488,10 @@ class _RangeView extends ConsumerWidget {
             from: start, to: start.add(const Duration(days: 6)));
       case Period.month:
         final first = DateTime(a.year, a.month, 1);
+        final last = DateTime(a.year, a.month + 1, 0);
+        return ActivityRange(from: first, to: last);
+      case Period.threeMonths:
+        final first = DateTime(a.year, a.month - 2, 1);
         final last = DateTime(a.year, a.month + 1, 0);
         return ActivityRange(from: first, to: last);
     }
@@ -492,6 +527,11 @@ class _RangeView extends ConsumerWidget {
         final days = next.difference(first).inDays;
         return List.generate(
             days, (i) => DateTime(first.year, first.month, 1 + i));
+      case Period.threeMonths:
+        final first = DateTime(anchor.year, anchor.month - 2, 1);
+        final last = DateTime(anchor.year, anchor.month + 1, 1);
+        final days = last.difference(first).inDays;
+        return List.generate(days, (i) => first.add(Duration(days: i)));
     }
   }
 
@@ -510,6 +550,12 @@ class _RangeView extends ConsumerWidget {
         return [
           for (final day in [1, 7, 13, 19, 25, days])
             md(DateTime(first.year, first.month, day)),
+        ];
+      case Period.threeMonths:
+        return [
+          '${anchor.year}-${pad(anchor.month - 2)}',
+          '${anchor.year}-${pad(anchor.month - 1)}',
+          '${anchor.year}-${pad(anchor.month)}',
         ];
     }
   }
@@ -579,50 +625,167 @@ class _StatsGrid extends StatelessWidget {
 
 // ─── Recent exercises ──────────────────────────────────────────────────────
 
-class _RecentExercisesSection extends StatelessWidget {
+final _recentExercisesProvider = StreamProvider<List<ExerciseSession>>((ref) {
+  final repo = ref.watch(exerciseSessionRepositoryProvider);
+  return repo.watchForUser(userId: ActiveSession.defaultUserId, limit: 5);
+});
+
+class _RecentExercisesSection extends ConsumerWidget {
   const _RecentExercisesSection();
 
   @override
-  Widget build(BuildContext context) {
-    // ExerciseSession model/repo doesn't exist yet (HLT-19 lands it).
-    // Until then always show the empty state.
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sessions = ref
+        .watch(_recentExercisesProvider)
+        .maybeWhen(data: (list) => list, orElse: () => const <ExerciseSession>[]);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Padding(
-          padding: EdgeInsets.only(bottom: 10),
-          child: Text(
-            'Recent Exercises',
-            style: TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Row(
-            children: const [
-              Icon(Icons.fitness_center,
-                  color: AppColors.activity, size: 28),
-              SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'No exercises recorded yet — start a 10+ minute walk or run to estimate your fitness level.',
-                  style: TextStyle(color: AppColors.textSecondary),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(bottom: 10),
+              child: Text(
+                'Recent Exercises',
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-            ],
-          ),
+            ),
+            GestureDetector(
+              onTap: () => context.push('/workouts'),
+              child: const Padding(
+                padding: EdgeInsets.only(bottom: 10),
+                child: Text(
+                  'Start workout',
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
+        if (sessions.isEmpty)
+          GestureDetector(
+            onTap: () => context.push('/workouts'),
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                children: const [
+                  Icon(Icons.fitness_center,
+                      color: AppColors.activity, size: 28),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'No exercises recorded yet — tap here to start a workout.',
+                      style: TextStyle(color: AppColors.textSecondary),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          ...sessions.map((s) => _ExerciseRow(session: s)),
       ],
     );
   }
+}
+
+class _ExerciseRow extends StatelessWidget {
+  const _ExerciseRow({required this.session});
+  final ExerciseSession session;
+
+  @override
+  Widget build(BuildContext context) {
+    final sportLabel = _sportLabel(session.sportType);
+    final dur = Duration(seconds: session.durationSec);
+    final m = dur.inMinutes;
+    final s = dur.inSeconds % 60;
+    final hrText =
+        session.avgHrBpm == null ? '' : ' · ${session.avgHrBpm} bpm';
+    final local = session.startedAt.toLocal();
+    final dateStr =
+        '${local.month}/${local.day} ${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(_sportIcon(session.sportType),
+              color: AppColors.activity, size: 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  sportLabel,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${m}m ${s}s · ${(session.distanceM / 1000).toStringAsFixed(2)} km$hrText',
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            dateStr,
+            style: const TextStyle(
+                color: AppColors.textTertiary, fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _sportLabel(int type) => switch (type) {
+        BleService.sportTypeRunning => 'Run',
+        BleService.sportTypeWalking => 'Walk',
+        BleService.sportTypeCycling => 'Cycle',
+        BleService.sportTypeHiking => 'Hike',
+        BleService.sportTypeStrength => 'Strength',
+        BleService.sportTypeYoga => 'Yoga',
+        BleService.sportTypeRowing => 'Rowing',
+        BleService.sportTypeElliptical => 'Elliptical',
+        _ => 'Workout',
+      };
+
+  IconData _sportIcon(int type) => switch (type) {
+        BleService.sportTypeRunning => Icons.directions_run,
+        BleService.sportTypeWalking => Icons.directions_walk,
+        BleService.sportTypeCycling => Icons.directions_bike,
+        BleService.sportTypeHiking => Icons.terrain,
+        BleService.sportTypeStrength => Icons.fitness_center,
+        BleService.sportTypeYoga => Icons.self_improvement,
+        BleService.sportTypeRowing => Icons.rowing,
+        _ => Icons.timer,
+      };
 }
 
 // ─── Misc ──────────────────────────────────────────────────────────────────
@@ -678,6 +841,28 @@ class _EmptyState extends StatelessWidget {
                 style: const TextStyle(color: AppColors.textSecondary)),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _DisclaimerCard extends StatelessWidget {
+  const _DisclaimerCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: const Text(
+        'Activity data is captured by the band\'s accelerometer and may vary '
+        'based on wearing position and movement patterns. '
+        'This feature is not designed for medical use.',
+        style: TextStyle(
+            color: AppColors.textSecondary, fontSize: 12, height: 1.4),
       ),
     );
   }

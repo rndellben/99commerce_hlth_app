@@ -6,10 +6,12 @@ import 'package:hlth_app/features/activity/activity_screen.dart';
 import 'package:hlth_app/features/auth/auth_screen.dart';
 import 'package:hlth_app/features/auth/privacy_screen.dart';
 import 'package:hlth_app/features/blood_pressure/blood_pressure_screen.dart';
+import 'package:hlth_app/features/data_details/data_details_screen.dart';
 import 'package:hlth_app/features/debug/ble_debug_screen.dart';
 import 'package:hlth_app/features/heart_rate/heart_rate_screen.dart';
 import 'package:hlth_app/features/home/home_screen.dart';
 import 'package:hlth_app/features/hrv/hrv_screen.dart';
+import 'package:hlth_app/features/insights/insights_screen.dart';
 import 'package:hlth_app/features/onboarding/onboarding_screen.dart';
 import 'package:hlth_app/features/one_key/one_key_measurement_screen.dart';
 import 'package:hlth_app/features/pairing/pairing_screen.dart';
@@ -50,8 +52,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final loc = state.matchedLocation;
 
-      // Always allow /debug — useful while iterating without a profile.
-      if (loc == '/debug') return null;
+      // Always allow /debug and /auth — useful while iterating without a
+      // profile, and /auth is needed during onboarding login flow.
+      if (loc == '/debug' || loc == '/auth') return null;
 
       // First-launch profile gate (DOB / sex / height / weight). This is
       // the ONLY mandatory step before reaching the app body — the band
@@ -66,55 +69,46 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
+      // ── Primary shell (bottom-tab nav) ───────────────────────────────────
+      // Tabs: Home · Activity · Insights · Settings (per spec).
+      // Sleep is a metric detail/trend view — it lives outside the shell so
+      // the bottom nav is hidden when drilling into a metric.
       ShellRoute(
         builder: (context, state, child) => ShellScreen(child: child),
         routes: [
-          GoRoute(path: '/', builder: (context, state) => const HomeScreen()),
-          GoRoute(path: '/sleep', builder: (context, state) => const SleepScreen()),
-          GoRoute(path: '/activity', builder: (context, state) => const ActivityScreen()),
-          GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
+          GoRoute(path: '/', builder: (_, __) => const HomeScreen()),
+          GoRoute(path: '/activity', builder: (_, __) => const ActivityScreen()),
+          GoRoute(path: '/insights', builder: (_, __) => const InsightsScreen()),
+          GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
         ],
       ),
-      GoRoute(path: '/heart-rate', builder: (context, state) => const HeartRateScreen()),
-      GoRoute(path: '/spo2', builder: (context, state) => const SpO2Screen()),
-      GoRoute(path: '/recovery', builder: (context, state) => const RecoveryScreen()),
-      GoRoute(path: '/onboarding', builder: (context, state) => const OnboardingScreen()),
-      GoRoute(path: '/debug', builder: (context, state) => const BleDebugScreen()),
+
+      // ── Metric detail / trend-view screens (push, no bottom nav) ────────
+      GoRoute(path: '/sleep', builder: (_, __) => const SleepScreen()),
+      GoRoute(path: '/heart-rate', builder: (_, __) => const HeartRateScreen()),
+      GoRoute(path: '/spo2', builder: (_, __) => const SpO2Screen()),
+      GoRoute(path: '/hrv', builder: (_, __) => const HrvScreen()),
+      GoRoute(path: '/blood-pressure', builder: (_, __) => const BloodPressureScreen()),
+      GoRoute(path: '/stress', builder: (_, __) => const StressScreen()),
+      GoRoute(path: '/recovery', builder: (_, __) => const RecoveryScreen()),
+      GoRoute(path: '/workouts', builder: (_, __) => const WorkoutsScreen()),
+      GoRoute(path: '/one-key', builder: (_, __) => const OneKeyMeasurementScreen()),
+
+      // ── Utility screens ──────────────────────────────────────────────────
+      GoRoute(path: '/onboarding', builder: (_, __) => const OnboardingScreen()),
+      GoRoute(path: '/pairing', builder: (_, __) => const PairingScreen()),
+      GoRoute(path: '/auth', builder: (_, __) => const AuthScreen()),
+      GoRoute(path: '/privacy', builder: (_, __) => const PrivacyScreen()),
+      GoRoute(path: '/debug', builder: (_, __) => const BleDebugScreen()),
+      GoRoute(
+        path: '/data-details',
+        builder: (_, state) => DataDetailsScreen(
+          metric: state.uri.queryParameters['metric'] ?? 'unknown',
+        ),
+      ),
       GoRoute(
         path: '/settings/device',
-        builder: (context, state) => const DeviceSettingsScreen(),
-      ),
-      GoRoute(
-        path: '/one-key',
-        builder: (context, state) => const OneKeyMeasurementScreen(),
-      ),
-      GoRoute(
-        path: '/blood-pressure',
-        builder: (context, state) => const BloodPressureScreen(),
-      ),
-      GoRoute(
-        path: '/stress',
-        builder: (context, state) => const StressScreen(),
-      ),
-      GoRoute(
-        path: '/workouts',
-        builder: (context, state) => const WorkoutsScreen(),
-      ),
-      GoRoute(
-        path: '/hrv',
-        builder: (context, state) => const HrvScreen(),
-      ),
-      GoRoute(
-        path: '/pairing',
-        builder: (context, state) => const PairingScreen(),
-      ),
-      GoRoute(
-        path: '/auth',
-        builder: (context, state) => const AuthScreen(),
-      ),
-      GoRoute(
-        path: '/privacy',
-        builder: (context, state) => const PrivacyScreen(),
+        builder: (_, __) => const DeviceSettingsScreen(),
       ),
     ],
   );

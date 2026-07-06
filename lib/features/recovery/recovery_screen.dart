@@ -4,14 +4,23 @@ import 'package:hlth_app/core/models/daily_metrics.dart';
 import 'package:hlth_app/features/activity/activity_providers.dart';
 import 'package:hlth_app/features/home/home_providers.dart';
 import 'package:hlth_app/ui/theme/app_colors.dart';
+import 'package:hlth_app/ui/widgets/metric_trend_scaffold.dart';
 import 'package:hlth_app/ui/widgets/score_gauge.dart';
+import 'package:hlth_app/ui/widgets/trend_view_sections.dart';
 
-/// Recovery detail screen. Reads the same `latestRecoveryScoreProvider` the
-/// home card uses, so the two never disagree. Each contributing factor shows
-/// the night's RAW measurement (bpm / ms / min), coloured by how that factor
-/// scored against the user's baseline (the engine's 0–100 sub-score).
+/// Recovery (Stability) detail screen. Reads the same
+/// `latestRecoveryScoreProvider` the home card uses, so the two never
+/// disagree. Each contributing factor shows the night's RAW measurement
+/// (bpm / ms / min), coloured by how that factor scored against the user's
+/// baseline (the engine's 0–100 sub-score). Wrapped in the MVP
+/// `MetricTrendScaffold` shell (about drawer + data-details + 7-day tile).
 class RecoveryScreen extends ConsumerWidget {
   const RecoveryScreen({super.key});
+
+  static const _aboutText =
+      'The stability score reflects how consistently your body is recovering '
+      'based on resting heart rate, HRV, and sleep patterns over the past '
+      '14 days.';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -31,46 +40,64 @@ class RecoveryScreen extends ConsumerWidget {
       subtitle = score.label ?? 'Recovery';
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Recovery'),
-        leading: const BackButton(),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            const SizedBox(height: 16),
-            ScoreGauge(
-              score: score?.score.round() ?? 0,
-              label: 'Recovery',
-              size: 160,
-            ),
-            const SizedBox(height: 8),
-            Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
-            const SizedBox(height: 32),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Contributing Factors',
-                style: Theme.of(context).textTheme.titleMedium,
+    return MetricTrendScaffold(
+      metricName: 'Stability',
+      allowAddEdit: false,
+      aboutTitle: 'Stability',
+      aboutText: _aboutText,
+      extraActions: const [],
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: [
+              const SizedBox(height: 16),
+              ScoreGauge(
+                score: score?.score.round() ?? 0,
+                label: 'Recovery',
+                size: 160,
               ),
-            ),
-            const SizedBox(height: 16),
-            for (final f in _buildFactors(metrics))
-              _FactorRow(
-                label: f.label,
-                icon: f.icon,
-                value: f.value,
-                color: _factorColor(components[f.key]),
+              const SizedBox(height: 8),
+              Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
+              const SizedBox(height: 32),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Contributing Factors',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
               ),
-            const Spacer(),
-            Text(
-              'This is a wellness feature, not a medical device.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 9),
-              textAlign: TextAlign.center,
-            ),
-          ],
+              const SizedBox(height: 16),
+              for (final f in _buildFactors(metrics))
+                _FactorRow(
+                  label: f.label,
+                  icon: f.icon,
+                  value: f.value,
+                  color: _factorColor(components[f.key]),
+                ),
+              const SizedBox(height: 32),
+              const DataDetailsCard(metric: 'recovery'),
+              const SizedBox(height: 16),
+              Last7DaysTile(
+                metric: 'recovery',
+                averageValue: null,
+                unit: '/100',
+                color: AppColors.recovery,
+              ),
+              const SizedBox(height: 16),
+              const AboutMetricSection(
+                title: 'About Stability',
+                body: _aboutText,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'This is a wellness feature, not a medical device.',
+                style:
+                    Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 9),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
         ),
       ),
     );
