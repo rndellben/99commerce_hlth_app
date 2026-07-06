@@ -49,7 +49,7 @@ class AppDatabase extends _$AppDatabase {
   /// Bump on every schema change. Add a migration step in
   /// `migration` below. See hlth-db-schema.md §"Schema versioning".
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -123,6 +123,62 @@ class AppDatabase extends _$AppDatabase {
             await customStatement(
               'CREATE UNIQUE INDEX IF NOT EXISTS idx_nightly_records_user_date '
               'ON nightly_records(user_id, local_date)',
+            );
+          }
+          // v9 → v10: add VO2 max estimate columns to exercise_sessions
+          // (aerobic-fitness feature, Åstrand-Ryhming Algorithm A). Nullable
+          // addColumn is non-destructive; existing rows compute lazily.
+          if (from < 10) {
+            await m.addColumn(exerciseSessions, exerciseSessions.vo2maxMl);
+            await m.addColumn(exerciseSessions, exerciseSessions.vo2Confidence);
+          }
+          // v10 → v11: de-duplicate sleep sessions. Until now sleepFromNative
+          // minted a fresh uuid.v4() per sync, so createSession's upsert-by-id
+          // never collided and each night re-inserted forever (observed: 64
+          // rows for ~6 nights). The adapter now uses a deterministic id
+          // ('sleepsync:<deviceId>:<sleepSec>' where sleepSec == started_at_utc)
+          // so future syncs upsert in place. This one-time cleanup collapses the
+          // existing duplicates and re-ids the survivors + their epochs to the
+          // new scheme (grouped by device_id+started_at_utc so the re-id is
+          // guaranteed unique).
+          if (from < 11) {
+            // 1. Keep the earliest-inserted row per (device, start); drop dups.
+            await customStatement(
+              'DELETE FROM sleep_sessions WHERE rowid NOT IN '
+              '(SELECT MIN(rowid) FROM sleep_sessions '
+              'GROUP BY device_id, started_at_utc)',
+            );
+            // 2. Drop epochs orphaned by the deleted duplicate sessions.
+            await customStatement(
+              'DELETE FROM sleep_epochs WHERE session_id NOT IN '
+              '(SELECT id FROM sleep_sessions)',
+            );
+            // 3. Re-point surviving epochs to the deterministic session id
+            //    (uses the still-current session.id for the lookup) …
+            await customStatement(
+              "UPDATE sleep_epochs SET session_id = "
+              "(SELECT 'sleepsync:' || s.device_id || ':' || s.started_at_utc "
+              " FROM sleep_sessions s WHERE s.id = sleep_epochs.session_id) "
+              "WHERE session_id IN (SELECT id FROM sleep_sessions)",
+            );
+            // 4. … then re-id the sessions themselves so they match.
+            await customStatement(
+              "UPDATE sleep_sessions SET id = "
+              "'sleepsync:' || device_id || ':' || started_at_utc",
+            );
+          }
+          // v11 → v12: clear the HRV rollup in daily_metrics. A briefly-shipped
+          // (dev-only) sleep-window "frame bridge" wrote NON-sleep (awake)
+          // HRV into hrv_rmssd_ms/hrv_sdnn_ms, and the aggregator's merge
+          // preserves an existing value when a fresh computation is null
+          // (`hrvRmssd ?? existing`) — so that bad value would stick forever on
+          // nights that have no real sleep HRV. Null it once; the corrected
+          // aggregator (which queries the sleep window with the session bounds
+          // directly) repopulates the trailing days on the next sync, and days
+          // with genuinely no sleep HRV correctly stay null (redistributed).
+          if (from < 12) {
+            await customStatement(
+              'UPDATE daily_metrics SET hrv_rmssd_ms = NULL, hrv_sdnn_ms = NULL',
             );
           }
         },

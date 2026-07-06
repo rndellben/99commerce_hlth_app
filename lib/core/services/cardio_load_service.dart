@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hlth_app/core/database/enums.dart';
 import 'package:hlth_app/core/models/nightly_record_row.dart';
 import 'package:hlth_app/core/models/score.dart';
+import 'package:hlth_app/core/models/sleep.dart';
 import 'package:hlth_app/core/repositories/hr_repository.dart';
 import 'package:hlth_app/core/repositories/hrv_repository.dart';
 import 'package:hlth_app/core/repositories/nightly_record_repository.dart';
@@ -43,11 +44,52 @@ class CardioLoadService {
     // 1. Most recent night session = tonight's trigger.
     final session = await sleepRepo.watchMostRecentNight(userId).first;
     if (session == null) return null;
+    return _computeForSession(userId: userId, session: session);
+  }
 
+  /// Recompute the trailing [nights] of night sessions (oldest → newest).
+  ///
+  /// The H59 only serves a night's HRV starting the NEXT day, so last night's
+  /// Cardio Load is computed before its RMSSD exists (→ `noData`). Re-running
+  /// recent nights on each sync lets a night's record + score "settle" — gain
+  /// validity and produce — once its HRV backfills. Idempotent: the nightly
+  /// record and Score are keyed by wake-date, so this replaces in place.
+  Future<void> computeRecentNights({
+    required String userId,
+    int nights = 3,
+  }) async {
+    final now = DateTime.now();
+    final sessions = await sleepRepo.getInRange(
+      userId: userId,
+      from: now.subtract(Duration(days: nights)),
+      to: now,
+      type: SleepSessionType.night,
+    );
+    // Oldest → newest so each night's rolling history sees updated priors, and
+    // (upsert is date-keyed) a later same-date session wins, matching
+    // "most recent night".
+    sessions.sort((a, b) => a.startedAt.compareTo(b.startedAt));
+    for (final s in sessions) {
+      try {
+        await _computeForSession(userId: userId, session: s);
+      } catch (_) {
+        // One bad night must not abort the backfill of the others.
+      }
+    }
+  }
+
+  Future<vl.VascularLoadResult?> _computeForSession({
+    required String userId,
+    required SleepSession session,
+  }) async {
     final wakeLocal = session.endedAt.toLocal();
     final wakeDate = DateTime(wakeLocal.year, wakeLocal.month, wakeLocal.day);
 
-    // 2. Pull the night's stored samples + stage timeline.
+    // 2. Pull the night's stored samples + stage timeline. HR, HRV, stress and
+    // the sleep session are ALL stored in true UTC, so we query each with the
+    // session bounds directly — no tz conversion. (An earlier "frame bridge"
+    // that shifted HRV/stress by tzOffsetMin was WRONG: it pulled awake-evening
+    // HRV instead of sleep HRV. See daily_aggregator.dart. Do not re-add it.)
     final epochs = await sleepRepo.getEpochsForSession(session.id);
     final hr = await hrRepo.getInRange(
         userId: userId, from: session.startedAt, to: session.endedAt);

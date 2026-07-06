@@ -43,6 +43,7 @@ class RecoveryScoreService {
     int? ageYears,
     bool betaBlocker = false,
     double? lastNightWeight,
+    void Function(String msg)? log,
   }) async {
     final day = DateTime(localDate.year, localDate.month, localDate.day);
     final from = day.subtract(const Duration(days: _historyDays));
@@ -86,6 +87,27 @@ class RecoveryScoreService {
       lastNightWeight: lastNightWeight,
       cfg: config,
     );
+
+    // Debug-only: surface the full component breakdown so a low/odd score can
+    // be explained (e.g. illness shows as elevated resting HR + resp rate +
+    // suppressed HRV). No effect on the persisted score.
+    if (log != null) {
+      final d = result.debug;
+      log('Recovery breakdown [$dayKey]: status=${result.status.name} '
+          'raw=${result.rawScore?.toStringAsFixed(1) ?? "—"} '
+          'score=${result.score?.toStringAsFixed(1) ?? "—"} '
+          '${result.label ?? ""} conf=${result.confidence.toStringAsFixed(2)}'
+          '${result.provisional ? " (provisional)" : ""}'
+          '${result.overrideTriggered ? " [DECLINE OVERRIDE]" : ""}');
+      log('  window_n=${d['window_n']} baseline_n=${d['baseline_n']} '
+          'tonight_composite=${d['tonight_composite']} '
+          'activity_z=${d['tonight_activity_z']} night_scores=${d['night_scores']}');
+      for (final c in result.components.values) {
+        log('  ${c.name}: ${c.score.toStringAsFixed(1)} '
+            '(w=${c.weight.toStringAsFixed(2)})'
+            '${c.available ? "" : " [redistributed]"} ${c.note}');
+      }
+    }
 
     // No score to show: invalid sleep last night or no trustworthy signals.
     if (result.score == null) return null;

@@ -7,6 +7,7 @@ import 'package:hlth_app/core/bootstrap/active_session.dart';
 import 'package:hlth_app/core/models/exercise_session.dart';
 import 'package:hlth_app/core/repositories/device_repository.dart';
 import 'package:hlth_app/core/repositories/exercise_session_repository.dart';
+import 'package:hlth_app/core/services/vo2max_service.dart';
 import 'package:hlth_app/ui/theme/app_colors.dart';
 
 /// One row in the workout picker. `sportType` is the raw SDK byte we
@@ -326,11 +327,25 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
           .read(deviceRepositoryProvider)
           .getActiveForUser(ActiveSession.defaultUserId);
       if (device != null) {
-        await ref.read(exerciseSessionRepositoryProvider).upsertFromBand(
-              userId: ActiveSession.defaultUserId,
-              deviceId: device.id,
-              summary: best,
-            );
+        final sessionId =
+            await ref.read(exerciseSessionRepositoryProvider).upsertFromBand(
+                  userId: ActiveSession.defaultUserId,
+                  deviceId: device.id,
+                  summary: best,
+                );
+        // Estimate aerobic fitness (VO2 max) for this workout. Non-fatal:
+        // a scoring failure must not block the summary screen.
+        if (sessionId != null) {
+          try {
+            await ref.read(vo2MaxServiceProvider).computeForSession(
+                  userId: ActiveSession.defaultUserId,
+                  sessionId: sessionId,
+                  log: (m) => debugPrint('[VO2] $m'),
+                );
+          } catch (e) {
+            debugPrint('[VO2] computeForSession threw: $e');
+          }
+        }
       }
     }
     if (!mounted) return;

@@ -465,6 +465,11 @@ class ExerciseSessions extends Table {
   IntColumn get elevationCm => integer().nullable()();
   IntColumn get uphillCm => integer().nullable()();
   IntColumn get downhillCm => integer().nullable()();
+  // Estimated VO2 max for this session (mL/kg/min) + its 0..1 confidence.
+  // Computed by Vo2MaxService (Åstrand-Ryhming, Algorithm A) after sync; null
+  // when the session didn't qualify or lacked the inputs to estimate.
+  RealColumn get vo2maxMl => real().nullable()();
+  RealColumn get vo2Confidence => real().nullable()();
   IntColumn get source => intEnum<DataSource>()();
   IntColumn get createdAtUtc => integer()();
   IntColumn get deletedAtUtc => integer().nullable()();

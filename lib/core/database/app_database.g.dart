@@ -13877,6 +13877,28 @@ class $ExerciseSessionsTable extends ExerciseSessions
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _vo2maxMlMeta = const VerificationMeta(
+    'vo2maxMl',
+  );
+  @override
+  late final GeneratedColumn<double> vo2maxMl = GeneratedColumn<double>(
+    'vo2max_ml',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _vo2ConfidenceMeta = const VerificationMeta(
+    'vo2Confidence',
+  );
+  @override
+  late final GeneratedColumn<double> vo2Confidence = GeneratedColumn<double>(
+    'vo2_confidence',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
   @override
   late final GeneratedColumnWithTypeConverter<DataSource, int> source =
       GeneratedColumn<int>(
@@ -13929,6 +13951,8 @@ class $ExerciseSessionsTable extends ExerciseSessions
     elevationCm,
     uphillCm,
     downhillCm,
+    vo2maxMl,
+    vo2Confidence,
     source,
     createdAtUtc,
     deletedAtUtc,
@@ -14086,6 +14110,21 @@ class $ExerciseSessionsTable extends ExerciseSessions
         downhillCm.isAcceptableOrUnknown(data['downhill_cm']!, _downhillCmMeta),
       );
     }
+    if (data.containsKey('vo2max_ml')) {
+      context.handle(
+        _vo2maxMlMeta,
+        vo2maxMl.isAcceptableOrUnknown(data['vo2max_ml']!, _vo2maxMlMeta),
+      );
+    }
+    if (data.containsKey('vo2_confidence')) {
+      context.handle(
+        _vo2ConfidenceMeta,
+        vo2Confidence.isAcceptableOrUnknown(
+          data['vo2_confidence']!,
+          _vo2ConfidenceMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at_utc')) {
       context.handle(
         _createdAtUtcMeta,
@@ -14191,6 +14230,14 @@ class $ExerciseSessionsTable extends ExerciseSessions
         DriftSqlType.int,
         data['${effectivePrefix}downhill_cm'],
       ),
+      vo2maxMl: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}vo2max_ml'],
+      ),
+      vo2Confidence: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}vo2_confidence'],
+      ),
       source: $ExerciseSessionsTable.$convertersource.fromSql(
         attachedDatabase.typeMapping.read(
           DriftSqlType.int,
@@ -14237,6 +14284,8 @@ class ExerciseSession extends DataClass implements Insertable<ExerciseSession> {
   final int? elevationCm;
   final int? uphillCm;
   final int? downhillCm;
+  final double? vo2maxMl;
+  final double? vo2Confidence;
   final DataSource source;
   final int createdAtUtc;
   final int? deletedAtUtc;
@@ -14260,6 +14309,8 @@ class ExerciseSession extends DataClass implements Insertable<ExerciseSession> {
     this.elevationCm,
     this.uphillCm,
     this.downhillCm,
+    this.vo2maxMl,
+    this.vo2Confidence,
     required this.source,
     required this.createdAtUtc,
     this.deletedAtUtc,
@@ -14307,6 +14358,12 @@ class ExerciseSession extends DataClass implements Insertable<ExerciseSession> {
     }
     if (!nullToAbsent || downhillCm != null) {
       map['downhill_cm'] = Variable<int>(downhillCm);
+    }
+    if (!nullToAbsent || vo2maxMl != null) {
+      map['vo2max_ml'] = Variable<double>(vo2maxMl);
+    }
+    if (!nullToAbsent || vo2Confidence != null) {
+      map['vo2_confidence'] = Variable<double>(vo2Confidence);
     }
     {
       map['source'] = Variable<int>(
@@ -14363,6 +14420,12 @@ class ExerciseSession extends DataClass implements Insertable<ExerciseSession> {
       downhillCm: downhillCm == null && nullToAbsent
           ? const Value.absent()
           : Value(downhillCm),
+      vo2maxMl: vo2maxMl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(vo2maxMl),
+      vo2Confidence: vo2Confidence == null && nullToAbsent
+          ? const Value.absent()
+          : Value(vo2Confidence),
       source: Value(source),
       createdAtUtc: Value(createdAtUtc),
       deletedAtUtc: deletedAtUtc == null && nullToAbsent
@@ -14396,6 +14459,8 @@ class ExerciseSession extends DataClass implements Insertable<ExerciseSession> {
       elevationCm: serializer.fromJson<int?>(json['elevationCm']),
       uphillCm: serializer.fromJson<int?>(json['uphillCm']),
       downhillCm: serializer.fromJson<int?>(json['downhillCm']),
+      vo2maxMl: serializer.fromJson<double?>(json['vo2maxMl']),
+      vo2Confidence: serializer.fromJson<double?>(json['vo2Confidence']),
       source: $ExerciseSessionsTable.$convertersource.fromJson(
         serializer.fromJson<int>(json['source']),
       ),
@@ -14426,6 +14491,8 @@ class ExerciseSession extends DataClass implements Insertable<ExerciseSession> {
       'elevationCm': serializer.toJson<int?>(elevationCm),
       'uphillCm': serializer.toJson<int?>(uphillCm),
       'downhillCm': serializer.toJson<int?>(downhillCm),
+      'vo2maxMl': serializer.toJson<double?>(vo2maxMl),
+      'vo2Confidence': serializer.toJson<double?>(vo2Confidence),
       'source': serializer.toJson<int>(
         $ExerciseSessionsTable.$convertersource.toJson(source),
       ),
@@ -14454,6 +14521,8 @@ class ExerciseSession extends DataClass implements Insertable<ExerciseSession> {
     Value<int?> elevationCm = const Value.absent(),
     Value<int?> uphillCm = const Value.absent(),
     Value<int?> downhillCm = const Value.absent(),
+    Value<double?> vo2maxMl = const Value.absent(),
+    Value<double?> vo2Confidence = const Value.absent(),
     DataSource? source,
     int? createdAtUtc,
     Value<int?> deletedAtUtc = const Value.absent(),
@@ -14477,6 +14546,10 @@ class ExerciseSession extends DataClass implements Insertable<ExerciseSession> {
     elevationCm: elevationCm.present ? elevationCm.value : this.elevationCm,
     uphillCm: uphillCm.present ? uphillCm.value : this.uphillCm,
     downhillCm: downhillCm.present ? downhillCm.value : this.downhillCm,
+    vo2maxMl: vo2maxMl.present ? vo2maxMl.value : this.vo2maxMl,
+    vo2Confidence: vo2Confidence.present
+        ? vo2Confidence.value
+        : this.vo2Confidence,
     source: source ?? this.source,
     createdAtUtc: createdAtUtc ?? this.createdAtUtc,
     deletedAtUtc: deletedAtUtc.present ? deletedAtUtc.value : this.deletedAtUtc,
@@ -14516,6 +14589,10 @@ class ExerciseSession extends DataClass implements Insertable<ExerciseSession> {
       downhillCm: data.downhillCm.present
           ? data.downhillCm.value
           : this.downhillCm,
+      vo2maxMl: data.vo2maxMl.present ? data.vo2maxMl.value : this.vo2maxMl,
+      vo2Confidence: data.vo2Confidence.present
+          ? data.vo2Confidence.value
+          : this.vo2Confidence,
       source: data.source.present ? data.source.value : this.source,
       createdAtUtc: data.createdAtUtc.present
           ? data.createdAtUtc.value
@@ -14548,6 +14625,8 @@ class ExerciseSession extends DataClass implements Insertable<ExerciseSession> {
           ..write('elevationCm: $elevationCm, ')
           ..write('uphillCm: $uphillCm, ')
           ..write('downhillCm: $downhillCm, ')
+          ..write('vo2maxMl: $vo2maxMl, ')
+          ..write('vo2Confidence: $vo2Confidence, ')
           ..write('source: $source, ')
           ..write('createdAtUtc: $createdAtUtc, ')
           ..write('deletedAtUtc: $deletedAtUtc')
@@ -14576,6 +14655,8 @@ class ExerciseSession extends DataClass implements Insertable<ExerciseSession> {
     elevationCm,
     uphillCm,
     downhillCm,
+    vo2maxMl,
+    vo2Confidence,
     source,
     createdAtUtc,
     deletedAtUtc,
@@ -14603,6 +14684,8 @@ class ExerciseSession extends DataClass implements Insertable<ExerciseSession> {
           other.elevationCm == this.elevationCm &&
           other.uphillCm == this.uphillCm &&
           other.downhillCm == this.downhillCm &&
+          other.vo2maxMl == this.vo2maxMl &&
+          other.vo2Confidence == this.vo2Confidence &&
           other.source == this.source &&
           other.createdAtUtc == this.createdAtUtc &&
           other.deletedAtUtc == this.deletedAtUtc);
@@ -14628,6 +14711,8 @@ class ExerciseSessionsCompanion extends UpdateCompanion<ExerciseSession> {
   final Value<int?> elevationCm;
   final Value<int?> uphillCm;
   final Value<int?> downhillCm;
+  final Value<double?> vo2maxMl;
+  final Value<double?> vo2Confidence;
   final Value<DataSource> source;
   final Value<int> createdAtUtc;
   final Value<int?> deletedAtUtc;
@@ -14652,6 +14737,8 @@ class ExerciseSessionsCompanion extends UpdateCompanion<ExerciseSession> {
     this.elevationCm = const Value.absent(),
     this.uphillCm = const Value.absent(),
     this.downhillCm = const Value.absent(),
+    this.vo2maxMl = const Value.absent(),
+    this.vo2Confidence = const Value.absent(),
     this.source = const Value.absent(),
     this.createdAtUtc = const Value.absent(),
     this.deletedAtUtc = const Value.absent(),
@@ -14677,6 +14764,8 @@ class ExerciseSessionsCompanion extends UpdateCompanion<ExerciseSession> {
     this.elevationCm = const Value.absent(),
     this.uphillCm = const Value.absent(),
     this.downhillCm = const Value.absent(),
+    this.vo2maxMl = const Value.absent(),
+    this.vo2Confidence = const Value.absent(),
     required DataSource source,
     required int createdAtUtc,
     this.deletedAtUtc = const Value.absent(),
@@ -14709,6 +14798,8 @@ class ExerciseSessionsCompanion extends UpdateCompanion<ExerciseSession> {
     Expression<int>? elevationCm,
     Expression<int>? uphillCm,
     Expression<int>? downhillCm,
+    Expression<double>? vo2maxMl,
+    Expression<double>? vo2Confidence,
     Expression<int>? source,
     Expression<int>? createdAtUtc,
     Expression<int>? deletedAtUtc,
@@ -14734,6 +14825,8 @@ class ExerciseSessionsCompanion extends UpdateCompanion<ExerciseSession> {
       if (elevationCm != null) 'elevation_cm': elevationCm,
       if (uphillCm != null) 'uphill_cm': uphillCm,
       if (downhillCm != null) 'downhill_cm': downhillCm,
+      if (vo2maxMl != null) 'vo2max_ml': vo2maxMl,
+      if (vo2Confidence != null) 'vo2_confidence': vo2Confidence,
       if (source != null) 'source': source,
       if (createdAtUtc != null) 'created_at_utc': createdAtUtc,
       if (deletedAtUtc != null) 'deleted_at_utc': deletedAtUtc,
@@ -14761,6 +14854,8 @@ class ExerciseSessionsCompanion extends UpdateCompanion<ExerciseSession> {
     Value<int?>? elevationCm,
     Value<int?>? uphillCm,
     Value<int?>? downhillCm,
+    Value<double?>? vo2maxMl,
+    Value<double?>? vo2Confidence,
     Value<DataSource>? source,
     Value<int>? createdAtUtc,
     Value<int?>? deletedAtUtc,
@@ -14786,6 +14881,8 @@ class ExerciseSessionsCompanion extends UpdateCompanion<ExerciseSession> {
       elevationCm: elevationCm ?? this.elevationCm,
       uphillCm: uphillCm ?? this.uphillCm,
       downhillCm: downhillCm ?? this.downhillCm,
+      vo2maxMl: vo2maxMl ?? this.vo2maxMl,
+      vo2Confidence: vo2Confidence ?? this.vo2Confidence,
       source: source ?? this.source,
       createdAtUtc: createdAtUtc ?? this.createdAtUtc,
       deletedAtUtc: deletedAtUtc ?? this.deletedAtUtc,
@@ -14853,6 +14950,12 @@ class ExerciseSessionsCompanion extends UpdateCompanion<ExerciseSession> {
     if (downhillCm.present) {
       map['downhill_cm'] = Variable<int>(downhillCm.value);
     }
+    if (vo2maxMl.present) {
+      map['vo2max_ml'] = Variable<double>(vo2maxMl.value);
+    }
+    if (vo2Confidence.present) {
+      map['vo2_confidence'] = Variable<double>(vo2Confidence.value);
+    }
     if (source.present) {
       map['source'] = Variable<int>(
         $ExerciseSessionsTable.$convertersource.toSql(source.value),
@@ -14892,6 +14995,8 @@ class ExerciseSessionsCompanion extends UpdateCompanion<ExerciseSession> {
           ..write('elevationCm: $elevationCm, ')
           ..write('uphillCm: $uphillCm, ')
           ..write('downhillCm: $downhillCm, ')
+          ..write('vo2maxMl: $vo2maxMl, ')
+          ..write('vo2Confidence: $vo2Confidence, ')
           ..write('source: $source, ')
           ..write('createdAtUtc: $createdAtUtc, ')
           ..write('deletedAtUtc: $deletedAtUtc, ')
@@ -28109,6 +28214,8 @@ typedef $$ExerciseSessionsTableCreateCompanionBuilder =
       Value<int?> elevationCm,
       Value<int?> uphillCm,
       Value<int?> downhillCm,
+      Value<double?> vo2maxMl,
+      Value<double?> vo2Confidence,
       required DataSource source,
       required int createdAtUtc,
       Value<int?> deletedAtUtc,
@@ -28135,6 +28242,8 @@ typedef $$ExerciseSessionsTableUpdateCompanionBuilder =
       Value<int?> elevationCm,
       Value<int?> uphillCm,
       Value<int?> downhillCm,
+      Value<double?> vo2maxMl,
+      Value<double?> vo2Confidence,
       Value<DataSource> source,
       Value<int> createdAtUtc,
       Value<int?> deletedAtUtc,
@@ -28279,6 +28388,16 @@ class $$ExerciseSessionsTableFilterComposer
 
   ColumnFilters<int> get downhillCm => $composableBuilder(
     column: $table.downhillCm,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get vo2maxMl => $composableBuilder(
+    column: $table.vo2maxMl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get vo2Confidence => $composableBuilder(
+    column: $table.vo2Confidence,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -28439,6 +28558,16 @@ class $$ExerciseSessionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<double> get vo2maxMl => $composableBuilder(
+    column: $table.vo2maxMl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get vo2Confidence => $composableBuilder(
+    column: $table.vo2Confidence,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get source => $composableBuilder(
     column: $table.source,
     builder: (column) => ColumnOrderings(column),
@@ -28575,6 +28704,14 @@ class $$ExerciseSessionsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<double> get vo2maxMl =>
+      $composableBuilder(column: $table.vo2maxMl, builder: (column) => column);
+
+  GeneratedColumn<double> get vo2Confidence => $composableBuilder(
+    column: $table.vo2Confidence,
+    builder: (column) => column,
+  );
+
   GeneratedColumnWithTypeConverter<DataSource, int> get source =>
       $composableBuilder(column: $table.source, builder: (column) => column);
 
@@ -28684,6 +28821,8 @@ class $$ExerciseSessionsTableTableManager
                 Value<int?> elevationCm = const Value.absent(),
                 Value<int?> uphillCm = const Value.absent(),
                 Value<int?> downhillCm = const Value.absent(),
+                Value<double?> vo2maxMl = const Value.absent(),
+                Value<double?> vo2Confidence = const Value.absent(),
                 Value<DataSource> source = const Value.absent(),
                 Value<int> createdAtUtc = const Value.absent(),
                 Value<int?> deletedAtUtc = const Value.absent(),
@@ -28708,6 +28847,8 @@ class $$ExerciseSessionsTableTableManager
                 elevationCm: elevationCm,
                 uphillCm: uphillCm,
                 downhillCm: downhillCm,
+                vo2maxMl: vo2maxMl,
+                vo2Confidence: vo2Confidence,
                 source: source,
                 createdAtUtc: createdAtUtc,
                 deletedAtUtc: deletedAtUtc,
@@ -28734,6 +28875,8 @@ class $$ExerciseSessionsTableTableManager
                 Value<int?> elevationCm = const Value.absent(),
                 Value<int?> uphillCm = const Value.absent(),
                 Value<int?> downhillCm = const Value.absent(),
+                Value<double?> vo2maxMl = const Value.absent(),
+                Value<double?> vo2Confidence = const Value.absent(),
                 required DataSource source,
                 required int createdAtUtc,
                 Value<int?> deletedAtUtc = const Value.absent(),
@@ -28758,6 +28901,8 @@ class $$ExerciseSessionsTableTableManager
                 elevationCm: elevationCm,
                 uphillCm: uphillCm,
                 downhillCm: downhillCm,
+                vo2maxMl: vo2maxMl,
+                vo2Confidence: vo2Confidence,
                 source: source,
                 createdAtUtc: createdAtUtc,
                 deletedAtUtc: deletedAtUtc,

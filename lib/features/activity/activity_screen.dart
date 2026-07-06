@@ -6,6 +6,8 @@ import 'package:hlth_app/core/models/step_bucket.dart';
 import 'package:hlth_app/core/repositories/device_repository.dart';
 import 'package:hlth_app/core/services/sync_service.dart';
 import 'package:hlth_app/features/activity/activity_providers.dart';
+import 'package:hlth_app/features/activity/widgets/vo2max_card.dart';
+import 'package:hlth_app/features/activity/widgets/workout_prompt_banner.dart';
 import 'package:hlth_app/ui/theme/app_colors.dart';
 import 'package:hlth_app/ui/widgets/date_selector.dart';
 import 'package:hlth_app/ui/widgets/metric_tile.dart';
@@ -120,6 +122,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                const WorkoutPromptBanner(),
                 PeriodToggle(
                   value: _period,
                   onChanged: (p) => setState(() {
@@ -220,6 +223,8 @@ class _DayView extends ConsumerWidget {
               distanceKm: distanceKm,
               activeMinutes: activeMin,
             ),
+            const SizedBox(height: 16),
+            const Vo2MaxCard(),
           ],
         );
       },

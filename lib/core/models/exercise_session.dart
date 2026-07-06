@@ -25,6 +25,8 @@ class ExerciseSession {
     this.elevationCm,
     this.uphillCm,
     this.downhillCm,
+    this.vo2maxMl,
+    this.vo2Confidence,
   });
 
   final String id;
@@ -46,6 +48,10 @@ class ExerciseSession {
   final int? elevationCm;
   final int? uphillCm;
   final int? downhillCm;
+  /// Estimated VO2 max for this session (mL/kg/min); null if not estimated.
+  final double? vo2maxMl;
+  /// 0..1 confidence in [vo2maxMl] (driven by the intensity-derivation tier).
+  final double? vo2Confidence;
   final DataSource source;
   final DateTime createdAt;
 }

@@ -8,7 +8,15 @@
       "Bash(command -v dart)",
       "Bash(echo \"dart: $\\(command -v dart\\)\")",
       "Bash(dart run *)",
-      "Bash(flutter analyze *)"
+      "Bash(flutter analyze *)",
+      "Bash(ls -la ~/Downloads 2>&1 | head -50)",
+      "Read(//Users/randellbenedictcalilung/Downloads/**)",
+      "Read(//Users/randellbenedictcalilung/Downloads/Transfered Files/**)",
+      "Read(//Users/randellbenedictcalilung/**)",
+      "Bash(echo \"=== HLTH APP contents ===\" && ls -la ~/\"HLTH APP\")",
+      "Read(//Users/randellbenedictcalilung/HLTH APP/**)",
+      "Bash(mv ~/Downloads/\"Transfered Files\" ~/\"HLTH APP\"/)",
+      "Bash(mv ~/99commerce_hlth_app ~/\"HLTH APP\"/)"
     ]
   }
 }

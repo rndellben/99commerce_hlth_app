@@ -40,6 +40,31 @@ void main() {
         'type': type,
       };
 
+  group('sleepFromNative — deterministic id (dedup)', () {
+    test('same night → identical session + epoch ids (upserts in place)', () {
+      final stages = [stage(startSec: sleepTime, durationSec: 3600, type: 2)];
+      final a = sleepFromNative(baseNative(stages: stages),
+          userId: 'u', deviceId: 'd')!;
+      final b = sleepFromNative(baseNative(stages: stages),
+          userId: 'u', deviceId: 'd')!;
+      // Was uuid.v4() → a != b on every sync → duplicate rows. Now stable.
+      expect(a.session.id, b.session.id);
+      expect(a.session.id, 'sleepsync:d:$sleepTime');
+      expect(a.epochs.single.id, b.epochs.single.id);
+      expect(a.epochs.single.id, startsWith('sleepsync:d:$sleepTime:'));
+    });
+
+    test('different night or device → different id', () {
+      final base = baseNative();
+      final n1 = sleepFromNative(base, userId: 'u', deviceId: 'd')!;
+      final n2 = sleepFromNative(baseNative()..['sleepTime'] = sleepTime + 86400,
+          userId: 'u', deviceId: 'd')!;
+      final n3 = sleepFromNative(base, userId: 'u', deviceId: 'other')!;
+      expect(n1.session.id, isNot(n2.session.id));
+      expect(n1.session.id, isNot(n3.session.id));
+    });
+  });
+
   group('sleepFromNative — basic parsing', () {
     test('returns null when sleepTime or wakeTime is zero', () {
       expect(

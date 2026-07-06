@@ -128,6 +128,17 @@ class DailyAggregator {
     double? hrvRmssd;
     double? hrvSdnn;
     if (session != null) {
+      // Query HRV with the session bounds DIRECTLY. Sleep sessions AND HRV are
+      // both stored in true UTC (sleepFromNative takes the band's true-UTC
+      // sleep epoch as-is; hrvFromNative anchors on true-UTC-of-local-midnight),
+      // so the frames already match — no tz shift. Verified 2026-07-03: a user
+      // who genuinely slept 03:37–12:52 local had the session window render
+      // exactly [03:37–12:52] and align with their sleep-window HRV. (An earlier
+      // "frame bridge" that subtracted tzOffsetMin here was WRONG — it shifted
+      // the window 8h into the awake evening and pulled non-sleep HRV. Do not
+      // re-add it.) Same-day the score may still find 0 samples because the H59
+      // serves a night's HRV only the NEXT day; the trailing-day recompute in
+      // sync_service picks it up once it lands.
       final hrvInSleep = await hrvRepo.getInRange(
         userId: userId,
         from: session.startedAt,

@@ -7,7 +7,10 @@ import 'package:hlth_app/core/models/exercise_session.dart';
 import 'package:uuid/uuid.dart';
 
 abstract class ExerciseSessionRepository {
-  Future<void> upsertFromBand({
+  /// Persist a band workout summary (idempotent on the dedup key). Returns the
+  /// row's id — whether newly inserted or already present — so callers can
+  /// trigger per-session scoring (VO2 max).
+  Future<String?> upsertFromBand({
     required String userId,
     required String deviceId,
     required SportSessionSummary summary,
@@ -16,6 +19,21 @@ abstract class ExerciseSessionRepository {
   Future<ExerciseSession?> getById(String id);
   Stream<List<ExerciseSession>> watchForUser({required String userId, int limit = 50});
   Stream<ExerciseSession?> watchLatest({required String userId});
+
+  /// Sessions started within [from, to] (UTC), ascending by start time.
+  /// Used by Vo2MaxService to build the rolling-average trend.
+  Future<List<ExerciseSession>> getInRange({
+    required String userId,
+    required DateTime from,
+    required DateTime to,
+  });
+
+  /// Persist a computed VO2 max estimate back onto a session row.
+  Future<void> updateVo2({
+    required String sessionId,
+    required double? vo2maxMl,
+    required double? vo2Confidence,
+  });
 }
 
 class ExerciseSessionRepositoryImpl implements ExerciseSessionRepository {
@@ -24,7 +42,7 @@ class ExerciseSessionRepositoryImpl implements ExerciseSessionRepository {
   final _uuid = const Uuid();
 
   @override
-  Future<void> upsertFromBand({
+  Future<String?> upsertFromBand({
     required String userId,
     required String deviceId,
     required SportSessionSummary summary,
@@ -32,6 +50,7 @@ class ExerciseSessionRepositoryImpl implements ExerciseSessionRepository {
     final startedAtUtc = summary.startTimeUnixSec;
     final endedAtUtc = startedAtUtc + summary.durationSec;
     final nowSec = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
+    const source = DataSource.bandScheduled;
     await _db.into(_db.exerciseSessions).insert(
           db.ExerciseSessionsCompanion.insert(
             id: _uuid.v4(),
@@ -53,7 +72,7 @@ class ExerciseSessionRepositoryImpl implements ExerciseSessionRepository {
             elevationCm: Value(summary.elevationCm),
             uphillCm: Value(summary.uphillCm),
             downhillCm: Value(summary.downhillCm),
-            source: DataSource.bandScheduled,
+            source: source,
             createdAtUtc: nowSec,
           ),
           // The composite unique index (user_id, device_id, started_at_utc,
@@ -61,6 +80,16 @@ class ExerciseSessionRepositoryImpl implements ExerciseSessionRepository {
           // workout twice.
           mode: InsertMode.insertOrIgnore,
         );
+    // Resolve the row id on the dedup key (new insert or pre-existing).
+    final row = await (_db.select(_db.exerciseSessions)
+          ..where((t) =>
+              t.userId.equals(userId) &
+              t.deviceId.equals(deviceId) &
+              t.startedAtUtc.equals(startedAtUtc) &
+              t.source.equals(source.index))
+          ..limit(1))
+        .getSingleOrNull();
+    return row?.id;
   }
 
   @override
@@ -92,6 +121,40 @@ class ExerciseSessionRepositoryImpl implements ExerciseSessionRepository {
         .map((list) => list.isEmpty ? null : list.first);
   }
 
+  @override
+  Future<List<ExerciseSession>> getInRange({
+    required String userId,
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final fromSec = from.toUtc().millisecondsSinceEpoch ~/ 1000;
+    final toSec = to.toUtc().millisecondsSinceEpoch ~/ 1000;
+    final rows = await (_db.select(_db.exerciseSessions)
+          ..where((t) =>
+              t.userId.equals(userId) &
+              t.deletedAtUtc.isNull() &
+              t.startedAtUtc.isBiggerOrEqualValue(fromSec) &
+              t.startedAtUtc.isSmallerOrEqualValue(toSec))
+          ..orderBy([(t) => OrderingTerm(
+              expression: t.startedAtUtc, mode: OrderingMode.asc)]))
+        .get();
+    return rows.map(_toModel).toList();
+  }
+
+  @override
+  Future<void> updateVo2({
+    required String sessionId,
+    required double? vo2maxMl,
+    required double? vo2Confidence,
+  }) async {
+    await (_db.update(_db.exerciseSessions)
+          ..where((t) => t.id.equals(sessionId)))
+        .write(db.ExerciseSessionsCompanion(
+      vo2maxMl: Value(vo2maxMl),
+      vo2Confidence: Value(vo2Confidence),
+    ));
+  }
+
   ExerciseSession _toModel(db.ExerciseSession d) => ExerciseSession(
         id: d.id,
         userId: d.userId,
@@ -120,6 +183,8 @@ class ExerciseSessionRepositoryImpl implements ExerciseSessionRepository {
         elevationCm: d.elevationCm,
         uphillCm: d.uphillCm,
         downhillCm: d.downhillCm,
+        vo2maxMl: d.vo2maxMl,
+        vo2Confidence: d.vo2Confidence,
         source: d.source,
         createdAt: DateTime.fromMillisecondsSinceEpoch(
           d.createdAtUtc * 1000,

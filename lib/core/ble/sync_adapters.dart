@@ -360,7 +360,15 @@ DailyMetrics? dailyStepsFromNative(
   final remMin = secToMin(native['rapidDuration']);
   final awakeMin = secToMin(native['awakeDuration']);
 
-  final sessionId = _uuid.v4();
+  // Deterministic id keyed on the band's sleep-start epoch so the SAME night
+  // upserts in place instead of inserting a fresh row on every sync. "Sync All
+  // Sleep" pulls 8 day-offsets that can return the same night, and each
+  // periodic sync re-pulls it — with a uuid.v4() id createSession's
+  // upsert-by-id never collided, which is what bloated the table (observed: 64
+  // rows for ~6 nights). Mirrors the BP sync's `bpsync:<deviceId>:<epochSec>`
+  // idempotency pattern. NOTE: `startedAt.toUtc().seconds == sleepSec`, which
+  // the v11 dedup migration relies on to reconstruct this id.
+  final sessionId = 'sleepsync:$deviceId:$sleepSec';
   final epochs = <SleepEpoch>[];
   // Accumulators used to derive session-level fields the schema reserves
   // (`coverageGapMin`, `hasUnweared`, `protocolVersion`) but the band
@@ -393,7 +401,10 @@ DailyMetrics? dailyStepsFromNative(
     }
     if (stage == SleepStage.rem) sawRemEpoch = true;
     epochs.add(SleepEpoch(
-      id: _uuid.v4(),
+      // Deterministic per (session, epoch-start) so re-syncing the same night
+      // overwrites its epochs in place rather than accumulating (paired with
+      // the deterministic sessionId + insertEpochs' delete-then-insert).
+      id: '$sessionId:$startMs',
       sessionId: sessionId,
       userId: userId,
       startedAt: _utcFromMs(startMs),

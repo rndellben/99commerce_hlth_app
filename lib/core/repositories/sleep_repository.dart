@@ -153,6 +153,13 @@ class SleepRepositoryImpl implements SleepRepository {
 
   @override
   Future<void> insertEpochs(String sessionId, List<SleepEpoch> epochs) async {
+    // Replace the session's epoch set wholesale. Epoch ids are deterministic
+    // per (session, start), but if a re-sync returns slightly different stage
+    // boundaries the old epochs would linger — clearing first keeps the set
+    // exactly matching the latest reduction for this (now stable) sessionId.
+    await (_db.delete(_db.sleepEpochs)
+          ..where((t) => t.sessionId.equals(sessionId)))
+        .go();
     await _db.batch((b) {
       for (final e in epochs) {
         b.insert(

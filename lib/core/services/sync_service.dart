@@ -17,7 +17,9 @@ import 'package:hlth_app/core/processing/fall_detector.dart';
 import 'package:hlth_app/core/services/cardio_load_service.dart';
 import 'package:hlth_app/core/services/daily_aggregator.dart';
 import 'package:hlth_app/core/services/recovery_score_service.dart';
+import 'package:hlth_app/core/services/vo2max_service.dart';
 import 'package:hlth_app/core/auth/current_user_provider.dart';
+import 'package:hlth_app/core/services/activity_detector_service.dart';
 import 'package:hlth_app/core/services/alerts/alert_evaluator.dart';
 import 'package:hlth_app/core/services/cloud_sync_service.dart';
 import 'package:hlth_app/core/services/retention_sweep_service.dart';
@@ -107,6 +109,7 @@ class SyncService {
     required this.aggregator,
     required this.recoveryScore,
     required this.cardioLoad,
+    required this.vo2Max,
     required this.cloudSync,
   });
 
@@ -122,7 +125,23 @@ class SyncService {
   final DailyAggregator aggregator;
   final RecoveryScoreService recoveryScore;
   final CardioLoadService cardioLoad;
+  final Vo2MaxService vo2Max;
   final CloudSyncService cloudSync;
+
+  /// How many days back to recompute Recovery / Cardio Load each sync so scores
+  /// "settle" once the H59 releases a night's HRV (which it only does the next
+  /// day). 2 covers the same-day + next-day backfill with margin.
+  static const _scoreBackfillDays = 2;
+
+  /// Cardio Load recomputes a wider trailing window than Recovery. Its engine
+  /// needs 4 banked *valid* nights before it produces, and a night only becomes
+  /// valid once its sleep-window HRV is found. HRV was persisted all along but
+  /// the sleep-window search missed it (a tz-frame mismatch, fixed in
+  /// daily_aggregator/cardio_load_service), so historically NO night was valid.
+  /// Re-reducing a week of already-persisted nights on each sync lets the count
+  /// of valid nights bank quickly instead of one-per-day. Idempotent (nightly
+  /// records + scores are date-keyed) and cheap (local DB + pure engine).
+  static const _cardioLoadBackfillNights = 7;
 
   /// Runs every band sync in sequence, then re-aggregates the last 14
   /// days into `daily_metrics`. Continues past individual failures.
@@ -163,23 +182,42 @@ class SyncService {
       // rather than thrown; the next run will retry.
     }
 
-    // Recompute the daily Recovery score off the freshly-aggregated rollup
-    // (post-sleep trigger). Non-fatal: a scoring failure never breaks sync.
+    // Recompute the daily Recovery score off the freshly-aggregated rollup.
+    // We recompute the trailing 3 days (oldest → newest), not just today,
+    // because the H59 only serves a night's HRV starting the NEXT day — so a
+    // score computed the morning after a sleep is missing that night's HRV and
+    // must be re-run once it backfills. Oldest-first keeps Recovery's
+    // forward-only smoothing chain consistent. Non-fatal.
+    if (aggregated) {
+      final today = DateTime.now();
+      for (var d = _scoreBackfillDays; d >= 0; d--) {
+        try {
+          await recoveryScore.computeForDay(
+            userId: userId,
+            localDate: today.subtract(Duration(days: d)),
+          );
+        } catch (_) {}
+      }
+    }
+
+    // Recompute Cardio Load for the trailing nights (same next-day-HRV reason;
+    // Cardio Load REQUIRES sleep RMSSD, so last night is always noData until
+    // its HRV lands the next day). Non-fatal.
     if (aggregated) {
       try {
-        await recoveryScore.computeForDay(
+        await cardioLoad.computeRecentNights(
           userId: userId,
-          localDate: DateTime.now(),
+          nights: _cardioLoadBackfillNights,
         );
       } catch (_) {}
     }
 
-    // Recompute Cardio Load off the latest night session (post-sleep
-    // trigger), mirroring the Recovery score above. Non-fatal: a scoring
-    // failure never breaks sync.
+    // Refresh the rolling aerobic-fitness (VO2 max) score. Idempotent over
+    // whatever per-session estimates exist; covers band-native workouts synced
+    // without going through the workout screen. Non-fatal.
     if (aggregated) {
       try {
-        await cardioLoad.computeForLatestNight(userId: userId);
+        await vo2Max.computeForDay(userId: userId, localDate: DateTime.now());
       } catch (_) {}
     }
 
@@ -530,6 +568,7 @@ final syncServiceProvider = Provider<SyncService>((ref) {
     aggregator: ref.watch(dailyAggregatorProvider),
     recoveryScore: ref.watch(recoveryScoreServiceProvider),
     cardioLoad: ref.watch(cardioLoadServiceProvider),
+    vo2Max: ref.watch(vo2MaxServiceProvider),
     cloudSync: ref.watch(cloudSyncServiceProvider),
   );
 });
@@ -560,6 +599,8 @@ class PeriodicSyncCoordinator {
     this.fallSweepDuration = const Duration(seconds: 30),
     FallDetector? fallDetector,
     this.onTickIntervalMinutes,
+    this.activityDetector,
+    this.onActivityDetected,
   }) : _fallDetector = fallDetector ?? const FallDetector() {
     _tickSub = tickStream.listen((mins) {
       lastTickIntervalMin = mins;
@@ -594,6 +635,12 @@ class PeriodicSyncCoordinator {
   /// the battery telemetry path so each row is tagged with the cadence
   /// that triggered it. Optional — null means "don't log telemetry".
   final void Function(int intervalMin)? onTickIntervalMinutes;
+
+  /// Optional: detects sustained activity and, when found, calls
+  /// [onActivityDetected] so the UI can prompt the user to start a workout.
+  final ActivityDetectorService? activityDetector;
+  final void Function(DateTime detectedAt)? onActivityDetected;
+
   BleConnectionState? _lastConnState;
   bool _inFlight = false;
   final _runs = StreamController<SyncRunResult>.broadcast();
@@ -637,6 +684,17 @@ class PeriodicSyncCoordinator {
          // `_runs`. Anything reaching here is unexpected — let it die
          // quietly so we don't kill the listener.
        }
+       // The H59 is dormant until scheduled monitoring is enabled. The native
+       // connect bootstrap binds + sets time but does NOT enable monitoring,
+       // and nothing else does outside the debug screen — so HRV (and the
+       // other scheduled metrics) never record for a normal user. That
+       // starves Recovery of confidence and blocks Cardio Load entirely
+       // (it needs sleep RMSSD). Enable it AFTER the first sync, which proves
+       // the band is past its (sometimes ~1 min) bind/time-set handshake and
+       // responsive. Idempotent + self-healing on every connect edge.
+       try {
+         await ble.setScheduledMonitoring();
+       } catch (_) {}
      });
    }
 
@@ -662,6 +720,17 @@ class PeriodicSyncCoordinator {
       // tick.
       try {
         await alertEvaluator.evaluateAll(userId: ActiveSession.defaultUserId);
+      } catch (_) {}
+      // VO2 max: detect a sustained activity bout and (debounced) prompt the
+      // user to start a workout so the band records it. Read-only over the
+      // just-synced HR + step data. Non-fatal.
+      try {
+        final detector = activityDetector;
+        if (detector != null) {
+          final detectedAt =
+              await detector.evaluate(userId: ActiveSession.defaultUserId);
+          if (detectedAt != null) onActivityDetected?.call(detectedAt);
+        }
       } catch (_) {}
       // HLT-5: run the background fall sweep once data sync is done.
       // Sequenced after sync so we never have two `startMeasureHrRaw`
@@ -903,6 +972,11 @@ final periodicSyncCoordinatorProvider =
     nightlyBpCapture: ref.watch(nightlyBpCaptureServiceProvider),
     authUserIdReader: () => ref.read(currentUserIdProvider),
     tickStream: ble.periodicSyncTick,
+    // VO2 max: surface a "start a workout?" prompt when sustained activity is
+    // detected (debounced inside the detector).
+    activityDetector: ref.watch(activityDetectorServiceProvider),
+    onActivityDetected: (detectedAt) =>
+        ref.read(pendingWorkoutPromptProvider.notifier).flag(detectedAt),
     // Battery-drain telemetry — one row per tick. Fire-and-forget; we
     // never want a telemetry write to block the actual sync work.
     onTickIntervalMinutes: (intervalMin) async {

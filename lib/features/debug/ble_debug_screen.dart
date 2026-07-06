@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'dart:convert';
 import 'dart:math' as math;
@@ -19,6 +20,8 @@ import 'package:hlth_app/core/services/notification_service.dart';
 import 'package:hlth_app/core/services/ppg_analysis_service.dart';
 import 'package:hlth_app/core/services/scheduled_ppg_capture_service.dart';
 import 'package:hlth_app/core/repositories/hr_repository.dart';
+import 'package:hlth_app/core/repositories/hrv_repository.dart';
+import 'package:hlth_app/core/repositories/score_repository.dart';
 import 'package:hlth_app/core/repositories/sleep_repository.dart';
 import 'package:hlth_app/core/repositories/spo2_repository.dart';
 import 'package:hlth_app/core/repositories/step_bucket_repository.dart';
@@ -399,6 +402,28 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
   }
 
   Future<bool> _ensurePermissions() async {
+    // iOS has a single Bluetooth permission and CoreBluetooth shows its own
+    // system prompt on first central-manager use; `Permission.bluetoothScan`
+    // / `bluetoothConnect` are Android-12 concepts that report not-granted on
+    // iOS, so the Android gate below would always fail there. Request the iOS
+    // Bluetooth permission and only hard-block if it's permanently denied —
+    // the native CBCentralManager state is the real gate (startScan returns
+    // `ble.bluetooth.off` if it isn't powered on/authorized).
+    if (Platform.isIOS) {
+      // permission_handler's iOS Bluetooth status is unreliable (it frequently
+      // reports denied/permanentlyDenied even when Bluetooth is authorized),
+      // so never hard-block on it. Fire the request to surface the system
+      // prompt on first use, log the status for diagnostics, then defer to the
+      // native CBCentralManager state — startScan returns `ble.bluetooth.off`
+      // if Bluetooth truly isn't powered on / authorized.
+      final status = await Permission.bluetooth.request();
+      if (!status.isGranted) {
+        _push('note(iOS): permission_handler bluetooth=$status — proceeding; '
+            'CoreBluetooth state is the real gate. If scan fails, enable '
+            'Bluetooth for HLTH in iOS Settings → Privacy & Security → Bluetooth.');
+      }
+      return true;
+    }
     // On Android 12+ we declared `BLUETOOTH_SCAN` with `neverForLocation`
     // flag in the manifest, so location is NOT required for BLE scanning.
     // Only block on the BLE permissions. We still REQUEST location (for
@@ -925,18 +950,32 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
     final svc = ref.read(recoveryScoreServiceProvider);
     final today = DateTime.now();
     var recoveryShown = false;
-    for (final d in [today, today.subtract(const Duration(days: 1))]) {
-      final dk = d.toIso8601String().substring(0, 10);
-      final score = await svc.computeForDay(userId: _activeUserId!, localDate: d);
-      if (score != null) {
-        _push('Recovery ($dk): ${score.score.toStringAsFixed(1)}/100 — '
-            '${score.label ?? "?"}'
-            '${score.provisional ? " (provisional)" : ""} '
-            'conf=${score.confidence?.toStringAsFixed(2) ?? "?"}');
-        recoveryShown = true;
-        break;
+    // Compute the trailing window OLDEST→NEWEST so the engine's forward-only
+    // smoothing chain (each day reads the previous displayed score) builds in
+    // correct order and every day with data gets persisted — this is what
+    // populates the Rec Hist view. Each day only uses its own date + earlier,
+    // so past scores are stable; re-running is idempotent. Only today's
+    // breakdown is logged (log:_push) to keep the older days quiet.
+    const backfillDays = 14;
+    for (var i = backfillDays; i >= 0; i--) {
+      final d = today.subtract(Duration(days: i));
+      final isToday = i == 0;
+      final score = await svc.computeForDay(
+          userId: _activeUserId!,
+          localDate: d,
+          log: isToday ? _push : null);
+      if (isToday) {
+        final dk = d.toIso8601String().substring(0, 10);
+        if (score != null) {
+          _push('Recovery ($dk): ${score.score.toStringAsFixed(1)}/100 — '
+              '${score.label ?? "?"}'
+              '${score.provisional ? " (provisional)" : ""} '
+              'conf=${score.confidence?.toStringAsFixed(2) ?? "?"}');
+          recoveryShown = true;
+        } else {
+          _push('Recovery ($dk): no score — no valid sleep night / not enough data');
+        }
       }
-      _push('Recovery ($dk): no score — no valid sleep night / not enough data');
     }
 
     // Cardio Load (Vascular Load) — reduce the latest night + score it, then
@@ -944,6 +983,53 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
     // visible (the physiological sanity check: trough HR < daytime resting,
     // RMSSD finite, etc.). Runs regardless of the Recovery outcome above.
     try {
+      // Heal the trailing week of nights first. Cardio Load needs 4 banked
+      // VALID nights before it produces, and a night is only valid once its
+      // sleep-window HRV is found. This re-reduces past nights (whose HRV is
+      // fully served, unlike tonight's) so they bank as valid — the same
+      // backfill syncAll runs, done locally here so it's instant (no BLE).
+      await ref.read(cardioLoadServiceProvider).computeRecentNights(
+            userId: _activeUserId!,
+            nights: 7,
+          );
+      // Per-night bank check: for each night in the last week show how many
+      // HRV samples land in its (frame-bridged) sleep window and whether the
+      // reduced record is valid. Tells us if Cardio Load is stuck on HRV
+      // availability (0 samples on older nights — syncHrv only pulls day 0/1)
+      // vs sparsity (< 5 samples/night, the engine's minimum).
+      try {
+        final now = DateTime.now();
+        final nights = await ref.read(sleepRepositoryProvider).getInRange(
+              userId: _activeUserId!,
+              from: now.subtract(const Duration(days: 7)),
+              to: now,
+              type: SleepSessionType.night,
+            );
+        nights.sort((a, b) => a.startedAt.compareTo(b.startedAt));
+        _push('Cardio Load bank check — ${nights.length} night(s) in 7d:');
+        var validCount = 0;
+        for (final s in nights) {
+          // Session bounds directly — HRV shares the session's true-UTC frame.
+          final hrv = await ref.read(hrvRepositoryProvider).getInRange(
+                userId: _activeUserId!,
+                from: s.startedAt,
+                to: s.endedAt,
+              );
+          final w = s.endedAt.toLocal();
+          final rec =
+              await ref.read(nightlyRecordRepositoryProvider).getForDate(
+                    userId: _activeUserId!,
+                    localDate: DateTime(w.year, w.month, w.day),
+                  );
+          if (rec?.valid ?? false) validCount++;
+          _push('  ${w.month}/${w.day} wake: ${hrv.length} HRV in-window, '
+              'valid=${rec?.valid ?? false}, '
+              'rmssd=${rec?.rmssdMedian?.toStringAsFixed(0) ?? "—"}');
+        }
+        _push('  → banked valid: $validCount / 4 needed');
+      } catch (e) {
+        _push('bank check failed: $e');
+      }
       final vl =
           await ref.read(cardioLoadServiceProvider).computeForLatestNight(
                 userId: _activeUserId!,
@@ -984,6 +1070,19 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
           }
         }
       }
+      // A past night may have produced even when tonight's is still
+      // calibrating/invalid — show the most recent PERSISTED Cardio Load score.
+      final latestCl = await ref.read(scoreRepositoryProvider).getCurrent(
+            userId: _activeUserId!,
+            scoreType: ScoreType.cardioLoad,
+            forDate: DateTime.now(),
+          );
+      _push(latestCl != null
+          ? '  → latest persisted Cardio Load: '
+              '${latestCl.score.toStringAsFixed(1)}/100 '
+              '(${latestCl.computedForDate.toIso8601String().substring(0, 10)})'
+          : '  → latest persisted Cardio Load: none yet '
+              '(need 4 valid nights banked)');
     } catch (e) {
       _push('Cardio Load: failed — $e');
     }
@@ -991,6 +1090,35 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
     _push(recoveryShown
         ? '  → open Home; the Recovery + Cardio Load cards now show this.'
         : '  → run Sync All Sleep first, then Compute Scores again.');
+  }
+
+  /// READ-ONLY Recovery score history — shows the persisted daily scores
+  /// (newest first). Does NOT recompute: the engine is forward-only and
+  /// smooths each day against the previous displayed score, so recomputing a
+  /// past date would overwrite history and break that chain. This just reads
+  /// what was actually shown on each day from the `scores` table.
+  Future<void> _recoveryHistory() async {
+    if (!_requireSession()) return;
+    _push('Recovery history (persisted, newest first):');
+    try {
+      final rows = await ref.read(scoreRepositoryProvider).getHistory(
+            userId: _activeUserId!,
+            scoreType: ScoreType.recovery,
+            limit: 14,
+          );
+      if (rows.isEmpty) {
+        _push('  (no recovery scores stored yet)');
+        return;
+      }
+      for (final s in rows) {
+        final d = s.computedForDate.toIso8601String().substring(0, 10);
+        _push('  $d: ${s.score.toStringAsFixed(1)}/100 — ${s.label ?? "?"}'
+            '${s.provisional ? " (provisional)" : ""} '
+            'conf=${s.confidence?.toStringAsFixed(2) ?? "?"}');
+      }
+    } catch (e) {
+      _push('  recovery history failed: $e');
+    }
   }
 
   /// Pull every sleep session the band still has buffered (it retains ~7
@@ -2064,6 +2192,7 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
                     _sendTestNotification),
                 _toolBtn(Icons.fact_check_outlined, 'Alerts', _evaluateAlerts),
                 _toolBtn(Icons.battery_charging_full, 'Scores', _computeScores),
+                _toolBtn(Icons.history, 'Rec Hist', _recoveryHistory),
                 _toolBtn(Icons.monitor_heart_outlined, 'R-R',
                     _exportRrToClipboard),
                 _toolBtn(
