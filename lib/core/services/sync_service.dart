@@ -155,7 +155,14 @@ class SyncService {
     required String deviceId,
   }) async {
     final steps = <SyncStepResult>[];
+    // HR is pulled for today AND yesterday (mirroring HRV below). Today's pull
+    // only covers 00:00→now, so after a day with no sync the evening/morning
+    // HR of the gap night is never backfilled — the night then has HRV but no
+    // hrP5 and can't bank as valid (observed 2026-07-06: "7/5 wake: 12 HRV,
+    // rmssd=42, valid=false"). The band retains ~7 days of HR; re-pulls are
+    // idempotent via the dedup index.
     steps.add(await syncHr(userId: userId, deviceId: deviceId));
+    steps.add(await syncHr(userId: userId, deviceId: deviceId, dayOffset: 1));
     steps.add(await syncSpo2(userId: userId, deviceId: deviceId));
     steps.add(await syncSleep(userId: userId, deviceId: deviceId));
     steps.add(await syncSteps(userId: userId));

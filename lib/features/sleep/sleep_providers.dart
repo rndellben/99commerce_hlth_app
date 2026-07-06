@@ -5,6 +5,8 @@ import 'package:hlth_app/core/models/daily_metrics.dart';
 import 'package:hlth_app/core/models/sleep.dart';
 import 'package:hlth_app/core/repositories/daily_metrics_repository.dart';
 import 'package:hlth_app/core/repositories/sleep_repository.dart';
+import 'package:hlth_app/core/repositories/spo2_repository.dart';
+import 'package:hlth_app/core/services/alerts/breathing_disruption_rule.dart';
 
 /// Most-recent night sleep session for the active user. Streams so the
 /// detail screen updates as soon as a fresh overnight sync lands.
@@ -74,6 +76,22 @@ final sleepNightMetricsProvider =
     userId: ActiveSession.defaultUserId,
     localDate: DateTime(wakeDate.year, wakeDate.month, wakeDate.day),
   );
+});
+
+/// Overnight low-oxygen scan for one session — Ryan's June 17 "surfaced card
+/// on the sleep dashboard" ask. Runs the SAME pure detection as
+/// [BreathingDisruptionRule] (which drives the notification), so the card and
+/// the push can never disagree. The card decides visibility from the result
+/// (≥2 low hourly buckets with ≥4 buckets of coverage).
+final breathingRiskForSessionProvider =
+    FutureProvider.family<BreathingDisruptionResult, SleepSession>(
+        (ref, session) async {
+  final spo2 = await ref.watch(spo2RepositoryProvider).getInRange(
+        userId: ActiveSession.defaultUserId,
+        from: session.startedAt,
+        to: session.endedAt,
+      );
+  return BreathingDisruptionRule.detect(spo2);
 });
 
 /// Range request — used by Week + Month tabs.

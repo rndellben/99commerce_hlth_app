@@ -3,7 +3,10 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hlth_app/core/repositories/notification_log_repository.dart';
 import 'package:hlth_app/core/services/alerts/alert_rule.dart';
+import 'package:hlth_app/core/services/alerts/breathing_disruption_rule.dart';
+import 'package:hlth_app/core/services/alerts/hypertension_risk_rule.dart';
 import 'package:hlth_app/core/services/alerts/irregular_rhythm_rule.dart';
+import 'package:hlth_app/core/services/alerts/morning_report_rule.dart';
 import 'package:hlth_app/core/services/alerts/retention_rule.dart';
 import 'package:hlth_app/core/services/notification_service.dart';
 
@@ -91,10 +94,13 @@ class AlertEvaluator {
 
 final alertEvaluatorProvider = Provider<AlertEvaluator>((ref) {
   return AlertEvaluator(
-    // Grows by one entry per new rule (sleep-apnea, hypertension).
+    // Grows by one entry per new rule.
     rules: [
       ref.watch(retentionRuleProvider),
       ref.watch(irregularRhythmRuleProvider),
+      ref.watch(hypertensionRiskRuleProvider),
+      ref.watch(breathingDisruptionRuleProvider),
+      ref.watch(morningReportRuleProvider),
     ],
     log: ref.watch(notificationLogRepositoryProvider),
     notifications: ref.watch(notificationServiceProvider),

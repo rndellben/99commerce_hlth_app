@@ -346,6 +346,7 @@ class _DaySessionContent extends ConsumerWidget {
         ),
         const SizedBox(height: 24),
         _SleepVitalsSection(metrics: nightMetrics),
+        _BreathingRiskCard(session: session),
         const SizedBox(height: 16),
         DataDetailsCard(metric: 'sleep'),
         const SizedBox(height: 16),
@@ -443,6 +444,71 @@ class _SleepVitalsSection extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+/// Surfaced "potential breathing disruption" card (Ryan, June 17: "an in-app
+/// alert on the sleep dashboard if your oxygen drops below a certain amount
+/// for a certain amount of time"). Renders ONLY when the night flags: ≥2
+/// hourly SpO2 buckets at/below 90% with ≥4 buckets of coverage — the same
+/// detection the breathing-disruption notification uses. Wellness
+/// observation; copy never claims a sleep-apnea diagnosis.
+class _BreathingRiskCard extends ConsumerWidget {
+  const _BreathingRiskCard({required this.session});
+  final SleepSession session;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final result =
+        ref.watch(breathingRiskForSessionProvider(session)).valueOrNull;
+    if (result == null ||
+        result.totalBuckets < 4 ||
+        result.lowBuckets < 2) {
+      return const SizedBox.shrink();
+    }
+    return Container(
+      margin: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.scoreFair.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.scoreFair.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.air, color: AppColors.scoreFair, size: 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Potential breathing disruption',
+                  style: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Blood oxygen dipped to ${result.minPct}% and stayed below '
+                  '90% during ${result.lowBuckets} hours of this sleep. This '
+                  'isn’t a diagnosis — if it happens often, consider '
+                  'mentioning it to a healthcare professional.',
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 12,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
