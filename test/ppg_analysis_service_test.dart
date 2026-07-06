@@ -51,13 +51,15 @@ void main() {
         greens.add(30000 + 800 * sin(2 * pi * 1.2 * i / fs));
       }
 
-      // Tell the gate the band measured 130 bpm — derived ~72 is >15% off.
+      // Tell the gate the band measured 150 bpm — derived ~72 is ~52% off,
+      // gross-mismatch territory (a genuine ½/2× mis-count) that must reject
+      // even under the loosened 0.45 cross-check.
       final r = svc.analyze(
         counts: counts,
         greens: greens,
         greenZeroCount: 0,
         durationSec: seconds.toDouble(),
-        bandHr: 130,
+        bandHr: 150,
       );
 
       expect(r.passedQualityGate, isFalse);

@@ -88,9 +88,16 @@ class ScheduledPpgCaptureService {
     await prefs.setString(_kAttemptDateKey, today);
     await prefs.setInt(_kAttemptCountKey, attempts + 1);
 
-    // Only a PASS ends the day's retries (captureAndPersist already persisted
-    // it). A rejected capture leaves the day open so the next tick retries.
-    if (result.passedQualityGate) {
+    // End the day's retries only once we actually have the resting
+    // respiratory rate — the value the Sleep card needs. A gate PASS alone no
+    // longer implies it: with the band's realtime HR often unavailable the HR
+    // cross-check is skipped, so a cardiac-clean capture passes the gate while
+    // RSA (respiratory) can still be too weak to yield a peak — typical of
+    // awake, seated daytime captures. Marking the day "done" on such a capture
+    // left the card blank all day. HRV is still banked by captureAndPersist on
+    // every passing capture; the retries (bounded by maxDailyAttempts) keep
+    // trying for a rest window where RSA is strong enough to read.
+    if (result.passedQualityGate && result.respRateBpm != null) {
       await prefs.setString(_kLastCaptureDateKey, today);
     }
     return result;

@@ -101,14 +101,19 @@ class PpgAnalysisResult {
 /// and [greens] is the aligned green-channel value (0 = blank). Pass the
 /// band's own HR as [bandHr] to enable the quality gate's HR cross-check.
 class PpgAnalysisService {
-  /// Derived HR must be within this fraction of the band's HR. Loose (0.30)
-  /// on purpose: the band's realtime HR is coarse and LAGS — right after the
-  /// user settles to rest it still reports the older, higher value, so a
-  /// clean PPG-derived HR can legitimately sit ~20% below it. A genuine
-  /// half/double-count error is ≥50% off, so 0.30 still catches those while
-  /// no longer vetoing good resting captures. The primary missed-beat guard
-  /// is [minBeatCoverage] (self-consistent, doesn't trust the band's HR).
-  static const maxHrDivergence = 0.30;
+  /// Derived HR must be within this fraction of the band's HR. Loose (0.45)
+  /// on purpose: the band's realtime HR is coarse, LAGS, and can be plain
+  /// wrong — verified on-device 2026-07-06, a pristine capture (0% BLE loss,
+  /// 99 peaks, RMSSD 47 ms) derived a clean resting 72 bpm while the band
+  /// reported a stuck 108, a 33% gap that the old 0.30 threshold wrongly
+  /// rejected — taking HRV, respiratory AND rhythm down with it. A genuine
+  /// peak half/double-count error is ≥50% off, so 0.45 still catches those
+  /// while no longer vetoing good captures against a bad band HR. The primary
+  /// missed-beat guard is [minBeatCoverage] (self-consistent, doesn't trust
+  /// the band's HR), and each derived metric has its own downstream gate
+  /// (respiratory peak prominence, HRV min-beats), so this cross-check only
+  /// needs to catch gross mis-counts.
+  static const maxHrDivergence = 0.45;
 
   /// At most this fraction of beats may be dropped as ectopic.
   static const maxEctopicDropFrac = 0.20;
