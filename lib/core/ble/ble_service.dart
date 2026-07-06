@@ -399,6 +399,29 @@ class BleService {
     return Map<String, dynamic>.from(r as Map);
   }
 
+  /// Whether the app is exempt from Android battery optimizations. Overnight
+  /// background sync (foreground service + headless engine) is killed on
+  /// battery-optimized devices — especially MIUI-style OEMs — so settings
+  /// surfaces this. Android-only; returns false where unsupported.
+  Future<bool> isIgnoringBatteryOptimizations() async {
+    try {
+      final r =
+          await _channel.invokeMethod('isIgnoringBatteryOptimizations');
+      return (Map<String, dynamic>.from(r as Map)['ignoring'] as bool?) ??
+          false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Shows the OS "let this app ignore battery optimizations" dialog.
+  /// Android-only; no-op elsewhere.
+  Future<void> requestIgnoreBatteryOptimizations() async {
+    try {
+      await _channel.invokeMethod('requestIgnoreBatteryOptimizations');
+    } catch (_) {}
+  }
+
   /// Toggle the band's scheduled BP monitoring on/off and pick the cadence.
   /// Defaults: enabled, all-day window (00:00 → 23:59), every 60 minutes.
   Future<Map<String, dynamic>> setBpScheduled({

@@ -52,7 +52,17 @@ class BleForegroundService : Service() {
                 action = ACTION_START
                 putExtra(EXTRA_DEVICE_NAME, deviceName ?: "")
             }
-            ContextCompat.startForegroundService(context, intent)
+            try {
+                ContextCompat.startForegroundService(context, intent)
+            } catch (e: Exception) {
+                // Android 12+ forbids FGS start from the background. The
+                // headless-engine reconnect path can land here (watchdog
+                // revive while the app is backgrounded). Non-fatal: the
+                // sticky service is usually already running; if not, sync
+                // still proceeds in-process and the next foreground moment
+                // (or sticky restart) promotes us again.
+                Log.w(TAG, "startForegroundService rejected: ${e.message}")
+            }
         }
 
         fun updateLastSync(context: Context, deviceName: String?, lastSyncMs: Long) {
@@ -101,9 +111,27 @@ class BleForegroundService : Service() {
                 intent?.getStringExtra(EXTRA_DEVICE_NAME)?.takeIf { it.isNotEmpty() }
                     ?.let { deviceName = it }
                 promoteToForeground()
+                if (intent == null) {
+                    // STICKY restart after the process was killed (swipe-away
+                    // or OEM reaper). The UI engine — and with it the Dart
+                    // sync brain — is gone; bring up the headless engine so
+                    // reconnect + sync + alerts resume without the user.
+                    Log.i(TAG, "sticky restart with null intent → headless engine")
+                    HeadlessSyncEngine.start(applicationContext)
+                }
                 return START_STICKY
             }
         }
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // The user swiped the app out of Recents. The Activity + UI Flutter
+        // engine die with the task, but this service (and the BLE connection)
+        // survive — hand the sync brain to the headless engine so overnight
+        // collection and the morning report keep working.
+        Log.i(TAG, "task removed → starting headless sync engine")
+        HeadlessSyncEngine.start(applicationContext)
+        super.onTaskRemoved(rootIntent)
     }
 
     private fun promoteToForeground() {

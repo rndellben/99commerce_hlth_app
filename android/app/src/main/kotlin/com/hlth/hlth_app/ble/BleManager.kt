@@ -297,6 +297,34 @@ class BleManager(
                 minutes = call.argument<Int>("minutes") ?: 30,
                 result = result,
             )
+            // Background-survival support: overnight sync dies on battery-
+            // optimized devices (especially MIUI-style OEMs). Dart's settings
+            // surface checks the current state and deep-links the standard
+            // exemption dialog. Activity-only — a no-op headless.
+            "isIgnoringBatteryOptimizations" -> {
+                val pm = context.getSystemService(android.os.PowerManager::class.java)
+                result.success(
+                    mapOf("ignoring" to (pm?.isIgnoringBatteryOptimizations(context.packageName) ?: false))
+                )
+            }
+            "requestIgnoreBatteryOptimizations" -> {
+                val act = activity
+                if (act == null) {
+                    result.error("NO_ACTIVITY", "Activity not attached", null)
+                } else {
+                    try {
+                        act.startActivity(
+                            android.content.Intent(
+                                android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                                android.net.Uri.parse("package:${context.packageName}")
+                            )
+                        )
+                        result.success(mapOf("requested" to true))
+                    } catch (e: Exception) {
+                        result.error("BATTERY_OPT_FAILED", e.message, null)
+                    }
+                }
+            }
             "getSyncIntervalMinutes" -> result.success(
                 mapOf("minutes" to (syncIntervalMs / 60_000L).toInt())
             )

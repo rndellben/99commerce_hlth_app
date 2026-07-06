@@ -45,6 +45,9 @@ android {
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
     implementation(files("libs/qring_sdk_1.0.0.17.aar"))
+    // Background-sync watchdog (SyncWatchdogWorker): revives the headless
+    // sync engine after process kills; schedule survives reboots.
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
 }
 
 flutter {

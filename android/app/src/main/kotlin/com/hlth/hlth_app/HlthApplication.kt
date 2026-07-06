@@ -3,9 +3,13 @@ package com.hlth.hlth_app
 import android.app.Application
 import android.util.Log
 import androidx.core.content.ContextCompat
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import com.hlth.hlth_app.ble.HlthBluetoothReceiver
 import com.oudmon.ble.base.bluetooth.BleAction
 import com.oudmon.ble.base.bluetooth.BleOperateManager
+import java.util.concurrent.TimeUnit
 
 /**
  * App-wide initialization for the QRing BLE SDK. Without this, calling
@@ -50,6 +54,24 @@ class HlthApplication : Application() {
             BleAction.getIntentFilter(),
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
+
+        // Background-sync watchdog: every ~15 min WorkManager wakes the
+        // process and SyncWatchdogWorker revives the headless sync engine if
+        // no Dart brain is alive (killed by an OEM reaper, or after a
+        // reboot — WorkManager's schedule persists across restarts, so this
+        // doubles as the boot-recovery path). KEEP: never reset an existing
+        // schedule on app start.
+        try {
+            WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+                SyncWatchdogWorker.UNIQUE_NAME,
+                ExistingPeriodicWorkPolicy.KEEP,
+                PeriodicWorkRequestBuilder<SyncWatchdogWorker>(
+                    15, TimeUnit.MINUTES
+                ).build()
+            )
+        } catch (e: Exception) {
+            Log.w("HlthApp", "watchdog scheduling failed: ${e.message}")
+        }
     }
 
     private fun deleteLegacySqfliteDb() {

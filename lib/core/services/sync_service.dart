@@ -712,6 +712,14 @@ class PeriodicSyncCoordinator {
       final device = await deviceRepo.getActiveForUser(
         ActiveSession.defaultUserId,
       );
+      // Mirror band-paired state into a plain pref the native
+      // SyncWatchdogWorker can read ("flutter." prefix is added by the
+      // plugin): with no band ever paired it skips reviving the headless
+      // engine, so non-ring users never pay the background cost.
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('has_bonded_band', device != null);
+      } catch (_) {}
       if (device == null) return;
       final result = await _runSyncWithRetention(device.id);
       _runs.add(result);

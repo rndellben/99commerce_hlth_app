@@ -312,6 +312,34 @@ class _DeviceSettingsScreenState extends ConsumerState<DeviceSettingsScreen> {
           trailing: const Icon(Icons.chevron_right),
           onTap: () => context.push('/pairing'),
         ),
+        // Overnight sync survives the OS killing the app ONLY when the app
+        // is exempt from battery optimization (aggressive OEMs — MIUI etc. —
+        // kill even foreground services otherwise). One tap → the standard
+        // OS exemption dialog.
+        FutureBuilder<bool>(
+          future: ref.read(bleServiceProvider).isIgnoringBatteryOptimizations(),
+          builder: (context, snap) {
+            final exempt = snap.data ?? false;
+            return ListTile(
+              leading: Icon(
+                exempt ? Icons.battery_full : Icons.battery_alert,
+                color: exempt ? AppColors.success : AppColors.warning,
+              ),
+              title: const Text('Background running'),
+              subtitle: Text(exempt
+                  ? 'Allowed — overnight sync can run all night'
+                  : 'Restricted — tap to allow so overnight sync isn’t killed'),
+              onTap: exempt
+                  ? null
+                  : () async {
+                      await ref
+                          .read(bleServiceProvider)
+                          .requestIgnoreBatteryOptimizations();
+                      if (mounted) setState(() {});
+                    },
+            );
+          },
+        ),
         ListTile(
           leading: const Icon(Icons.delete_forever, color: Colors.red),
           title: const Text('Forget device',
