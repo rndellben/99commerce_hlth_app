@@ -4,6 +4,7 @@ import 'package:hlth_app/core/bootstrap/active_session.dart';
 import 'package:hlth_app/core/models/health_samples.dart';
 import 'package:hlth_app/core/repositories/device_repository.dart';
 import 'package:hlth_app/core/services/sync_service.dart';
+import 'package:hlth_app/features/activity/activity_providers.dart';
 import 'package:hlth_app/features/home/home_providers.dart';
 import 'package:hlth_app/features/hrv/hrv_providers.dart';
 import 'package:hlth_app/ui/theme/app_colors.dart';
@@ -320,8 +321,16 @@ class _DayView extends ConsumerWidget {
             .map((s) => s.sdnnMs)
             .whereType<double>()
             .toList();
+        // Band-scheduled HRV carries RMSSD ONLY (one byte per slot — the
+        // H59 protocol has no SDNN field), so per-slot SDNN is always null.
+        // Fall back to the day's rollup SDNN, which the resting PPG capture
+        // computes from real beat intervals and banks into daily_metrics.
+        final rollupSdnn = ref
+            .watch(dailyMetricsForDateProvider(anchor))
+            .valueOrNull
+            ?.hrvSdnnMs;
         final avgSdnn = sdnnValues.isEmpty
-            ? null
+            ? rollupSdnn
             : sdnnValues.reduce((a, b) => a + b) / sdnnValues.length;
 
         final dayStart = DateTime(anchor.year, anchor.month, anchor.day);
@@ -373,7 +382,11 @@ class _DayView extends ConsumerWidget {
                 ),
                 MetricTile(
                   label: 'Average SDNN',
-                  reference: avgSdnn == null ? '' : 'Beat-to-beat variation',
+                  reference: avgSdnn == null
+                      ? ''
+                      : sdnnValues.isEmpty
+                          ? 'From resting capture'
+                          : 'Beat-to-beat variation',
                   value: avgSdnn == null ? '--' : avgSdnn.toStringAsFixed(0),
                   valueUnit: avgSdnn == null ? null : 'ms',
                 ),

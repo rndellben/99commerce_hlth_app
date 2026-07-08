@@ -4,6 +4,7 @@ import 'package:hlth_app/core/database/enums.dart';
 import 'package:hlth_app/core/models/health_samples.dart';
 import 'package:hlth_app/core/repositories/bp_repository.dart';
 import 'package:hlth_app/core/repositories/device_repository.dart';
+import 'package:hlth_app/core/services/breadcrumbs.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
@@ -22,18 +23,27 @@ import 'package:uuid/uuid.dart';
 /// night: it fires on the first connected tick inside the night window and
 /// stops once a reading converges.
 ///
-/// "Night" is a fixed local-time window (default 23:00–07:00) rather than
-/// the band's sleep classification, which is retrospective — there's no
-/// real-time "now asleep" event to gate on. A non-converged measurement
-/// (ring off, motion) returns 0/0 and is discarded, so the next tick retries
-/// until a clean reading lands or the per-night attempt cap is hit.
+/// Firing is gated on BOTH:
+///  * the night window (default 23:00–11:00) — bounds which calendar night a
+///    reading belongs to (see [nightKey]); the 11:00 end covers late sleepers
+///    (verified 2026-07-07: user sleeps 03:37–12:52), AND
+///  * the caller's live `asleep` verdict ([SleepOnsetDetector]) — the band's
+///    sleep classification is retrospective, so the detector approximates
+///    "asleep now" from settled HR + zero steps. Without this gate the first
+///    tick after 23:00 fired on an awake, moving user and burned the night's
+///    attempt cap on motion-garbage readings before sleep even began
+///    (Ryan 2026-06-23: "when sleep is triggered, we trigger these things").
+///
+/// A non-converged measurement (ring off, motion) returns 0/0 and is
+/// discarded, so the next asleep tick retries until a clean reading lands or
+/// the per-night attempt cap is hit.
 class NightlyBpCaptureService {
   NightlyBpCaptureService({
     required this.ble,
     required this.bpRepo,
     required this.deviceRepo,
     this.windowStartHour = 23,
-    this.windowEndHour = 7,
+    this.windowEndHour = 11,
   });
 
   final BleService ble;
@@ -41,8 +51,8 @@ class NightlyBpCaptureService {
   final DeviceRepository deviceRepo;
 
   /// Night window in local hours: `[windowStartHour, 24) ∪ [0, windowEndHour)`.
-  /// Defaults to 23:00–07:00. Tune if a user's sleep schedule differs; a
-  /// future version can derive these from recent sleep sessions.
+  /// Defaults to 23:00–11:00. The sleep-onset gate does the real targeting;
+  /// this only bounds the span and names the night for the once-per-night key.
   final int windowStartHour;
   final int windowEndHour;
 
@@ -62,16 +72,25 @@ class NightlyBpCaptureService {
   bool get isMeasuring => _inFlight;
 
   /// Run on the periodic tick. Takes one resting BP reading per night while
-  /// inside the night window, retrying across ticks until one converges.
-  /// Returns the reading when one was persisted, else null (outside the
-  /// window / already done tonight / cap reached / not connected / didn't
-  /// converge).
-  Future<({int sbp, int dbp})?> maybeRunNightly({required String userId}) async {
+  /// inside the night window AND [asleep], retrying across asleep ticks until
+  /// one converges. Returns the reading when one was persisted, else null
+  /// (outside the window / awake / already done tonight / cap reached / not
+  /// connected / didn't converge).
+  Future<({int sbp, int dbp})?> maybeRunNightly({
+    required String userId,
+    bool asleep = false,
+  }) async {
     if (_inFlight) return null;
     if (ble.currentConnectionState != BleConnectionState.connected) return null;
 
     final nightKey = nightKeyFor(DateTime.now());
     if (nightKey == null) return null; // daytime — outside the window
+
+    // Sleep-onset gate: an awake tick never spends a nightly attempt — the
+    // reading we want is a SLEEPING BP, and awake/moving attempts were what
+    // burned the cap before sleep began. Skipping costs nothing; the next
+    // asleep tick tries again.
+    if (!asleep) return null;
 
     final prefs = await SharedPreferences.getInstance();
     if (prefs.getString(_kLastNightKey) == nightKey) return null; // got tonight's
@@ -86,10 +105,14 @@ class NightlyBpCaptureService {
     await prefs.setString(_kAttemptNightKey, nightKey);
     await prefs.setInt(_kAttemptCountKey, attempts + 1);
 
+    Breadcrumbs.log('bp: night attempt ${attempts + 1}/$maxNightlyAttempts');
     final result = await captureAndPersist(userId: userId);
     if (result != null) {
       // Converged — that's tonight's resting BP; stop retrying this night.
       await prefs.setString(_kLastNightKey, nightKey);
+      Breadcrumbs.log('bp: converged ${result.sbp}/${result.dbp} — night done');
+    } else {
+      Breadcrumbs.log('bp: attempt did not converge');
     }
     return result;
   }

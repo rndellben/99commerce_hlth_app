@@ -35,6 +35,19 @@ class BleService {
   bool? _currentCharging;
   int? _currentNativeBleState;
 
+  // Latch for the last smoothed realtime HR push. Broadcast streams don't
+  // replay, so a screen opened BETWEEN band pushes would miss the live value
+  // its sibling screen is showing (home card "97" vs HR screen "89 · 4h ago")
+  // and fall back to the stored sample. [realtimeHeartRateSeeded] replays
+  // this to new subscribers while fresh.
+  int? _lastRealtimeHr;
+  DateTime? _lastRealtimeHrAt;
+
+  /// How long a latched realtime HR may be replayed to a new subscriber as
+  /// "live". Band pushes arrive every ~10s while monitoring; past 2 min the
+  /// stored-sample fallback is the honest display.
+  static const _realtimeHrFreshness = Duration(minutes: 2);
+
   // Raw native callbacks (one-shot measurements + telemetry). Debug screen
   // observes these directly; production features will consume them via the
   // health engine.
@@ -117,6 +130,24 @@ class BleService {
   Stream<List<PpgSample>> get ppgData => _ppgData.stream;
   Stream<List<AccelerometerSample>> get accelData => _accelData.stream;
   Stream<int> get realtimeHeartRate => _realtimeHeartRate.stream;
+
+  /// [realtimeHeartRate] plus an immediate replay of the last live value when
+  /// it's still fresh (< [_realtimeHrFreshness]). UI screens use THIS so a
+  /// screen opened between band pushes shows the same live bpm as its
+  /// siblings. The raw [realtimeHeartRate] stays replay-free on purpose: the
+  /// PPG quality-gate cross-check must only see HR the band reported DURING
+  /// the capture window, never a stale replay.
+  Stream<int> get realtimeHeartRateSeeded async* {
+    final hr = _lastRealtimeHr;
+    final at = _lastRealtimeHrAt;
+    if (hr != null &&
+        at != null &&
+        DateTime.now().difference(at) < _realtimeHrFreshness) {
+      yield hr;
+    }
+    yield* _realtimeHeartRate.stream;
+  }
+
   Stream<int> get heartRateMeasured => _heartRateMeasured.stream;
   Stream<double> get spo2Measured => _spo2Measured.stream;
   Stream<int> get hrActiveStream => _hrStream.stream;
@@ -151,6 +182,28 @@ class BleService {
   BleService() {
     _setupEventChannels();
     _setupMethodCallHandler();
+    _seedConnectionStateFromNative();
+  }
+
+  /// The native SDK's BLE link outlives Flutter engines: after a swipe-away →
+  /// reopen, THIS is a brand-new engine attaching to a process whose band is
+  /// often still connected — but we'd never know, because onConnected only
+  /// fires on state CHANGES. Without this seed the UI shows a phantom
+  /// "Disconnected" and users re-pair a band that was never disconnected.
+  /// Fire-and-forget: on any failure we keep the `disconnected` default.
+  Future<void> _seedConnectionStateFromNative() async {
+    try {
+      final res = await _channel.invokeMethod<Map>('getConnectionState');
+      final connected = res?['connected'] == true;
+      if (connected &&
+          _currentConnectionState == BleConnectionState.disconnected) {
+        _currentConnectionState = BleConnectionState.connected;
+        _connectionState.add(BleConnectionState.connected);
+      }
+    } catch (_) {
+      // Native side not ready / method missing — the default (disconnected)
+      // stands until a real onConnected event arrives.
+    }
   }
 
   void _setupEventChannels() {
@@ -269,6 +322,8 @@ class BleService {
     _hrBuffer.removeWhere((s) => s.ts.isBefore(cutoff));
     final sum = _hrBuffer.fold<int>(0, (a, s) => a + s.bpm);
     final smoothed = (sum / _hrBuffer.length).round();
+    _lastRealtimeHr = smoothed;
+    _lastRealtimeHrAt = now;
     _realtimeHeartRate.add(smoothed);
   }
 

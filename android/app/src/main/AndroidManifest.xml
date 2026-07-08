@@ -61,6 +61,13 @@
             android:name=".ble.BleForegroundService"
             android:foregroundServiceType="connectedDevice"
             android:exported="false" />
+
+        <!-- Doze-piercing periodic sync tick (AlarmManager chain). Handler
+             timers freeze in deep sleep — this is what keeps overnight
+             collection at its real 30-min cadence. -->
+        <receiver
+            android:name=".ble.SyncTickAlarm"
+            android:exported="false" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

@@ -158,13 +158,29 @@ List<HrvSample> hrvFromNative(
   final intervalMin = (native['intervalMinutes'] as num?)?.toInt() ?? 30;
   if (values.isEmpty) return const [];
   final tz = tzOffsetMin ?? _localTzOffsetMin();
-  // Anchor on the local midnight of forDate, then translate to UTC.
-  // Same pattern as DailyAggregator: use DateTime.utc(y,m,d) and subtract
-  // tzOffsetMin once. (Using DateTime(y,m,d).toUtc() AND subtracting would
-  // shift the window 2× tz_offset backwards — see the aggregator's fix.)
-  final localMidnightAsUtc =
-      DateTime.utc(forDate.year, forDate.month, forDate.day);
-  final dayStartUtc = localMidnightAsUtc.subtract(Duration(minutes: tz));
+
+  // Prefer the band's own day-anchor (HRVRsp.today → getZeroTime()), same
+  // semantics as the stress path: unix SECONDS at the band's local midnight
+  // (misnamed key kept for symmetry with stress). The band files HRV slots
+  // under ITS day, which doesn't always match `now() - dayOffset` — trust it
+  // when present (2026-07-08: day-0 sync fixed to the direct HRVReq form,
+  // which supplies this anchor).
+  final zeroTimeSec = (native['zeroTimeMs'] as num?)?.toInt();
+  final DateTime dayStartUtc;
+  if (zeroTimeSec != null && zeroTimeSec > 0) {
+    dayStartUtc = DateTime.fromMillisecondsSinceEpoch(
+      zeroTimeSec * 1000,
+      isUtc: true,
+    );
+  } else {
+    // Fallback: anchor on the local midnight of forDate, translated to UTC.
+    // Same pattern as DailyAggregator: use DateTime.utc(y,m,d) and subtract
+    // tzOffsetMin once. (Using DateTime(y,m,d).toUtc() AND subtracting would
+    // shift the window 2× tz_offset backwards — see the aggregator's fix.)
+    final localMidnightAsUtc =
+        DateTime.utc(forDate.year, forDate.month, forDate.day);
+    dayStartUtc = localMidnightAsUtc.subtract(Duration(minutes: tz));
+  }
 
   final out = <HrvSample>[];
   for (var i = 0; i < values.length; i++) {

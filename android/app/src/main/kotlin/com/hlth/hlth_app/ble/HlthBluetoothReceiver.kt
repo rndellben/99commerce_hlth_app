@@ -27,12 +27,28 @@ import com.oudmon.ble.base.communication.req.SimpleKeyReq
  */
 class HlthBluetoothReceiver : QCBluetoothCallbackCloneReceiver() {
 
+    companion object {
+        /**
+         * Process-global "is the band connected right now". The BLE link is
+         * owned by the SDK singletons and OUTLIVES any single Flutter engine —
+         * a freshly-attached engine (reopen after swipe-away) has missed every
+         * onConnected event and would otherwise assume `disconnected` forever.
+         * [BleManager]'s `getConnectionState` reads this so a new engine can
+         * seed its state from reality instead of showing a phantom disconnect.
+         */
+        @JvmStatic
+        @Volatile
+        var isBandConnected: Boolean = false
+            internal set
+    }
+
     /** Called by HlthApplication after MethodChannel is registered. */
     var onConnectionChange: ((connected: Boolean, deviceName: String?) -> Unit)? = null
 
     override fun connectStatue(device: BluetoothDevice?, connected: Boolean) {
         val name = device?.name
         Log.i("HlthBLE", "connectStatue: connected=$connected device=$name")
+        isBandConnected = connected
         if (connected && name != null) {
             DeviceManager.getInstance().deviceName = name
         }
@@ -55,6 +71,7 @@ class HlthBluetoothReceiver : QCBluetoothCallbackCloneReceiver() {
         } catch (e: Exception) {
             Log.w("HlthBLE", "CMD_BIND_SUCCESS send failed: ${e.message}")
         }
+        isBandConnected = true
         onConnectionChange?.invoke(true, DeviceManager.getInstance().deviceName)
     }
 

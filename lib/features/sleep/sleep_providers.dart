@@ -2,8 +2,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hlth_app/core/bootstrap/active_session.dart';
 import 'package:hlth_app/core/database/enums.dart';
 import 'package:hlth_app/core/models/daily_metrics.dart';
+import 'package:hlth_app/core/models/nightly_record_row.dart';
 import 'package:hlth_app/core/models/sleep.dart';
 import 'package:hlth_app/core/repositories/daily_metrics_repository.dart';
+import 'package:hlth_app/core/repositories/nightly_record_repository.dart';
 import 'package:hlth_app/core/repositories/sleep_repository.dart';
 import 'package:hlth_app/core/repositories/spo2_repository.dart';
 import 'package:hlth_app/core/services/alerts/breathing_disruption_rule.dart';
@@ -73,6 +75,22 @@ final sleepNightMetricsProvider =
     StreamProvider.family<DailyMetrics?, DateTime>((ref, wakeDate) {
   final repo = ref.watch(dailyMetricsRepositoryProvider);
   return repo.watchForDay(
+    userId: ActiveSession.defaultUserId,
+    localDate: DateTime(wakeDate.year, wakeDate.month, wakeDate.day),
+  );
+});
+
+/// STRICTLY sleep-window HRV for a wake date: the `nightly_records` row's
+/// `rmssdMedian` (the exact per-night median Cardio Load banks — computed
+/// only from HRV samples inside [bedtime, wake)). The Sleep screen's HRV
+/// tile reads THIS instead of `daily_metrics.hrvRmssdMs`, because that
+/// rollup is also written by the daytime PPG capture as a fallback — which
+/// let an awake capture's (sometimes inflated) RMSSD masquerade as "measured
+/// during sleep" (290 ms seen on-device 2026-07-07).
+final sleepWindowHrvProvider =
+    FutureProvider.family<NightlyRecordRow?, DateTime>((ref, wakeDate) async {
+  final repo = ref.watch(nightlyRecordRepositoryProvider);
+  return repo.getForDate(
     userId: ActiveSession.defaultUserId,
     localDate: DateTime(wakeDate.year, wakeDate.month, wakeDate.day),
   );

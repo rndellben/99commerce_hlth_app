@@ -16,6 +16,7 @@ import 'package:hlth_app/core/processing/fall_detector.dart';
 import 'package:hlth_app/core/repositories/daily_metrics_repository.dart';
 import 'package:hlth_app/core/repositories/device_repository.dart';
 import 'package:hlth_app/core/services/alerts/alert_evaluator.dart';
+import 'package:hlth_app/core/services/breadcrumbs.dart';
 import 'package:hlth_app/core/services/notification_service.dart';
 import 'package:hlth_app/core/services/ppg_analysis_service.dart';
 import 'package:hlth_app/core/services/scheduled_ppg_capture_service.dart';
@@ -399,6 +400,22 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
       _log.insert(0, _LogEntry(DateTime.now(), message));
       if (_log.length > 200) _log.removeLast();
     });
+  }
+
+  /// Dump the persistent breadcrumb trail into the log view. This is the
+  /// only record that survives process death — THE tool for "what happened
+  /// overnight?" (the _log above is in-memory and dies with the process).
+  Future<void> _showBreadcrumbs() async {
+    final crumbs = await Breadcrumbs.tail(lines: 120);
+    if (crumbs.isEmpty) {
+      _push('breadcrumbs: (empty — no trail recorded yet)');
+      return;
+    }
+    // Newest-first to match the log view's ordering.
+    for (final line in crumbs) {
+      _push('🍞 $line');
+    }
+    _push('breadcrumbs: last ${crumbs.length} events ↓ (oldest at bottom)');
   }
 
   Future<bool> _ensurePermissions() async {
@@ -2193,6 +2210,7 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
                 _toolBtn(Icons.fact_check_outlined, 'Alerts', _evaluateAlerts),
                 _toolBtn(Icons.battery_charging_full, 'Scores', _computeScores),
                 _toolBtn(Icons.history, 'Rec Hist', _recoveryHistory),
+                _toolBtn(Icons.route_outlined, 'Crumbs', _showBreadcrumbs),
                 _toolBtn(Icons.monitor_heart_outlined, 'R-R',
                     _exportRrToClipboard),
                 _toolBtn(

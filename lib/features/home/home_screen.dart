@@ -185,9 +185,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     onTap: () => context.push('/blood-pressure'),
                   ),
 
-                  // 5 — Heart Rate (realtime takes precedence over stored)
+                  // 5 — Heart Rate (realtime takes precedence over stored;
+                  // seeded stream replays the last fresh push so this card
+                  // and the Heart Rate screen always agree)
                   StreamBuilder<int>(
-                    stream: ble.realtimeHeartRate,
+                    stream: ble.realtimeHeartRateSeeded,
                     builder: (context, snap) {
                       final value = snap.data?.toString() ??
                           latestHr?.bpm.toString() ??

@@ -1,10 +1,13 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hlth_app/core/ble/ble_service.dart';
 import 'package:hlth_app/core/database/enums.dart';
 import 'package:hlth_app/core/models/daily_metrics.dart';
 import 'package:hlth_app/core/repositories/daily_metrics_repository.dart';
+import 'package:hlth_app/core/services/breadcrumbs.dart';
+import 'package:hlth_app/core/repositories/hr_repository.dart';
 import 'package:hlth_app/core/services/ppg_analysis_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -28,12 +31,14 @@ class ScheduledPpgCaptureService {
     required this.ble,
     required this.analysis,
     required this.dailyRepo,
+    required this.hrRepo,
     this.captureDuration = const Duration(seconds: 180),
   });
 
   final BleService ble;
   final PpgAnalysisService analysis;
   final DailyMetricsRepository dailyRepo;
+  final HrRepository hrRepo;
   final Duration captureDuration;
   final _uuid = const Uuid();
 
@@ -48,6 +53,25 @@ class ScheduledPpgCaptureService {
   static const _kLastCaptureDateKey = 'scheduled_ppg_last_capture_date';
   static const _kAttemptDateKey = 'scheduled_ppg_attempt_date';
   static const _kAttemptCountKey = 'scheduled_ppg_attempt_count';
+
+  /// Rest gate: only spend a daily attempt when recent HR sits within this
+  /// many bpm of the user's resting baseline. Respiratory (RSA) is only
+  /// readable when the heart is near rest — an elevated/active capture can't
+  /// produce a breathing peak and would just waste the day's limited attempts.
+  /// 15 bpm admits calm sitting and all of sleep while rejecting walks,
+  /// exercise and acute stress (typically resting + 30-60 bpm).
+  static const _restMarginBpm = 15.0;
+
+  /// Fallback resting HR when the user has no banked `restingHrBpm` yet (first
+  /// days of wear). 70 + margin ≈ an 85 bpm ceiling — a reasonable "not active"
+  /// bound until a personal baseline lands.
+  static const _defaultRestingBpm = 70.0;
+
+  /// How far back to look for a fresh HR reading to judge "at rest now". When
+  /// connected the band syncs scheduled HR every tick, so a 30-min window
+  /// almost always has samples; an empty window means we can't confirm rest,
+  /// so we skip (without burning an attempt) rather than capture blind.
+  static const _recentHrWindow = Duration(minutes: 30);
 
   /// Max capture attempts per day before giving up. Respiratory needs ONE
   /// clean capture; on a flaky-signal day we retry across ticks rather than
@@ -66,7 +90,10 @@ class ScheduledPpgCaptureService {
   /// elevated HR). Marking the day "done" on a rejected capture left the
   /// card blank all day. Now we only mark the day done on a PASS, so later
   /// ticks keep trying until a clean reading lands — then stop for the day.
-  Future<PpgAnalysisResult?> maybeRunDaily({required String userId}) async {
+  Future<PpgAnalysisResult?> maybeRunDaily({
+    required String userId,
+    bool asleep = false,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     final today = _localDateKey(DateTime.now());
 
@@ -80,6 +107,19 @@ class ScheduledPpgCaptureService {
             : 0;
     if (attempts >= maxDailyAttempts) return null;
 
+    // Only spend an attempt when the user appears to be at rest — RSA is only
+    // readable near resting HR, so an active/elevated capture can't yield a
+    // respiratory number and would just burn the day's limited attempts. This
+    // concentrates the (bounded) attempts on quiet rest and sleep, where the
+    // breathing peak is strong. Skips WITHOUT burning an attempt (mirrors the
+    // not-connected skip), so the budget survives to the sleep window.
+    //
+    // A caller-supplied asleep verdict (SleepOnsetDetector: settled HR + zero
+    // steps) is strictly stronger evidence of rest than the +15 bpm gate, so
+    // it passes directly — sleep is the capture window RSA likes best.
+    if (!asleep && !await isAtRest(userId: userId)) return null;
+
+    if (asleep) Breadcrumbs.log('ppg: capture attempt while ASLEEP');
     final result = await captureAndPersist(userId: userId);
     // result == null means the capture never ran (not connected / too few
     // samples) — don't burn an attempt on it.
@@ -101,6 +141,52 @@ class ScheduledPpgCaptureService {
       await prefs.setString(_kLastCaptureDateKey, today);
     }
     return result;
+  }
+
+  /// True when the user's recent HR is close enough to their resting baseline
+  /// that a PPG capture could plausibly carry a readable respiratory (RSA)
+  /// rhythm. Returns false when HR is elevated (active) OR when there's no
+  /// fresh HR to judge from — in both cases capturing would likely waste an
+  /// attempt, so we wait for a calmer tick.
+  @visibleForTesting
+  Future<bool> isAtRest({required String userId}) async {
+    final nowUtc = DateTime.now().toUtc();
+    final recentAvg = await hrRepo.averageInRange(
+      userId: userId,
+      from: nowUtc.subtract(_recentHrWindow),
+      to: nowUtc,
+    );
+    if (recentAvg == null) {
+      debugPrint('[ppg] daily capture skipped: no HR in last '
+          '${_recentHrWindow.inMinutes}m — cannot confirm rest');
+      return false;
+    }
+    final resting = await _restingReferenceBpm(userId);
+    final atRest = recentAvg <= resting + _restMarginBpm;
+    if (!atRest) {
+      debugPrint('[ppg] daily capture skipped: HR '
+          '${recentAvg.toStringAsFixed(0)} > rest '
+          '${resting.toStringAsFixed(0)}+$_restMarginBpm — not at rest');
+    }
+    return atRest;
+  }
+
+  /// The user's resting-HR reference: the most recent banked `restingHrBpm`
+  /// within the last 14 days, or [_defaultRestingBpm] if none exists yet.
+  Future<double> _restingReferenceBpm(String userId) async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final rows = await dailyRepo.getInRange(
+      userId: userId,
+      fromDate: today.subtract(const Duration(days: 14)),
+      toDate: today,
+    );
+    // getInRange is ascending by date — walk back for the freshest baseline.
+    for (final m in rows.reversed) {
+      final r = m.restingHrBpm;
+      if (r != null && r > 0) return r.toDouble();
+    }
+    return _defaultRestingBpm;
   }
 
   /// Capture [captureDuration] of PPG, analyse it, and persist resting
@@ -189,8 +275,15 @@ class ScheduledPpgCaptureService {
         .copyWith(
       restingRespRateBpm:
           result.respRateBpm ?? existing?.restingRespRateBpm,
-      hrvRmssdMs: result.hrvRmssdMs ?? existing?.hrvRmssdMs,
-      hrvSdnnMs: result.hrvSdnnMs ?? existing?.hrvSdnnMs,
+      // HRV: EXISTING wins. The aggregator's sleep-window median is the
+      // authoritative daily HRV (it feeds Recovery and the Sleep screen);
+      // a capture's RMSSD is only a fallback filler for days where the band
+      // served no sleep HRV. Capture-wins here let one awake capture (which
+      // can carry inflated RMSSD — 290 ms seen 2026-07-07) clobber a clean
+      // overnight median. The aggregator independently prefers its own sleep
+      // median over whatever a capture left, so ordering stays correct.
+      hrvRmssdMs: existing?.hrvRmssdMs ?? result.hrvRmssdMs,
+      hrvSdnnMs: existing?.hrvSdnnMs ?? result.hrvSdnnMs,
       rrIrregularityPct:
           result.rrIrregularityPct ?? existing?.rrIrregularityPct,
       ectopicBeatPct: result.ectopicBeatPct ?? existing?.ectopicBeatPct,
@@ -210,6 +303,7 @@ final scheduledPpgCaptureServiceProvider =
     ble: ref.watch(bleServiceProvider),
     analysis: ref.watch(ppgAnalysisServiceProvider),
     dailyRepo: ref.watch(dailyMetricsRepositoryProvider),
+    hrRepo: ref.watch(hrRepositoryProvider),
   );
 });
 

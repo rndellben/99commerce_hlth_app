@@ -254,11 +254,20 @@ void main() {
           dailyRepo: _FakeDailyRepo(forDay: dm),
         );
 
-    test('outside the morning window → null', () async {
+    test('outside the window (evening) → null', () async {
       final r = rule(score: recovery(today), dm: metrics());
       final c = await r.evaluate(
-          AlertContext(userId: userId, now: DateTime(2026, 7, 6, 15)));
+          AlertContext(userId: userId, now: DateTime(2026, 7, 6, 17)));
       expect(c, isNull);
+    });
+
+    test('early afternoon fires — late sleepers score after noon', () async {
+      // 2026-07-07: a 03:37–12:52 sleeper's Recovery lands ~13:00; the old
+      // 12:00 window cap made the push structurally impossible for them.
+      final r = rule(score: recovery(today), dm: metrics());
+      final c = await r.evaluate(
+          AlertContext(userId: userId, now: DateTime(2026, 7, 6, 13, 10)));
+      expect(c, isNotNull);
     });
 
     test('yesterday\'s score does not count as fresh → null', () async {

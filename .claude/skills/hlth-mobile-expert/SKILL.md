@@ -54,9 +54,14 @@ Metrics use the **sleep window** (`[bedtime,wake)`), not daytime.
 **The H59 quirks that cause most bugs:**
 1. Records nothing until `setScheduledMonitoring` runs (auto-enabled on connect edge).
 2. Settings **write-ack `isEnable` lies** — trust the ~2s read-back / overnight sample count.
-3. HRV stored under the **wear-day index** — pull dayOffset 0 *and* 1. Served
-   only the NEXT day, and **retained ~1 day only** (dayOffset ≥2 → empty; HR
-   keeps ~7 days): miss a daily sync and that day's HRV is gone (2026-07-06).
+3. **HRV day-index is SHIFTED** (corrected 2026-07-08): `HRVReq` 0 = always
+   empty, **1 = TODAY**, 2 = yesterday. Same-day HRV IS served — the old
+   "next-day only" belief was a wrapper bug (`BleOperateManager.getHrv()`
+   short-circuits day-0 to instant-empty; use direct
+   `CommandHandle.executeReqCmd(HRVReq(day))`). Responses **self-anchor** via
+   `HRVRsp.today.getZeroTime()` (unix sec, band-local midnight) — trust it
+   for dating; hourly cadence regardless of requested interval. Sync daily
+   anyway (past-day retention depth unverified; HR keeps ~7 days).
 4. **No scheduled-BP history** (`getBpDay` → `-4001`) — only on-demand `startBpMeasurement`.
 5. **Accel only during raw PPG** (battery-heavy) — no continuous activity detection.
 6. Slow bootstrap (~1 min cold) — enable monitoring *after* first sync.

@@ -10,19 +10,26 @@ import 'package:hlth_app/core/services/alerts/alert_rule.dart';
 /// they open the app and see last night's results.
 ///
 /// Fires only when there is genuinely something to show:
-///  * local time is inside the morning window ([morningStartHour],
-///    [morningEndHour]) — a late-day first sync stays silent,
+///  * local time is inside the window ([morningStartHour], [morningEndHour])
+///    — an evening first sync stays silent,
 ///  * TODAY's Recovery score exists (i.e. last night synced + scored; the
 ///    trailing-day recompute upgrades it later, the push just opens the door),
 ///  * the wake-day rollup exists for the sleep line.
 ///
-/// One per day via minInterval ≈ 20 h (a second morning sync can't re-fire).
+/// The window ends at 16:00, not noon: today's Recovery score can only exist
+/// AFTER the sleep ends and syncs, and real users sleep late — verified
+/// 2026-07-07, a 03:37–12:52 sleeper's score lands ~13:00, which a 12:00 cap
+/// silenced *every single day* (the push could structurally never fire for
+/// them). 16:00 still reads as "your morning report" for any plausible wake
+/// time while keeping dinner-time pushes impossible.
+///
+/// One per day via minInterval ≈ 20 h (a second same-day sync can't re-fire).
 class MorningReportRule implements AlertRule {
   MorningReportRule({
     required this.scoreRepo,
     required this.dailyRepo,
     this.morningStartHour = 5,
-    this.morningEndHour = 12,
+    this.morningEndHour = 16,
   });
 
   final ScoreRepository scoreRepo;

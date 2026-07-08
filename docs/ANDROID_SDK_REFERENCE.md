@@ -177,7 +177,12 @@ minimal): `BLUETOOTH_SCAN`, `BLUETOOTH_CONNECT` (Android 12+),
    a **read-back ~2s later is ground truth** ([BleManager.kt:1151](../android/app/src/main/kotlin/com/hlth/hlth_app/ble/BleManager.kt#L1151)).
 3. **BP has no scheduled history** — `getBpDay`/timing-monitor times out
    (`-4001`); only on-demand `startBpMeasurement` works.
-4. **HRV stored under wear-day index** — pull dayOffset 0 *and* 1.
+4. **HRV day-index is SHIFTED** (2026-07-08) — `HRVReq` 0 = always empty,
+   **1 = TODAY**, 2 = yesterday; responses self-anchor via
+   `HRVRsp.today.getZeroTime()` (unix **seconds**, band-local midnight).
+   Use the direct `CommandHandle.executeReqCmd(HRVReq(day))` form — the
+   `BleOperateManager.getHrv()/getTodayHrv()` wrapper short-circuits day-0
+   to an instant-empty without touching the ring. `syncAll` pulls d=0+1+2.
 5. **Accel only during raw PPG** — no free-running accelerometer feed.
 6. **Slow bootstrap** — `SetTimeReq` can take ~1 min to ack on a cold connect.
 7. **Latest ~10 exercise records only** — sync after each workout or lose it.

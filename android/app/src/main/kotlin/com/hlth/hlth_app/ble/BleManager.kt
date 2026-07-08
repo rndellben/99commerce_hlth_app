@@ -12,6 +12,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import com.oudmon.ble.base.bluetooth.BleOperateManager
+import com.oudmon.ble.base.bluetooth.DeviceManager
 import com.oudmon.ble.base.bluetooth.ListenerKey
 import com.oudmon.ble.base.communication.CommandHandle
 import com.oudmon.ble.base.communication.Constants
@@ -25,6 +26,7 @@ import com.oudmon.ble.base.communication.entity.BleStepDetails
 import com.oudmon.ble.base.communication.entity.StartEndTimeEntity
 import com.oudmon.ble.base.communication.req.BloodOxygenSettingReq
 import com.oudmon.ble.base.communication.req.BpSettingReq
+import com.oudmon.ble.base.communication.req.HRVReq
 import com.oudmon.ble.base.communication.req.DeviceSupportReq
 import com.oudmon.ble.base.communication.req.HeartRateSettingReq
 import com.oudmon.ble.base.communication.req.HrvSettingReq
@@ -143,29 +145,21 @@ class BleManager(
     // next tick (not on the currently-queued one).
     private var syncIntervalMs: Long = DEFAULT_SYNC_INTERVAL_MS
 
-    // HLT-11: periodic sync tick. Posts a Runnable on the main looper every
-    // syncIntervalMs while connected. The runnable just signals
-    // Dart via `onPeriodicSyncTick` — no business logic lives natively.
-    // Dart's PeriodicSyncCoordinator owns the actual sync orchestration.
-    //
-    // Lives in BleManager (not BleForegroundService) for two reasons:
-    //   1. Direct access to `methodChannel` — no IPC needed
-    //   2. The FG service keeps the process alive, so this Handler keeps
-    //      firing even when the activity is destroyed
-    private val periodicSyncRunnable = object : Runnable {
-        override fun run() {
-            try {
-                methodChannel.invokeMethod(
-                    "onPeriodicSyncTick",
-                    mapOf("intervalMin" to (syncIntervalMs / 60_000L).toInt())
-                )
-                Log.i("HlthBLE", "periodic sync tick → Dart (${syncIntervalMs / 60_000L} min)")
-            } catch (e: Exception) {
-                Log.w("HlthBLE", "periodic sync tick failed: ${e.message}")
-            }
-            // Re-arm at the CURRENT cadence (may have been bumped via
-            // setSyncIntervalMinutes since the previous tick).
-            mainHandler.postDelayed(this, syncIntervalMs)
+    // HLT-11: periodic sync tick. Delivered by [SyncTickAlarm] (a Doze-
+    // piercing AlarmManager chain) — NOT a Handler timer: Handler's uptime
+    // clock freezes in deep sleep, which stretched the 30-min tick to 4–6 h
+    // overnight (crumbs, 2026-07-08). This just signals Dart via
+    // `onPeriodicSyncTick` — no business logic lives natively; Dart's
+    // PeriodicSyncCoordinator owns the actual sync orchestration.
+    private fun firePeriodicSyncTick() {
+        try {
+            methodChannel.invokeMethod(
+                "onPeriodicSyncTick",
+                mapOf("intervalMin" to (syncIntervalMs / 60_000L).toInt())
+            )
+            Log.i("HlthBLE", "periodic sync tick → Dart (${syncIntervalMs / 60_000L} min)")
+        } catch (e: Exception) {
+            Log.w("HlthBLE", "periodic sync tick failed: ${e.message}")
         }
     }
     private lateinit var methodChannel: MethodChannel
@@ -185,6 +179,12 @@ class BleManager(
             METHOD_CHANNEL
         )
         methodChannel.setMethodCallHandler(this)
+
+        // Route the Doze-piercing alarm ticks into THIS engine's channel.
+        // Last-registered engine wins — matches the one-Dart-brain
+        // invariant (MainActivity stops the headless engine before the UI
+        // engine registers).
+        SyncTickAlarm.onTick = { firePeriodicSyncTick() }
 
         EventChannel(flutterEngine.dartExecutor.binaryMessenger, PPG_EVENT_CHANNEL)
             .setStreamHandler(object : EventChannel.StreamHandler {
@@ -241,23 +241,22 @@ class BleManager(
                 if (!hasBootstrapped) {
                     hasBootstrapped = true
                     mainHandler.postDelayed({ bootstrapBandAfterConnect() }, 1500)
-                    // HLT-11: kick off the periodic sync schedule. First tick
-                    // fires syncIntervalMs after connect (not immediately —
-                    // Dart side handles startup sync on its own when it
-                    // wants to).
-                    mainHandler.postDelayed(
-                        periodicSyncRunnable,
-                        syncIntervalMs
-                    )
-                    Log.i("HlthBLE", "periodic sync scheduled (every ${syncIntervalMs / 60000} min)")
+                    // HLT-11: (re)arm the Doze-piercing alarm chain. First
+                    // tick fires syncIntervalMs after connect (not
+                    // immediately — Dart handles startup sync on its own via
+                    // the connect-edge trigger).
+                    SyncTickAlarm.intervalMs = syncIntervalMs
+                    SyncTickAlarm.schedule(context)
+                    Log.i("HlthBLE", "periodic sync scheduled (every ${syncIntervalMs / 60000} min, while-idle alarm)")
                 }
             } else {
                 hasBootstrapped = false
                 connectedDeviceName = ""
                 BleForegroundService.stop(context)
-                // HLT-11: cancel periodic sync — no point firing ticks
-                // while disconnected.
-                mainHandler.removeCallbacks(periodicSyncRunnable)
+                // HLT-11: the alarm chain deliberately KEEPS running while
+                // disconnected — the Dart tick now reconnects-then-syncs, so
+                // an overnight BLE drop self-heals on the next tick instead
+                // of going silent until morning (2026-07-08 lesson).
             }
         }
     }
@@ -272,6 +271,16 @@ class BleManager(
             "stopScan" -> stopScan(result)
             "connect" -> connect(call.argument<String>("deviceId"), result)
             "disconnect" -> disconnect(result)
+            // The SDK's link outlives Flutter engines. A freshly-attached
+            // engine (reopen after swipe-away) queries this at boot to seed
+            // its state instead of assuming `disconnected` until the next
+            // state-change event (which may never come — phantom disconnect).
+            "getConnectionState" -> result.success(
+                mapOf(
+                    "connected" to HlthBluetoothReceiver.isBandConnected,
+                    "deviceName" to DeviceManager.getInstance().deviceName,
+                )
+            )
             "getBattery" -> getBattery(result)
             "startSportMode" -> startSportMode(
                 sportType = call.argument<Int>("sportType") ?: 7,
@@ -703,8 +712,8 @@ class BleManager(
      * without rebuilding. Clamped to [MIN_SYNC_INTERVAL_MS, MAX_SYNC_INTERVAL_MS]
      * so a typo can't accidentally hammer the band every second.
      *
-     * Reschedules the in-flight Handler callback so the new cadence takes
-     * effect on the NEXT tick — does not fire one immediately.
+     * Re-arms the alarm chain so the new cadence takes effect on the NEXT
+     * tick — does not fire one immediately.
      */
     private fun setSyncIntervalMinutes(minutes: Int, result: MethodChannel.Result) {
         try {
@@ -713,13 +722,8 @@ class BleManager(
                 .coerceAtLeast(MIN_SYNC_INTERVAL_MS)
                 .coerceAtMost(MAX_SYNC_INTERVAL_MS)
             syncIntervalMs = clampedMs
-            // Only restart the queued runnable if we're actively scheduled
-            // (i.e. currently connected). When disconnected, hasBootstrapped
-            // is false and there's no pending callback to cancel.
-            if (hasBootstrapped) {
-                mainHandler.removeCallbacks(periodicSyncRunnable)
-                mainHandler.postDelayed(periodicSyncRunnable, syncIntervalMs)
-            }
+            SyncTickAlarm.intervalMs = clampedMs
+            SyncTickAlarm.schedule(context)
             Log.i(
                 "HlthBLE",
                 "sync interval set to ${syncIntervalMs / 60_000L} min " +
@@ -1778,44 +1782,61 @@ class BleManager(
      * the RMSSD ms we persist into `daily_metrics.hrv_rmssd_ms`.
      */
     private fun syncHRV(dayOffset: Int, result: MethodChannel.Result) {
-        // Uses the SDK's public per-day API — same call the QRing demo's
-        // "Today Data" / "Specific Day Data" buttons use (see
-        // HrvActivity.kt:bindHealthQueryActions). dayOffset=0 →
-        // getTodayHrv, 1..29 → getHrv(dayIndex). Same HRVRsp response so
-        // the Dart adapter is unchanged.
+        // Direct CommandHandle.executeReqCmd(HRVReq(day)) — the manual's
+        // canonical form ("Synchronized hrv function": 0=today, 1=yesterday,
+        // … ≤7) and what the vendor demo's sync button + QWatch Pro use.
+        //
+        // Do NOT switch back to BleOperateManager.getHrv()/getTodayHrv():
+        // that task-queue wrapper returned an INSTANT-EMPTY HRVRsp for
+        // day=0 on the H59 (onSuccess in the same millisecond — it never
+        // touched the ring) while QWatch side-by-side read 17 same-day
+        // readings from the same band (verified 2026-07-08). The direct
+        // command is answered by the firmware for all day indices.
+        //
+        // Response anchoring: `rsp.today` is the band's own day-anchor for
+        // the returned slots (same semantics as the stress path's zeroTime,
+        // unix SECONDS at band-local midnight) — pass it through so the
+        // Dart adapter files the slots under the band's date, not ours.
         val replied = java.util.concurrent.atomic.AtomicBoolean(false)
-        val callback = object : BleOperateManager.HealthDataCallback<HRVRsp> {
-            override fun onSuccess(rsp: HRVRsp?) {
-                if (!replied.compareAndSet(false, true)) return
-                if (rsp == null) {
-                    Log.i("HlthBLE", "syncHRV: onSuccess(null) — no HRV data for day=$dayOffset")
-                    result.success(emptyMap<String, Any>())
-                    return
-                }
-                val arr = rsp.hrvArray
-                val values = arr?.map { (it.toInt() and 0xFF).toDouble() } ?: emptyList()
-                Log.i("HlthBLE", "syncHRV: onSuccess day=$dayOffset range=${rsp.range} arrSize=${arr?.size ?: 0}")
-                result.success(mapOf(
-                    "values" to values,
-                    "intervalMinutes" to rsp.range,
-                    "rawArray" to (arr?.map { it.toInt() and 0xFF } ?: emptyList<Int>())
-                ))
-                markSync()
+        // A command the band never answers must not hang the Dart await
+        // forever (mirrors the BP measure safety net).
+        mainHandler.postDelayed({
+            if (replied.compareAndSet(false, true)) {
+                Log.w("HlthBLE", "syncHRV: timeout day=$dayOffset — replying empty")
+                result.success(emptyMap<String, Any>())
             }
-
-            override fun onError(code: Int, message: String?) {
-                if (!replied.compareAndSet(false, true)) return
-                Log.w("HlthBLE", "syncHRV: onError code=$code msg=$message")
-                result.error("SYNC_HRV_FAILED", message ?: "code=$code", code)
-            }
-        }
+        }, 10_000L)
         try {
-            Log.i("HlthBLE", "syncHRV: dayOffset=$dayOffset (BleOperateManager.getHrv)")
-            if (dayOffset == 0) {
-                BleOperateManager.getInstance().getTodayHrv(callback)
-            } else {
-                BleOperateManager.getInstance().getHrv(dayOffset, callback)
-            }
+            Log.i("HlthBLE", "syncHRV: dayOffset=$dayOffset (direct HRVReq)")
+            CommandHandle.getInstance().executeReqCmd(
+                HRVReq(dayOffset.toByte()),
+                ICommandResponse<HRVRsp> { rsp ->
+                    if (!replied.compareAndSet(false, true)) return@ICommandResponse
+                    mainHandler.post {
+                        val arr = rsp?.hrvArray
+                        val values =
+                            arr?.map { (it.toInt() and 0xFF).toDouble() } ?: emptyList()
+                        val today = rsp?.today
+                        val zeroTimeMs: Long? = today?.zeroTime
+                        Log.i(
+                            "HlthBLE",
+                            "syncHRV: rsp day=$dayOffset range=${rsp?.range} " +
+                                "arrSize=${arr?.size ?: 0} offset=${rsp?.offset} " +
+                                "bandDay=${today?.year}-${today?.month}-${today?.day} " +
+                                "zeroTimeMs=$zeroTimeMs"
+                        )
+                        result.success(mapOf(
+                            "values" to values,
+                            "intervalMinutes" to (rsp?.range ?: 30),
+                            "offset" to (rsp?.offset ?: 0),
+                            "zeroTimeMs" to zeroTimeMs,
+                            "rawArray" to (arr?.map { it.toInt() and 0xFF }
+                                ?: emptyList<Int>())
+                        ))
+                        markSync()
+                    }
+                }
+            )
         } catch (e: Exception) {
             if (replied.compareAndSet(false, true)) {
                 Log.e("HlthBLE", "syncHRV dayOffset=$dayOffset failed", e)

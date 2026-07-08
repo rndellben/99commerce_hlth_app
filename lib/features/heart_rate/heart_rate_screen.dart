@@ -250,8 +250,10 @@ class _LiveHrHeader extends ConsumerWidget {
         children: [
           const Icon(Icons.favorite, color: AppColors.heartRate, size: 40),
           const SizedBox(height: 8),
+          // Seeded: replays the last fresh live push so this headline agrees
+          // with the home card even when opened between band pushes.
           StreamBuilder<int>(
-            stream: ble.realtimeHeartRate,
+            stream: ble.realtimeHeartRateSeeded,
             builder: (context, snap) {
               final realtime = snap.data;
               final value = realtime?.toString() ??

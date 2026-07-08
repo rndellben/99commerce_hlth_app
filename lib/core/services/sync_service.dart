@@ -23,8 +23,10 @@ import 'package:hlth_app/core/services/activity_detector_service.dart';
 import 'package:hlth_app/core/services/alerts/alert_evaluator.dart';
 import 'package:hlth_app/core/services/cloud_sync_service.dart';
 import 'package:hlth_app/core/services/retention_sweep_service.dart';
+import 'package:hlth_app/core/services/breadcrumbs.dart';
 import 'package:hlth_app/core/services/scheduled_ppg_capture_service.dart';
 import 'package:hlth_app/core/services/nightly_bp_capture_service.dart';
+import 'package:hlth_app/core/services/sleep_onset_detector.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math' as math;
 
@@ -167,8 +169,16 @@ class SyncService {
     steps.add(await syncSleep(userId: userId, deviceId: deviceId));
     steps.add(await syncSteps(userId: userId));
     steps.add(await syncStepBuckets(userId: userId, deviceId: deviceId));
+    // H59 HRV day-indexing is SHIFTED (verified 2026-07-08 vs QWatch
+    // side-by-side + direct HRVReq): index 0 → always empty, index 1 →
+    // TODAY, index 2 → yesterday. Each response self-anchors via the band's
+    // zeroTime date-stamp (honored in hrvFromNative), so the pulls below
+    // file correctly no matter which day each index actually returns.
+    // 0 is kept as a cheap probe in case firmware fixes it; 1+2 blanket
+    // today + yesterday so a missed day self-heals.
     steps.add(await syncHrv(userId: userId, deviceId: deviceId, dayOffset: 0));
     steps.add(await syncHrv(userId: userId, deviceId: deviceId, dayOffset: 1));
+    steps.add(await syncHrv(userId: userId, deviceId: deviceId, dayOffset: 2));
     steps.add(await syncStress(userId: userId, deviceId: deviceId, dayOffset: 0));
     steps.add(await syncStress(userId: userId, deviceId: deviceId, dayOffset: 1));
     // NOTE: BP history is intentionally NOT pulled here. On H59 the SDK's
@@ -608,6 +618,7 @@ class PeriodicSyncCoordinator {
     this.onTickIntervalMinutes,
     this.activityDetector,
     this.onActivityDetected,
+    this.sleepOnset,
   }) : _fallDetector = fallDetector ?? const FallDetector() {
     _tickSub = tickStream.listen((mins) {
       lastTickIntervalMin = mins;
@@ -619,6 +630,19 @@ class PeriodicSyncCoordinator {
     // without the user having to open the debug screen first. Guarded by
     // `_inFlight` so it composes cleanly with the periodic tick.
     _connSub = ble.connectionState.listen(_onConnectionChange);
+    // Reconnect ownership (2026-07-07 overnight failure): native sync ticks
+    // are scheduled ONLY while connected, so once the band drops, no tick
+    // ever fires again and nothing Dart-side notices — the app sat "alive
+    // but deaf" for hours. This timer runs in WHICHEVER engine hosts the
+    // coordinator (UI or headless) and re-establishes the link by bonded
+    // MAC. Cheap no-op while connected.
+    _reconnectTimer = Timer.periodic(
+      const Duration(minutes: 5),
+      (_) => _tryReconnect(),
+    );
+    // Also try shortly after boot — a revived process shouldn't wait 5 min
+    // for its first attempt.
+    Future<void>.delayed(const Duration(seconds: 10), _tryReconnect);
   }
 
   final SyncService sync;
@@ -647,6 +671,14 @@ class PeriodicSyncCoordinator {
   /// [onActivityDetected] so the UI can prompt the user to start a workout.
   final ActivityDetectorService? activityDetector;
   final void Function(DateTime detectedAt)? onActivityDetected;
+
+  /// Optional: live "asleep right now" estimate computed once per tick and
+  /// handed to the nightly BP + PPG captures so they fire inside sleep
+  /// instead of on wall-clock guesses.
+  final SleepOnsetDetector? sleepOnset;
+
+  Timer? _reconnectTimer;
+  bool _reconnecting = false;
 
   BleConnectionState? _lastConnState;
   bool _inFlight = false;
@@ -721,8 +753,20 @@ class PeriodicSyncCoordinator {
         await prefs.setBool('has_bonded_band', device != null);
       } catch (_) {}
       if (device == null) return;
+      // Self-healing tick: the native alarm chain keeps firing while the
+      // band is disconnected (Doze fix, 2026-07-08), so an overnight BLE
+      // drop is repaired HERE — reconnect, then let the connect-edge
+      // trigger run the sync once the link is up. Skipping the sync now
+      // avoids a burst of guaranteed-failure steps against a dead link.
+      if (ble.currentConnectionState != BleConnectionState.connected) {
+        Breadcrumbs.log('tick: band disconnected — attempting reconnect');
+        await _tryReconnect();
+        return;
+      }
       final result = await _runSyncWithRetention(device.id);
       _runs.add(result);
+      Breadcrumbs.log('tick: synced ${result.totalSamples} samples, '
+          '${result.failed.length} step errors');
       // Drain cloud outbox after band sync (non-fatal).
       try {
         final authUid = authUserIdReader();
@@ -747,6 +791,15 @@ class PeriodicSyncCoordinator {
           if (detectedAt != null) onActivityDetected?.call(detectedAt);
         }
       } catch (_) {}
+      // Live sleep estimate for the capture gates below — computed ONCE per
+      // tick, right after sync, so both captures act on the same fresh HR +
+      // step evidence. Ryan 2026-06-23: "when sleep is triggered, we trigger
+      // these things to run" — the H59 has no realtime sleep event, so the
+      // detector approximates it. Never throws (resolves to awake).
+      final asleep = sleepOnset == null
+          ? false
+          : await sleepOnset!
+              .isProbablyAsleep(userId: ActiveSession.defaultUserId);
       // HLT-5: run the background fall sweep once data sync is done.
       // Sequenced after sync so we never have two `startMeasureHrRaw`
       // sessions racing for the same BLE link.
@@ -754,19 +807,25 @@ class PeriodicSyncCoordinator {
       _fallSweeps.add(fallResult);
       // Step 3: once-a-day PPG capture for resting respiratory + HRV.
       // Sequenced last (after the fall sweep's raw window) so the two raw
-      // captures never overlap. Daily-gated internally + non-fatal.
+      // captures never overlap. Daily-gated internally + non-fatal. The
+      // asleep verdict bypasses the awake rest gate — sleep IS rest, and the
+      // strongest RSA (respiratory) signal of the day.
       try {
         await scheduledPpgCapture.maybeRunDaily(
           userId: ActiveSession.defaultUserId,
+          asleep: asleep,
         );
       } catch (_) {}
       // Nightly resting BP: H59 has no retrievable scheduled-BP history, so
-      // we fire our own on-demand measurement once per night inside the
-      // night window. Sequenced last (after the raw-PPG captures) so the
-      // band-side active measurements never overlap. Gated + non-fatal.
+      // we fire our own on-demand measurement once per night — now only on
+      // ticks where the user is actually ASLEEP (awake ticks used to burn
+      // the night's attempt cap on motion readings before sleep began).
+      // Sequenced last (after the raw-PPG captures) so the band-side active
+      // measurements never overlap. Gated + non-fatal.
       try {
         await nightlyBpCapture.maybeRunNightly(
           userId: ActiveSession.defaultUserId,
+          asleep: asleep,
         );
       } catch (_) {}
     } finally {
@@ -967,8 +1026,34 @@ class PeriodicSyncCoordinator {
   void dispose() {
     _tickSub?.cancel();
     _connSub?.cancel();
+    _reconnectTimer?.cancel();
     _runs.close();
     _fallSweeps.close();
+  }
+
+  /// Re-establish the band link when it drops. Direct connect by bonded MAC
+  /// (no scan — works headless). Skips while connected/connecting, when no
+  /// band is bonded, or while a previous attempt is still in flight.
+  Future<void> _tryReconnect() async {
+    if (_reconnecting) return;
+    final state = ble.currentConnectionState;
+    if (state == BleConnectionState.connected ||
+        state == BleConnectionState.connecting) {
+      return;
+    }
+    _reconnecting = true;
+    try {
+      final device =
+          await deviceRepo.getActiveForUser(ActiveSession.defaultUserId);
+      final mac = device?.macAddress;
+      if (mac == null || mac.isEmpty) return;
+      Breadcrumbs.log('reconnect: band disconnected — trying $mac');
+      await ble.connect(mac);
+    } catch (e) {
+      Breadcrumbs.log('reconnect: attempt failed ($e)');
+    } finally {
+      _reconnecting = false;
+    }
   }
 }
 
@@ -990,6 +1075,9 @@ final periodicSyncCoordinatorProvider =
     // VO2 max: surface a "start a workout?" prompt when sustained activity is
     // detected (debounced inside the detector).
     activityDetector: ref.watch(activityDetectorServiceProvider),
+    // Live "asleep now" estimate — gates the nightly BP + sleep-window PPG
+    // captures so they fire inside actual sleep.
+    sleepOnset: ref.watch(sleepOnsetDetectorProvider),
     onActivityDetected: (detectedAt) =>
         ref.read(pendingWorkoutPromptProvider.notifier).flag(detectedAt),
     // Battery-drain telemetry — one row per tick. Fire-and-forget; we

@@ -3,11 +3,13 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hlth_app/core/repositories/notification_log_repository.dart';
 import 'package:hlth_app/core/services/alerts/alert_rule.dart';
+import 'package:hlth_app/core/services/alerts/bedtime_reminder_rule.dart';
 import 'package:hlth_app/core/services/alerts/breathing_disruption_rule.dart';
 import 'package:hlth_app/core/services/alerts/hypertension_risk_rule.dart';
 import 'package:hlth_app/core/services/alerts/irregular_rhythm_rule.dart';
 import 'package:hlth_app/core/services/alerts/morning_report_rule.dart';
 import 'package:hlth_app/core/services/alerts/retention_rule.dart';
+import 'package:hlth_app/core/services/breadcrumbs.dart';
 import 'package:hlth_app/core/services/notification_service.dart';
 
 /// Outcome of evaluating one rule on one pass.
@@ -83,9 +85,11 @@ class AlertEvaluator {
         );
         results.add(
             AlertFireResult(type: rule.type, fired: true, reason: 'fired'));
-      } catch (_) {
+        Breadcrumbs.log('alert: fired ${rule.type} — "${candidate.title}"');
+      } catch (e) {
         results.add(
             AlertFireResult(type: rule.type, fired: false, reason: 'error'));
+        Breadcrumbs.log('alert: ${rule.type} errored ($e)');
       }
     }
     return results;
@@ -101,6 +105,7 @@ final alertEvaluatorProvider = Provider<AlertEvaluator>((ref) {
       ref.watch(hypertensionRiskRuleProvider),
       ref.watch(breathingDisruptionRuleProvider),
       ref.watch(morningReportRuleProvider),
+      ref.watch(bedtimeReminderRuleProvider),
     ],
     log: ref.watch(notificationLogRepositoryProvider),
     notifications: ref.watch(notificationServiceProvider),

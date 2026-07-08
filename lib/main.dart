@@ -5,10 +5,15 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:hlth_app/app.dart';
 import 'package:hlth_app/core/auth/supabase_client_provider.dart';
 import 'package:hlth_app/core/config/app_env.dart';
+import 'package:hlth_app/core/services/breadcrumbs.dart';
 import 'package:hlth_app/core/services/notification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Persistent background-event trail (ticks, reconnects, captures) — the
+  // in-memory debug log dies with the process, so this file is what makes
+  // "what happened overnight?" answerable. Init early, never fatal.
+  await Breadcrumbs.init('ui');
   AppEnv.assertConfigured();
   try {
     await Supabase.initialize(

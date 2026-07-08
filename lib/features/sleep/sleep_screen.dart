@@ -260,6 +260,12 @@ class _DaySessionContent extends ConsumerWidget {
     final nightMetrics = ref
         .watch(sleepNightMetricsProvider(session.endedAt.toLocal()))
         .valueOrNull;
+    // Strict sleep-window HRV (nightly record median) — see
+    // _SleepVitalsSection for why this doesn't use the daily_metrics rollup.
+    final sleepHrv = ref
+        .watch(sleepWindowHrvProvider(session.endedAt.toLocal()))
+        .valueOrNull
+        ?.rmssdMedian;
     final totalMin = session.totalMin;
     final deepPct = totalMin > 0 ? (session.deepMin * 100 / totalMin) : 0.0;
     final lightPct = totalMin > 0 ? (session.lightMin * 100 / totalMin) : 0.0;
@@ -345,7 +351,7 @@ class _DaySessionContent extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 24),
-        _SleepVitalsSection(metrics: nightMetrics),
+        _SleepVitalsSection(metrics: nightMetrics, sleepHrvRmssd: sleepHrv),
         _BreathingRiskCard(session: session),
         const SizedBox(height: 16),
         DataDetailsCard(metric: 'sleep'),
@@ -372,16 +378,22 @@ class _DaySessionContent extends ConsumerWidget {
 /// from the wake-day `daily_metrics` row (all computed over the sleep window).
 /// Ryan, 2026-06-23: "in the sleep screen … while you were sleeping, this is
 /// your resting heart rate … your SpO2 … sleeping blood pressure average."
+///
+/// HRV is the exception: it comes from [sleepHrvRmssd] (the nightly record's
+/// sleep-window median), NOT the daily_metrics rollup — the rollup can also
+/// carry a daytime capture's RMSSD, which must never display as "measured
+/// during sleep".
 class _SleepVitalsSection extends StatelessWidget {
-  const _SleepVitalsSection({required this.metrics});
+  const _SleepVitalsSection({required this.metrics, this.sleepHrvRmssd});
   final DailyMetrics? metrics;
+  final double? sleepHrvRmssd;
 
   @override
   Widget build(BuildContext context) {
     final m = metrics;
     final hr = m?.restingHrBpm;
     final spo2 = m?.spo2OvernightAvg;
-    final hrv = m?.hrvRmssdMs;
+    final hrv = sleepHrvRmssd;
     final resp = m?.restingRespRateBpm;
     final sys = m?.systolicMmhg;
     final dia = m?.diastolicMmhg;
@@ -431,8 +443,10 @@ class _SleepVitalsSection extends StatelessWidget {
             ),
             MetricTile(
               label: 'HRV',
-              reference: 'Overnight average',
-              value: hrv == null ? '--' : hrv.toStringAsFixed(0),
+              reference: 'Sleep-window median',
+              value: (hrv == null || !hrv.isFinite)
+                  ? '--'
+                  : hrv.toStringAsFixed(0),
               valueUnit: 'ms',
             ),
             MetricTile(
