@@ -3,9 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hlth_app/core/bootstrap/active_session.dart';
 import 'package:hlth_app/core/models/health_samples.dart';
 import 'package:hlth_app/core/repositories/device_repository.dart';
-import 'package:hlth_app/core/services/sync_service.dart';
-import 'package:hlth_app/features/activity/activity_providers.dart';
-import 'package:hlth_app/features/home/home_providers.dart';
+import 'package:hlth_app/core/sync/band_sync_service.dart';
+import 'package:hlth_app/core/providers/health_data_providers.dart';
 import 'package:hlth_app/features/hrv/hrv_providers.dart';
 import 'package:hlth_app/ui/theme/app_colors.dart';
 import 'package:hlth_app/ui/widgets/date_selector.dart';
@@ -64,7 +63,7 @@ class _HrvScreenState extends ConsumerState<HrvScreen> {
           .read(deviceRepositoryProvider)
           .getActiveForUser(ActiveSession.defaultUserId);
       if (device == null) return; // not paired — silently skip
-      final sync = ref.read(syncServiceProvider);
+      final sync = ref.read(bandSyncServiceProvider);
       final offsets = _offsetsForView();
       var total = 0;
       for (final offset in offsets) {

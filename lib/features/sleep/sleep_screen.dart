@@ -5,7 +5,7 @@ import 'package:hlth_app/core/database/enums.dart';
 import 'package:hlth_app/core/models/daily_metrics.dart';
 import 'package:hlth_app/core/models/sleep.dart';
 import 'package:hlth_app/core/repositories/device_repository.dart';
-import 'package:hlth_app/core/services/sync_service.dart';
+import 'package:hlth_app/core/sync/band_sync_service.dart';
 import 'package:hlth_app/features/sleep/sleep_providers.dart';
 import 'package:hlth_app/ui/theme/app_colors.dart';
 import 'package:hlth_app/ui/widgets/date_selector.dart';
@@ -13,6 +13,7 @@ import 'package:hlth_app/ui/widgets/metric_tile.dart';
 import 'package:hlth_app/ui/widgets/metric_trend_scaffold.dart';
 import 'package:hlth_app/ui/widgets/period_toggle.dart';
 import 'package:hlth_app/ui/widgets/trend_view_sections.dart';
+import 'package:hlth_app/core/processing/sleep_scoring.dart';
 
 /// Sleep detail screen mirroring QWatch Pro's Day / Week / Month layout.
 ///
@@ -60,7 +61,7 @@ class _SleepScreenState extends ConsumerState<SleepScreen> {
           .read(deviceRepositoryProvider)
           .getActiveForUser(ActiveSession.defaultUserId);
       if (device == null) return; // not paired — silently skip
-      final sync = ref.read(syncServiceProvider);
+      final sync = ref.read(bandSyncServiceProvider);
       final offsets = _offsetsForView();
       final results = await sync.syncSleepRange(
         userId: ActiveSession.defaultUserId,
@@ -269,7 +270,7 @@ class _DaySessionContent extends ConsumerWidget {
     final totalMin = session.totalMin;
     final deepPct = totalMin > 0 ? (session.deepMin * 100 / totalMin) : 0.0;
     final lightPct = totalMin > 0 ? (session.lightMin * 100 / totalMin) : 0.0;
-    final continuity = _deepContinuityScore(session.deepMin);
+    final continuity = deepContinuityScore(session.deepMin);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -525,13 +526,6 @@ class _BreathingRiskCard extends ConsumerWidget {
       ),
     );
   }
-}
-
-// QWatch's deep-continuity score reverse-engineered from "1h50min deep
-// → score 91" ≈ 110 / 120 * 100. Documented as sleep-deep-continuity-v1.
-int _deepContinuityScore(int deepMin) {
-  final raw = (deepMin / 120 * 100).round();
-  return raw.clamp(0, 100);
 }
 
 String _hmDuration(int minutes) {
@@ -904,7 +898,7 @@ class _RangeContent extends StatelessWidget {
         .where((s) => s.totalMin > 0)
         .map((s) => s.lightMin * 100 / s.totalMin));
     final avgContinuity = _avg(
-        sessions.map((s) => _deepContinuityScore(s.deepMin).toDouble()));
+        sessions.map((s) => deepContinuityScore(s.deepMin).toDouble()));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

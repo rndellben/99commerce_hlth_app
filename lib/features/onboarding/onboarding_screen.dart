@@ -15,6 +15,7 @@ import 'package:hlth_app/core/models/user.dart';
 import 'package:hlth_app/core/repositories/user_repository.dart';
 import 'package:hlth_app/core/services/consent_service.dart';
 import 'package:hlth_app/ui/theme/app_colors.dart';
+import 'package:hlth_app/core/providers/user_profile_provider.dart';
 
 /// Day-0 setup per hlth-onboarding-timeline.md §"Day 0: Setup".
 ///
@@ -208,16 +209,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   }
 
   int get _pageCount => _buildPages().length;
-  int get _disclaimerIndex => _pageCount - 1;
-
-  // Find the index of the consent page (if present).
-  int get _consentIndex {
-    if (!_needsConsentPage) return -1;
-    // Consent comes after cycle (if present) or after profile.
-    int idx = 5; // after profile at 4
-    if (_sex == SexAtBirth.female) idx++; // cycle page inserted
-    return idx;
-  }
 
   bool get _isWelcomePage => _currentPage == 1;
   bool get _isSplashPage => _currentPage == 0;
@@ -596,13 +587,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     if (picked != null) setState(() => _lastPeriodStart = picked);
   }
 }
-
-/// FutureProvider used by the router redirect: returns the current user's
-/// profile (null if onboarding hasn't been completed).
-final userProfileProvider = FutureProvider<UserProfile?>((ref) async {
-  final repo = ref.watch(userRepositoryProvider);
-  return repo.getProfile(ActiveSession.defaultUserId);
-});
 
 // ─────────────────────────────────────────────────────────────────────────
 // Pages

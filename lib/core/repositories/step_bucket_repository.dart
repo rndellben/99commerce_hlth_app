@@ -26,6 +26,16 @@ abstract class StepBucketRepository {
     required int tzOffsetMin,
   });
 
+  /// Sum of steps across buckets whose `bucket_start_at_utc` falls inside
+  /// `[from, to)`. Used by night-time wake-evidence checks; note the band
+  /// buckets steps in 15-minute slots anchored to the slot start, so a
+  /// window boundary can miss up to 15 minutes of trailing activity.
+  Future<int> stepsInWindow({
+    required String userId,
+    required DateTime from,
+    required DateTime to,
+  });
+
   /// HLT-12: soft-delete (sets `deleted_at_utc`) any bucket whose
   /// `bucket_start_at_utc` is older than `cutoff`. Returns affected row
   /// count. Hard delete deferred until a backend-sync grace period needs it.
@@ -143,6 +153,24 @@ class StepBucketRepositoryImpl implements StepBucketRepository {
           ..addColumns([sum])
           ..where(_db.stepBuckets.userId.equals(userId) &
               _db.stepBuckets.bucketStartAtUtc.isBetweenValues(w.from, w.to) &
+              _db.stepBuckets.deletedAtUtc.isNull()))
+        .getSingle();
+    return (row.read(sum) ?? 0).toInt();
+  }
+
+  @override
+  Future<int> stepsInWindow({
+    required String userId,
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final sum = _db.stepBuckets.steps.sum();
+    final row = await (_db.selectOnly(_db.stepBuckets)
+          ..addColumns([sum])
+          ..where(_db.stepBuckets.userId.equals(userId) &
+              _db.stepBuckets.bucketStartAtUtc
+                  .isBiggerOrEqualValue(_toSec(from)) &
+              _db.stepBuckets.bucketStartAtUtc.isSmallerThanValue(_toSec(to)) &
               _db.stepBuckets.deletedAtUtc.isNull()))
         .getSingle();
     return (row.read(sum) ?? 0).toInt();

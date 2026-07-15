@@ -5,17 +5,6 @@ import 'package:hlth_app/core/models/step_bucket.dart';
 import 'package:hlth_app/core/repositories/daily_metrics_repository.dart';
 import 'package:hlth_app/core/repositories/step_bucket_repository.dart';
 
-/// `daily_metrics` row for a specific local date. Streams so the Activity
-/// detail screen updates as soon as `syncSteps` lands a fresh aggregate.
-final dailyMetricsForDateProvider =
-    StreamProvider.family<DailyMetrics?, DateTime>((ref, localDate) {
-  final repo = ref.watch(dailyMetricsRepositoryProvider);
-  return repo.watchForDay(
-    userId: ActiveSession.defaultUserId,
-    localDate: DateTime(localDate.year, localDate.month, localDate.day),
-  );
-});
-
 /// Range request — used by the Week / Month tabs.
 class ActivityRange {
   const ActivityRange({required this.from, required this.to});

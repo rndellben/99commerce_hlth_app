@@ -23,6 +23,7 @@ import 'package:hlth_app/features/spo2/spo2_screen.dart';
 import 'package:hlth_app/features/stress/stress_screen.dart';
 import 'package:hlth_app/features/workouts/workouts_screen.dart';
 import 'package:hlth_app/ui/widgets/shell_screen.dart';
+import 'package:hlth_app/core/providers/user_profile_provider.dart';
 
 /// GoRouter wrapped in a provider so it can react to the
 /// `userProfileProvider` (first-launch onboarding gate).

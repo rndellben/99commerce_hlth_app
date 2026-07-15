@@ -1,6 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:hlth_app/core/ble/ble_service.dart';
+import 'package:hlth_app/core/ble/ble_types.dart';
 import 'package:hlth_app/core/database/app_database.dart' as db;
 import 'package:hlth_app/core/database/enums.dart';
 import 'package:hlth_app/core/models/exercise_session.dart';

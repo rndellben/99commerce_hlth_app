@@ -18,6 +18,11 @@ abstract class UserRepository {
   Future<UserProfile?> getProfile(String userId);
   Stream<UserProfile?> watchProfile(String userId);
   Future<void> upsertProfile(UserProfile profile);
+
+  /// Hard-deletes the profile row ("Delete profile data" in Settings).
+  /// The `users` row and health samples are intentionally left in place —
+  /// only the onboarding-provided profile answers are erased.
+  Future<void> deleteProfile(String userId);
 }
 
 class UserRepositoryImpl implements UserRepository {
@@ -104,6 +109,13 @@ class UserRepositoryImpl implements UserRepository {
         );
   }
 
+  @override
+  Future<void> deleteProfile(String userId) async {
+    await (_db.delete(_db.userProfiles)
+          ..where((t) => t.userId.equals(userId)))
+        .go();
+  }
+
   // ── helpers ──────────────────────────────────────────────────────────────
   User _rowToUser(db.User r) => User(
         id: r.id,
@@ -133,7 +145,7 @@ class UserRepositoryImpl implements UserRepository {
       );
 
   String? _dateOnly(DateTime? dt) =>
-      dt == null ? null : dt.toIso8601String().substring(0, 10);
+      dt?.toIso8601String().substring(0, 10);
 
   DateTime _utcSecToDt(int sec) =>
       DateTime.fromMillisecondsSinceEpoch(sec * 1000, isUtc: true);

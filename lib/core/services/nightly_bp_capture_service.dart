@@ -19,9 +19,12 @@ import 'package:uuid/uuid.dart';
 /// then rolls it into the sleep-window BP on the sleep screen.
 ///
 /// Triggered from the periodic sync tick (`PeriodicSyncCoordinator`), which
-/// already holds a BLE link overnight. v1 takes ONE resting reading per
-/// night: it fires on the first connected tick inside the night window and
-/// stops once a reading converges.
+/// already holds a BLE link overnight. v2 takes ONE reading PER HOUR of
+/// sleep (Ryan 2026-06-23: hourly is the accepted BP cadence — "no one's
+/// complaining at the one hour" — and the sleep screen should show "the
+/// average during sleep", which needs more than one sample a night). The
+/// aggregator's `getHourlySnapshots` + median already expect an
+/// hourly-shaped series, so denser capture flows straight through.
 ///
 /// Firing is gated on BOTH:
 ///  * the night window (default 23:00–11:00) — bounds which calendar night a
@@ -57,24 +60,32 @@ class NightlyBpCaptureService {
   final int windowEndHour;
 
   static const _uuid = Uuid();
-  static const _algorithmVersion = 'nightly-bp-v1';
+  static const _algorithmVersion = 'nightly-bp-hourly-v2';
 
-  static const _kLastNightKey = 'nightly_bp_last_success_night';
+  static const _kLastSuccessAtKey = 'nightly_bp_last_success_at_epoch_sec';
   static const _kAttemptNightKey = 'nightly_bp_attempt_night';
   static const _kAttemptCountKey = 'nightly_bp_attempt_count';
 
+  /// Minimum gap between converged readings. 55 min, not 60: ticks arrive on
+  /// a 30-min cadence, so a reading at 01:00 must not make the 02:00 tick
+  /// miss its hour by seconds of jitter — 55 keeps real spacing ~hourly
+  /// while never letting two land inside the same clock hour.
+  static const minReadingSpacing = Duration(minutes: 55);
+
   /// Max measurements per night before giving up. Each is ~30 s of active
-  /// LEDs; at a 10-min tick across an 8 h window there are ~48 ticks, so the
-  /// cap stops a ring-off / non-converging night from firing on every one.
-  static const maxNightlyAttempts = 6;
+  /// LEDs. Hourly capture over a long sleep (~8–12 h at a 30-min tick) needs
+  /// headroom for one retry per hour-slot; 16 bounds a ring-off /
+  /// non-converging night to ~8 min of wasted LED time.
+  static const maxNightlyAttempts = 16;
 
   bool _inFlight = false;
   bool get isMeasuring => _inFlight;
 
-  /// Run on the periodic tick. Takes one resting BP reading per night while
-  /// inside the night window AND [asleep], retrying across asleep ticks until
-  /// one converges. Returns the reading when one was persisted, else null
-  /// (outside the window / awake / already done tonight / cap reached / not
+  /// Run on the periodic tick. Takes one resting BP reading per HOUR of
+  /// sleep — inside the night window AND [asleep], spaced by
+  /// [minReadingSpacing], retrying non-converged attempts on later ticks.
+  /// Returns the reading when one was persisted, else null (outside the
+  /// window / awake / too soon after the last reading / cap reached / not
   /// connected / didn't converge).
   Future<({int sbp, int dbp})?> maybeRunNightly({
     required String userId,
@@ -83,7 +94,8 @@ class NightlyBpCaptureService {
     if (_inFlight) return null;
     if (ble.currentConnectionState != BleConnectionState.connected) return null;
 
-    final nightKey = nightKeyFor(DateTime.now());
+    final now = DateTime.now();
+    final nightKey = nightKeyFor(now);
     if (nightKey == null) return null; // daytime — outside the window
 
     // Sleep-onset gate: an awake tick never spends a nightly attempt — the
@@ -93,7 +105,19 @@ class NightlyBpCaptureService {
     if (!asleep) return null;
 
     final prefs = await SharedPreferences.getInstance();
-    if (prefs.getString(_kLastNightKey) == nightKey) return null; // got tonight's
+
+    // Hourly spacing: skip while the last converged reading is fresh.
+    final lastSuccessSec = prefs.getInt(_kLastSuccessAtKey);
+    if (lastSuccessSec != null &&
+        !dueForNextReading(
+          now: now.toUtc(),
+          lastSuccessAt: DateTime.fromMillisecondsSinceEpoch(
+            lastSuccessSec * 1000,
+            isUtc: true,
+          ),
+        )) {
+      return null;
+    }
 
     final attempts = prefs.getString(_kAttemptNightKey) == nightKey
         ? (prefs.getInt(_kAttemptCountKey) ?? 0)
@@ -105,16 +129,30 @@ class NightlyBpCaptureService {
     await prefs.setString(_kAttemptNightKey, nightKey);
     await prefs.setInt(_kAttemptCountKey, attempts + 1);
 
-    Breadcrumbs.log('bp: night attempt ${attempts + 1}/$maxNightlyAttempts');
+    Breadcrumbs.log('bp: hourly attempt ${attempts + 1}/$maxNightlyAttempts');
     final result = await captureAndPersist(userId: userId);
     if (result != null) {
-      // Converged — that's tonight's resting BP; stop retrying this night.
-      await prefs.setString(_kLastNightKey, nightKey);
-      Breadcrumbs.log('bp: converged ${result.sbp}/${result.dbp} — night done');
+      // Converged — start the hourly clock for the next reading.
+      await prefs.setInt(
+        _kLastSuccessAtKey,
+        DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000,
+      );
+      Breadcrumbs.log(
+          'bp: converged ${result.sbp}/${result.dbp} — next in ~1 h');
     } else {
       Breadcrumbs.log('bp: attempt did not converge');
     }
     return result;
+  }
+
+  /// Whether enough time has passed since [lastSuccessAt] for the next
+  /// hourly reading. Pure so the spacing rule is unit-testable.
+  static bool dueForNextReading({
+    required DateTime now,
+    required DateTime? lastSuccessAt,
+  }) {
+    if (lastSuccessAt == null) return true;
+    return now.difference(lastSuccessAt) >= minReadingSpacing;
   }
 
   /// Fire one active BP measurement now and persist it if it converges.

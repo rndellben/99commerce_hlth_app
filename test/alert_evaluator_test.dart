@@ -17,10 +17,16 @@ void main() {
     log = _FakeLog();
   });
 
-  AlertEvaluator evaluatorWith(AlertRule rule) => AlertEvaluator(
+  AlertEvaluator evaluatorWith(
+    AlertRule rule, {
+    bool enabled = true,
+    bool dnd = false,
+  }) =>
+      AlertEvaluator(
         rules: [rule],
         log: log,
         notifications: notifications,
+        policy: _FixedPolicy(enabled: enabled, dnd: dnd),
       );
 
   test('fires once when a candidate exists and nothing has fired before',
@@ -86,6 +92,54 @@ void main() {
     expect(results.single.reason, 'error');
     expect(notifications.shown, isEmpty);
   });
+
+  test('OS permission missing: not shown AND not logged — the candidate is '
+      'deferred, so it fires on the first pass after permission returns',
+      () async {
+    notifications.osEnabled = false;
+    final rule = _StubRule(candidate: _candidate());
+    final e = evaluatorWith(rule);
+
+    final blocked = await e.evaluateAll(userId: userId, now: t0);
+    expect(blocked.single.reason, 'blocked-by-os');
+    expect(notifications.shown, isEmpty);
+    expect(log.entries, isEmpty, reason: 'rate limit must not be burned');
+
+    notifications.osEnabled = true;
+    final after = await e.evaluateAll(
+        userId: userId, now: t0.add(const Duration(minutes: 30)));
+    expect(after.single.fired, isTrue);
+    expect(notifications.shown, hasLength(1));
+  });
+
+  test('master toggle off: nothing shown, nothing logged', () async {
+    final rule = _StubRule(candidate: _candidate());
+    final results = await evaluatorWith(rule, enabled: false)
+        .evaluateAll(userId: userId, now: t0);
+    expect(results.single.reason, 'disabled-in-settings');
+    expect(notifications.shown, isEmpty);
+    expect(log.entries, isEmpty);
+  });
+
+  test('DND: silenced but still recorded (per the settings-screen copy)',
+      () async {
+    final rule = _StubRule(candidate: _candidate());
+    final results = await evaluatorWith(rule, dnd: true)
+        .evaluateAll(userId: userId, now: t0);
+    expect(results.single.fired, isFalse);
+    expect(results.single.reason, 'dnd-silenced');
+    expect(notifications.shown, isEmpty);
+    expect(log.entries, hasLength(1));
+  });
+}
+
+class _FixedPolicy extends NotificationDeliveryPolicy {
+  const _FixedPolicy({required this.enabled, required this.dnd});
+  final bool enabled;
+  final bool dnd;
+  @override
+  Future<({bool enabled, bool dnd})> read() async =>
+      (enabled: enabled, dnd: dnd);
 }
 
 AlertCandidate _candidate() => const AlertCandidate(
@@ -121,10 +175,13 @@ class _ThrowingRule implements AlertRule {
 
 class _FakeNotifications implements NotificationService {
   final List<String> shown = [];
+  bool osEnabled = true;
   @override
   Future<void> init() async {}
   @override
   Future<bool> requestPermission() async => true;
+  @override
+  Future<bool> areNotificationsEnabled() async => osEnabled;
   @override
   Future<void> show({
     required int id,

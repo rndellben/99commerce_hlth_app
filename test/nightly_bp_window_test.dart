@@ -39,4 +39,37 @@ void main() {
     expect(key(DateTime(2026, 6, 24, 4, 59), start: 1, end: 5), '2026-06-24');
     expect(key(DateTime(2026, 6, 24, 5), start: 1, end: 5), isNull);
   });
+
+  group('hourly spacing (one reading per hour of sleep)', () {
+    bool due(DateTime now, DateTime? last) =>
+        NightlyBpCaptureService.dueForNextReading(
+          now: now,
+          lastSuccessAt: last,
+        );
+
+    test('no prior reading → due immediately', () {
+      expect(due(DateTime.utc(2026, 6, 24, 23, 30), null), isTrue);
+    });
+
+    test('30 min after a reading (next tick) → not due', () {
+      final last = DateTime.utc(2026, 6, 25, 1, 0);
+      expect(due(DateTime.utc(2026, 6, 25, 1, 30), last), isFalse);
+    });
+
+    test('55 min after a reading → due (tick jitter must not skip an hour)',
+        () {
+      final last = DateTime.utc(2026, 6, 25, 1, 0);
+      expect(due(DateTime.utc(2026, 6, 25, 1, 55), last), isTrue);
+    });
+
+    test('a full hour after a reading → due', () {
+      final last = DateTime.utc(2026, 6, 25, 1, 0);
+      expect(due(DateTime.utc(2026, 6, 25, 2, 0), last), isTrue);
+    });
+
+    test('54 min after a reading → still inside the spacing guard', () {
+      final last = DateTime.utc(2026, 6, 25, 1, 0);
+      expect(due(DateTime.utc(2026, 6, 25, 1, 54), last), isFalse);
+    });
+  });
 }

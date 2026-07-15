@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:hlth_app/core/ble/ble_service.dart';
+import 'package:hlth_app/core/ble/ble_types.dart';
 import 'package:hlth_app/core/bootstrap/active_session.dart';
 import 'package:hlth_app/core/models/daily_metrics.dart';
 import 'package:hlth_app/core/models/step_bucket.dart';
 import 'package:hlth_app/core/repositories/device_repository.dart';
-import 'package:hlth_app/core/services/sync_service.dart';
+import 'package:hlth_app/core/sync/band_sync_service.dart';
 import 'package:hlth_app/features/activity/activity_providers.dart';
 import 'package:hlth_app/features/activity/widgets/vo2max_card.dart';
 import 'package:hlth_app/features/activity/widgets/workout_prompt_banner.dart';
@@ -18,6 +18,7 @@ import 'package:hlth_app/ui/widgets/trend_view_sections.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hlth_app/core/models/exercise_session.dart';
 import 'package:hlth_app/core/repositories/exercise_session_repository.dart';
+import 'package:hlth_app/core/providers/health_data_providers.dart';
 
 /// Activity detail screen mirroring the Sleep screen's Day / Week / Month
 /// layout: a steps headline with progress ring, a trend chart of the
@@ -63,7 +64,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
           .read(deviceRepositoryProvider)
           .getActiveForUser(ActiveSession.defaultUserId);
       if (device == null) return; // not paired — silently skip
-      final sync = ref.read(syncServiceProvider);
+      final sync = ref.read(bandSyncServiceProvider);
       final stepsResult =
           await sync.syncSteps(userId: ActiveSession.defaultUserId);
       final bucketsResult = await sync.syncStepBuckets(
@@ -765,25 +766,25 @@ class _ExerciseRow extends StatelessWidget {
   }
 
   String _sportLabel(int type) => switch (type) {
-        BleService.sportTypeRunning => 'Run',
-        BleService.sportTypeWalking => 'Walk',
-        BleService.sportTypeCycling => 'Cycle',
-        BleService.sportTypeHiking => 'Hike',
-        BleService.sportTypeStrength => 'Strength',
-        BleService.sportTypeYoga => 'Yoga',
-        BleService.sportTypeRowing => 'Rowing',
-        BleService.sportTypeElliptical => 'Elliptical',
+        SportTypes.running => 'Run',
+        SportTypes.walking => 'Walk',
+        SportTypes.cycling => 'Cycle',
+        SportTypes.hiking => 'Hike',
+        SportTypes.strength => 'Strength',
+        SportTypes.yoga => 'Yoga',
+        SportTypes.rowing => 'Rowing',
+        SportTypes.elliptical => 'Elliptical',
         _ => 'Workout',
       };
 
   IconData _sportIcon(int type) => switch (type) {
-        BleService.sportTypeRunning => Icons.directions_run,
-        BleService.sportTypeWalking => Icons.directions_walk,
-        BleService.sportTypeCycling => Icons.directions_bike,
-        BleService.sportTypeHiking => Icons.terrain,
-        BleService.sportTypeStrength => Icons.fitness_center,
-        BleService.sportTypeYoga => Icons.self_improvement,
-        BleService.sportTypeRowing => Icons.rowing,
+        SportTypes.running => Icons.directions_run,
+        SportTypes.walking => Icons.directions_walk,
+        SportTypes.cycling => Icons.directions_bike,
+        SportTypes.hiking => Icons.terrain,
+        SportTypes.strength => Icons.fitness_center,
+        SportTypes.yoga => Icons.self_improvement,
+        SportTypes.rowing => Icons.rowing,
         _ => Icons.timer,
       };
 }

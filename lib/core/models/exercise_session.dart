@@ -32,7 +32,7 @@ class ExerciseSession {
   final String id;
   final String userId;
   final String deviceId;
-  final int sportType; // SDK byte — see BleService.sportTypeX constants.
+  final int sportType; // SDK byte — see SportTypes constants (core/ble/ble_types.dart).
   final DateTime startedAt;
   final DateTime? endedAt;
   final int durationSec;

@@ -1,5 +1,6 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Which channel a notification fires on. `alert` is high-importance
 /// (health events — heads-up, sound); `retention` is default-importance
@@ -81,6 +82,34 @@ class NotificationService {
     return true;
   }
 
+  /// Whether the OS will actually display our notifications right now
+  /// (Android 13+ POST_NOTIFICATIONS grant / iOS authorization).
+  ///
+  /// The alert engine checks this BEFORE recording a fire: `show()` on a
+  /// denied device is a silent no-op, and logging it anyway would burn the
+  /// rule's rate-limit window on a notification nobody saw. Unknown
+  /// platforms (tests, desktop) resolve to true — the status quo.
+  Future<bool> areNotificationsEnabled() async {
+    try {
+      await init();
+      final android = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      if (android != null) {
+        return await android.areNotificationsEnabled() ?? true;
+      }
+      final ios = _plugin.resolvePlatformSpecificImplementation<
+          IOSFlutterLocalNotificationsPlugin>();
+      if (ios != null) {
+        final options = await ios.checkPermissions();
+        return options?.isEnabled ?? true;
+      }
+      return true;
+    } catch (_) {
+      // Introspection failure must never block delivery attempts.
+      return true;
+    }
+  }
+
   /// Show a notification immediately on [channel].
   Future<void> show({
     required int id,
@@ -112,3 +141,36 @@ class NotificationService {
 
 final notificationServiceProvider =
     Provider<NotificationService>((ref) => NotificationService());
+
+/// The user's in-app delivery preferences, written by the Notifications
+/// settings screen and enforced by the alert engine:
+///
+///  * master toggle OFF → nothing is shown and nothing is logged (alerts
+///    resume, with their rate-limits intact, when re-enabled);
+///  * Do Not Disturb ON → nothing is shown but fires ARE logged, matching
+///    the screen's copy "Notifications are silenced but still recorded".
+///
+/// Before 2026-07-14 these prefs were written but never read — the toggles
+/// were cosmetic. The key constants live here (not in the screen) so the
+/// writer and the reader cannot drift apart.
+class NotificationDeliveryPolicy {
+  const NotificationDeliveryPolicy();
+
+  static const kEnabledKey = 'notifications_enabled';
+  static const kDndKey = 'notifications_dnd';
+
+  /// Reads the current preferences. Any storage failure (e.g. plugin not
+  /// registered in a bare test environment) resolves to the permissive
+  /// defaults — identical to pre-policy behavior.
+  Future<({bool enabled, bool dnd})> read() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return (
+        enabled: prefs.getBool(kEnabledKey) ?? true,
+        dnd: prefs.getBool(kDndKey) ?? false,
+      );
+    } catch (_) {
+      return (enabled: true, dnd: false);
+    }
+  }
+}

@@ -167,6 +167,190 @@ enum PayloadCodec {
         ]
     }
 
+    // MARK: - SpO2 history (getSpO2Day / getSpO2History)
+
+    /// QCBloodOxygenModel[] → ONE per-day entry of Android's SpO2 list shape:
+    /// {dateStr, unixTime, minArray[24], maxArray[24]}.
+    ///
+    /// Android's CMD returns hourly min/max arrays; the iOS SDK returns
+    /// individual timestamped measurements — so we bucket them into 24 hourly
+    /// slots ourselves. Dart (spo2FromNative) skips days where unixTime==0 or
+    /// minArray is empty, and files one sample per non-zero hour slot.
+    /// Returns nil when the day has no usable measurements.
+    static func spo2DayEntry(_ models: [QCBloodOxygenModel], dayOffset: Int) -> [String: Any]? {
+        guard !models.isEmpty else { return nil }
+        var minArr = [Int](repeating: 0, count: 24)
+        var maxArr = [Int](repeating: 0, count: 24)
+        let cal = Calendar.current
+        var any = false
+        for m in models {
+            guard let d = m.date else { continue }
+            let hour = cal.component(.hour, from: d)
+            guard (0..<24).contains(hour) else { continue }
+            let lo = Int(m.minSoa2 > 0 ? m.minSoa2 : m.soa2)
+            let hi = Int(m.maxSoa2 > 0 ? m.maxSoa2 : m.soa2)
+            guard hi > 0 else { continue }
+            any = true
+            minArr[hour] = minArr[hour] == 0 ? lo : min(minArr[hour], lo)
+            maxArr[hour] = max(maxArr[hour], hi)
+        }
+        guard any else { return nil }
+        let dayStart = localMidnight(dayOffset: dayOffset)
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return [
+            "dateStr": f.string(from: dayStart),
+            "unixTime": Int(dayStart.timeIntervalSince1970),
+            "minArray": minArr,
+            "maxArray": maxArr,
+        ]
+    }
+
+    // MARK: - BP day (getBpDay)
+
+    /// QCBloodPressureModel[] filtered to the requested local day →
+    /// Android's {readings:[{time,sbp,dbp}]} shape. `time` is unix SECONDS
+    /// (Dart bpFromNative multiplies by 1000). Callers pass ALL history and
+    /// we filter here because the iOS SDK has no per-day scheduled-BP read.
+    static func bpDayPayload(_ models: [QCBloodPressureModel], dayOffset: Int) -> [String: Any] {
+        let dayStart = localMidnight(dayOffset: dayOffset)
+        let dayEnd = dayStart.addingTimeInterval(24 * 3600)
+        var readings: [[String: Any]] = []
+        for m in models {
+            guard let d = m.date, d >= dayStart, d < dayEnd else { continue }
+            guard m.systolicPressure > 0, m.diastolicPressure > 0 else { continue }
+            readings.append([
+                "time": Int(d.timeIntervalSince1970),
+                "sbp": m.systolicPressure,
+                "dbp": m.diastolicPressure,
+            ])
+        }
+        return ["readings": readings]
+    }
+
+    // MARK: - Daily totals (getDailyTotals)
+
+    /// QCSportModel (current-day totals) → Android's getDailyTotals map.
+    /// Android fields sourced from CMD_GET_STEP_TODAY; iOS equivalents:
+    ///   totalSteps=totalStepCount, runningSteps=runStepCount,
+    ///   calorie=kcal (adapter passes daily calorie through unscaled),
+    ///   walkDistance=meters, sportDurationSec=activeTime(min)*60.
+    /// sleepDurationSec has no iOS source here → 0 (adapter doesn't read it).
+    static func dailyTotalsPayload(_ sport: QCSportModel) -> [String: Any] {
+        let now = Date()
+        let cal = Calendar.current
+        return [
+            "year": cal.component(.year, from: now),
+            "month": cal.component(.month, from: now),
+            "day": cal.component(.day, from: now),
+            "daysAgo": 0,
+            "totalSteps": sport.totalStepCount,
+            "runningSteps": sport.runStepCount,
+            "calorie": Int(sport.calories),
+            "walkDistance": sport.distance,
+            "sportDurationSec": sport.activeTime * 60,
+            "sleepDurationSec": 0,
+        ]
+    }
+
+    // MARK: - Step buckets (getStepBucketHistory / getStepDay)
+
+    /// Per-bucket QCSportModel[] → Android's 15-min bin list:
+    /// [{year,month,day,timeIndex,walkSteps,runSteps,calorie,distance}].
+    /// timeIndex = minutes-since-midnight / 15 (0-95), derived from
+    /// happenDate "yyyy-MM-dd HH:mm:ss".
+    /// calorie: Dart (stepBucketsFromNative) divides by 1000 → we emit
+    /// milli-kcal (QCSportModel.calories is kcal → ×1000).
+    static func stepBucketList(_ sports: [QCSportModel]) -> [[String: Any]] {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        f.timeZone = .current
+        let cal = Calendar.current
+        var out: [[String: Any]] = []
+        for s in sports {
+            guard s.totalStepCount > 0 else { continue } // Android skips empty bins
+            guard let d = f.date(from: s.happenDate ?? "") else { continue }
+            let comps = cal.dateComponents([.year, .month, .day, .hour, .minute], from: d)
+            let timeIndex = ((comps.hour ?? 0) * 60 + (comps.minute ?? 0)) / 15
+            let run = min(s.runStepCount, s.totalStepCount)
+            out.append([
+                "year": comps.year ?? 0,
+                "month": comps.month ?? 0,
+                "day": comps.day ?? 0,
+                "timeIndex": timeIndex,
+                "walkSteps": s.totalStepCount - run,
+                "runSteps": run,
+                "calorie": Int(s.calories * 1000),
+                "distance": s.distance,
+            ])
+        }
+        return out
+    }
+
+    // MARK: - Sport sessions (syncSportSessions)
+
+    /// OdmGeneralExerciseSummaryModel → Android's per-session map. Unit
+    /// conversions: speeds m/s → cm/s (×100), altitude/hill m → cm (×100).
+    static func sportSessionMap(_ s: OdmGeneralExerciseSummaryModel) -> [String: Any] {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd HH:mm"
+        f.timeZone = .current
+        let start = Date(timeIntervalSince1970: s.startTime)
+        return [
+            "sportType": s.exerciseType,
+            "startTime": Int(s.startTime),
+            "trainingStartTime": f.string(from: start),
+            "duration": s.duration,
+            "distance": s.distance,
+            "calories": Double(s.calorie),
+            "speedAvg": Int(s.averageSpeed * 100),
+            "speedMax": Int(s.fastestSpeed * 100),
+            "rateAvg": s.averageHR,
+            "rateMin": s.lowestHR,
+            "rateMax": s.highestHR,
+            "elevation": Int(s.averageAltitude * 100),
+            "uphill": Int(s.upHillDistance * 100),
+            "downhill": Int(s.downHillDistance * 100),
+            "stepRate": s.averageStepFrequency,
+            "steps": s.steps,
+            "sportCount": 0,
+            "locationCount": s.detail?.gpsLocations?.count ?? 0,
+        ]
+    }
+
+    // MARK: - Raw PPG frames (startMeasureHrRaw / startMeasureSpo2Raw)
+
+    /// QCBloodGlucoseHeartRateRawModel[] → per-sample maps matching Android's
+    /// hlth/realtime_stream payload. The iOS SDK delivers the whole burst in
+    /// the completion callback (Android streams per-packet), so timestamps
+    /// are synthesized backwards from "now" at 25 Hz (40 ms spacing) — the
+    /// fall detector only uses count/duration, and PpgSample only needs
+    /// monotonic timestamp_ms.
+    /// PPG + accel arrive as split hi/lo bytes → reassemble; accel is a
+    /// signed int16 (raw counts).
+    static func ppgSampleMaps(_ frames: [QCBloodGlucoseHeartRateRawModel]) -> [[String: Any]] {
+        let nowMs = Int(Date().timeIntervalSince1970 * 1000)
+        let startMs = nowMs - frames.count * 40
+        var out: [[String: Any]] = []
+        out.reserveCapacity(frames.count)
+        for (i, r) in frames.enumerated() {
+            out.append([
+                "timestamp_ms": startMs + i * 40,
+                "ppg_count": r.ppgCount,
+                "green": ((r.greenLightPpgH & 0xFF) << 8) | (r.greenLightPpgL & 0xFF),
+                "red": 0,
+                "infrared": 0,
+                "heart": r.value,
+                "rri": 0,
+                "hrv": 0,
+                "accel_x": signedInt16(high: r.xAxisH, low: r.xAxisL),
+                "accel_y": signedInt16(high: r.yAxisH, low: r.yAxisL),
+                "accel_z": signedInt16(high: r.zAxisH, low: r.zAxisL),
+            ])
+        }
+        return out
+    }
+
     // MARK: - Task 9: Stress
 
     /// QCStressModel? → Android getStressDay payload.

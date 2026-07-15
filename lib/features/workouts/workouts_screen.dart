@@ -21,14 +21,14 @@ class _SportType {
 
 /// Ryan's "eight things people actually do" curated set (call 2026-06-17).
 const List<_SportType> _kSports = [
-  _SportType('Run', Icons.directions_run, BleService.sportTypeRunning),
-  _SportType('Walk', Icons.directions_walk, BleService.sportTypeWalking),
-  _SportType('Cycle', Icons.directions_bike, BleService.sportTypeCycling),
-  _SportType('Hike', Icons.terrain, BleService.sportTypeHiking),
-  _SportType('Strength', Icons.fitness_center, BleService.sportTypeStrength),
-  _SportType('Yoga', Icons.self_improvement, BleService.sportTypeYoga),
-  _SportType('Rowing', Icons.rowing, BleService.sportTypeRowing),
-  _SportType('Elliptical', Icons.directions_run, BleService.sportTypeElliptical),
+  _SportType('Run', Icons.directions_run, SportTypes.running),
+  _SportType('Walk', Icons.directions_walk, SportTypes.walking),
+  _SportType('Cycle', Icons.directions_bike, SportTypes.cycling),
+  _SportType('Hike', Icons.terrain, SportTypes.hiking),
+  _SportType('Strength', Icons.fitness_center, SportTypes.strength),
+  _SportType('Yoga', Icons.self_improvement, SportTypes.yoga),
+  _SportType('Rowing', Icons.rowing, SportTypes.rowing),
+  _SportType('Elliptical', Icons.directions_run, SportTypes.elliptical),
 ];
 
 ({String label, IconData icon}) _resolveSport(int sportType) {

@@ -2,21 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hlth_app/core/ble/ble_service.dart';
-import 'package:hlth_app/core/bootstrap/active_session.dart';
-import 'package:hlth_app/core/database/enums.dart';
 import 'package:hlth_app/core/models/bp_calibration.dart';
-import 'package:hlth_app/core/models/health_samples.dart';
-import 'package:hlth_app/core/repositories/bp_calibration_repository.dart';
-import 'package:hlth_app/core/repositories/bp_repository.dart';
-import 'package:hlth_app/core/repositories/device_repository.dart';
-import 'package:hlth_app/features/blood_pressure/bp_calibration_providers.dart';
-import 'package:hlth_app/features/home/home_providers.dart';
-import 'package:hlth_app/features/onboarding/onboarding_screen.dart';
+import 'package:hlth_app/core/providers/bp_calibration_providers.dart';
+import 'package:hlth_app/features/blood_pressure/bp_controller.dart';
 import 'package:hlth_app/ui/theme/app_colors.dart';
 import 'package:hlth_app/ui/widgets/metric_trend_scaffold.dart';
 import 'package:hlth_app/ui/widgets/trend_view_sections.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:uuid/uuid.dart';
 
 // SharedPreferences keys for the offline-immediate UI cache. The band's
 // flash is still the source of truth — these just let the screen render
@@ -211,14 +203,12 @@ class _BloodPressureScreenState extends ConsumerState<BloodPressureScreen> {
   }
 
   Future<void> _measureNow() async {
-    final ble = ref.read(bleServiceProvider);
+    final controller = ref.read(bpControllerProvider);
     setState(() => _measuring = true);
     try {
-      final r = await ble.startBpMeasurement();
-      final sbp = (r['sbp'] as int?) ?? 0;
-      final dbp = (r['dbp'] as int?) ?? 0;
+      final r = await controller.measure();
       if (!mounted) return;
-      if (sbp <= 0 || dbp <= 0) {
+      if (r.sbp <= 0 || r.dbp <= 0) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content:
@@ -227,26 +217,10 @@ class _BloodPressureScreenState extends ConsumerState<BloodPressureScreen> {
         );
         return;
       }
-      final device = await ref
-          .read(deviceRepositoryProvider)
-          .getActiveForUser(ActiveSession.defaultUserId);
-      if (device != null) {
-        final now = DateTime.now();
-        await ref.read(bpRepositoryProvider).insert(BpReading(
-              id: const Uuid().v4(),
-              userId: ActiveSession.defaultUserId,
-              deviceId: device.id,
-              capturedAt: now.toUtc(),
-              tzOffsetMin: now.timeZoneOffset.inMinutes,
-              systolicMmhg: sbp,
-              diastolicMmhg: dbp,
-              derivation: BpDerivation.bandSensor,
-              source: DataSource.bandManual,
-            ));
-      }
+      await controller.storeBandReading(sbp: r.sbp, dbp: r.dbp);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Measured: $sbp/$dbp mmHg')),
+          SnackBar(content: Text('Measured: ${r.sbp}/${r.dbp} mmHg')),
         );
       }
     } catch (e) {
@@ -258,21 +232,6 @@ class _BloodPressureScreenState extends ConsumerState<BloodPressureScreen> {
     } finally {
       if (mounted) setState(() => _measuring = false);
     }
-  }
-
-  int _ageFrom(DateTime? dob) {
-    if (dob == null) return 30;
-    final now = DateTime.now();
-    var age = now.year - dob.year;
-    if (now.month < dob.month ||
-        (now.month == dob.month && now.day < dob.day)) {
-      age -= 1;
-    }
-    return age.clamp(13, 100);
-  }
-
-  int? _latestHr() {
-    return ref.read(latestHrSampleProvider).valueOrNull?.bpm;
   }
 
   @override
@@ -814,7 +773,7 @@ class _DisclaimerCard extends StatelessWidget {
 enum _CalibStep { bestPractices, threeReadings, explainer }
 
 class _BpCalibrationFlowPage extends ConsumerStatefulWidget {
-  const _BpCalibrationFlowPage({super.key, this.skipBestPractices = false});
+  const _BpCalibrationFlowPage({this.skipBestPractices = false});
   final bool skipBestPractices;
 
   @override
@@ -910,56 +869,17 @@ class _BpCalibrationFlowPageState
       }
     }
 
-    final sbp1 = int.parse(_sbpCtrl1.text);
-    final dbp1 = int.parse(_dbpCtrl1.text);
-    final sbp2 = int.parse(_sbpCtrl2.text);
-    final dbp2 = int.parse(_dbpCtrl2.text);
-    final sbp3 = int.parse(_sbpCtrl3.text);
-    final dbp3 = int.parse(_dbpCtrl3.text);
-    final avgSbp = ((sbp1 + sbp2 + sbp3) / 3).round();
-    final avgDbp = ((dbp1 + dbp2 + dbp3) / 3).round();
-
     setState(() => _saving = true);
     try {
-      final profile = ref.read(userProfileProvider).valueOrNull;
-      final age = _ageFrom(profile?.dateOfBirth);
-      final hrNow = ref.read(latestHrSampleProvider).valueOrNull?.bpm;
-      final calibrationId = const Uuid().v4();
-      final now = DateTime.now();
-      final calibration = BpCalibration(
-        id: calibrationId,
-        userId: ActiveSession.defaultUserId,
-        capturedAt: now.toUtc(),
-        cuffSystolic: avgSbp,
-        cuffDiastolic: avgDbp,
-        hrAtCalibration: hrNow,
-        ageAtCalibration: age,
-        notes: _notesCtrl.text.trim().isEmpty
-            ? null
-            : _notesCtrl.text.trim(),
-        isActive: true,
-        createdAt: now.toUtc(),
+      await ref.read(bpControllerProvider).saveCalibration(
+        readings: [
+          (sbp: int.parse(_sbpCtrl1.text), dbp: int.parse(_dbpCtrl1.text)),
+          (sbp: int.parse(_sbpCtrl2.text), dbp: int.parse(_dbpCtrl2.text)),
+          (sbp: int.parse(_sbpCtrl3.text), dbp: int.parse(_dbpCtrl3.text)),
+        ],
+        notes:
+            _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
       );
-      await ref
-          .read(bpCalibrationRepositoryProvider)
-          .upsertNewActive(calibration);
-
-      final ble = ref.read(bleServiceProvider);
-      final isMale = profile?.sexAtBirth == SexAtBirth.male;
-      final ok = await ble.setPersonalInfo(
-        isMale: isMale,
-        age: age,
-        heightCm: profile?.heightCm?.round() ?? 170,
-        weightKg: profile?.weightKg?.round() ?? 70,
-        baselineSbp: avgSbp,
-        baselineDbp: avgDbp,
-        hrWarnHigh: (220 - age).clamp(120, 200),
-      );
-      if (ok) {
-        await ref
-            .read(bpCalibrationRepositoryProvider)
-            .markBandWriteSucceeded(calibrationId);
-      }
       if (mounted) {
         setState(() => _step = _CalibStep.explainer);
       }
@@ -972,17 +892,6 @@ class _BpCalibrationFlowPageState
     } finally {
       if (mounted) setState(() => _saving = false);
     }
-  }
-
-  int _ageFrom(DateTime? dob) {
-    if (dob == null) return 30;
-    final now = DateTime.now();
-    var age = now.year - dob.year;
-    if (now.month < dob.month ||
-        (now.month == dob.month && now.day < dob.day)) {
-      age -= 1;
-    }
-    return age.clamp(13, 100);
   }
 
   String _stepTitle() {
@@ -1383,22 +1292,11 @@ class _BpAddReadingPageState extends ConsumerState<_BpAddReadingPage> {
 
     setState(() => _saving = true);
     try {
-      final device = await ref
-          .read(deviceRepositoryProvider)
-          .getActiveForUser(ActiveSession.defaultUserId);
-      final now = DateTime.now();
-      await ref.read(bpRepositoryProvider).insert(BpReading(
-            id: const Uuid().v4(),
-            userId: ActiveSession.defaultUserId,
-            deviceId: device?.id ?? '',
-            capturedAt: now.toUtc(),
-            tzOffsetMin: now.timeZoneOffset.inMinutes,
-            systolicMmhg: sbp,
-            diastolicMmhg: dbp,
+      await ref.read(bpControllerProvider).storeManualReading(
+            sbp: sbp,
+            dbp: dbp,
             pulseBpm: int.tryParse(_pulseCtrl.text),
-            derivation: BpDerivation.cuff,
-            source: DataSource.userEntered,
-          ));
+          );
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {

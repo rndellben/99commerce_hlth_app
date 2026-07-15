@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:hlth_app/core/services/notification_service.dart';
 import 'package:hlth_app/features/settings/reminders_screen.dart';
 import 'package:hlth_app/ui/theme/app_colors.dart';
 
@@ -25,8 +26,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Future<void> _loadPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _enabled = prefs.getBool('notifications_enabled') ?? true;
-      _dnd = prefs.getBool('notifications_dnd') ?? false;
+      _enabled = prefs.getBool(NotificationDeliveryPolicy.kEnabledKey) ?? true;
+      _dnd = prefs.getBool(NotificationDeliveryPolicy.kDndKey) ?? false;
     });
   }
 
@@ -62,7 +63,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       if (confirmed != true) return;
     }
     setState(() => _enabled = value);
-    _saveBool('notifications_enabled', value);
+    _saveBool(NotificationDeliveryPolicy.kEnabledKey, value);
   }
 
   @override
@@ -123,7 +124,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     activeTrackColor: AppColors.primary,
                     onChanged: (v) {
                       setState(() => _dnd = v);
-                      _saveBool('notifications_dnd', v);
+                      _saveBool(NotificationDeliveryPolicy.kDndKey, v);
                     },
                   ),
                   if (_dnd)

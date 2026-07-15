@@ -390,7 +390,7 @@ class _DayReadingsBody extends ConsumerWidget {
                   value: _formatMinutes(s.totalMin),
                   unit: '',
                   subtitle:
-                      'Deep ${s.deepMin}m · Light ${s.lightMin}m · REM ${s.remMin ?? 0}m · Awake ${s.awakeMin}m',
+                      'Deep ${s.deepMin}m · Light ${s.lightMin}m · REM ${s.remMin}m · Awake ${s.awakeMin}m',
                 ))
             .toList();
 
@@ -486,13 +486,11 @@ class _ReadingTile extends StatelessWidget {
     required this.value,
     required this.unit,
     required this.color,
-    this.subtitle,
   });
   final DateTime time;
   final String value;
   final String unit;
   final Color color;
-  final String? subtitle;
 
   @override
   Widget build(BuildContext context) {
@@ -545,16 +543,6 @@ class _ReadingTile extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle!,
-                    style: const TextStyle(
-                      color: AppColors.textTertiary,
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
               ],
             ),
           ),

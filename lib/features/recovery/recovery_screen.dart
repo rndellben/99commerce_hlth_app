@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hlth_app/core/models/daily_metrics.dart';
-import 'package:hlth_app/features/activity/activity_providers.dart';
-import 'package:hlth_app/features/home/home_providers.dart';
+import 'package:hlth_app/core/providers/health_data_providers.dart';
 import 'package:hlth_app/ui/theme/app_colors.dart';
 import 'package:hlth_app/ui/widgets/metric_trend_scaffold.dart';
 import 'package:hlth_app/ui/widgets/score_gauge.dart';

@@ -282,6 +282,7 @@ class BleManager(
                 )
             )
             "getBattery" -> getBattery(result)
+            "isPhoneActive" -> isPhoneActive(result)
             "startSportMode" -> startSportMode(
                 sportType = call.argument<Int>("sportType") ?: 7,
                 result = result,
@@ -679,6 +680,21 @@ class BleManager(
      * For now we report `charging=false` so the Dart `({level, charging})`
      * tuple stays well-formed.
      */
+    /// Phone-activity probe: true when the screen is interactive AND the
+    /// keyguard is dismissed — i.e. a human unlocked the phone and is using
+    /// it right now. A sleeping person's phone is locked (notification-lit
+    /// lockscreens stay keyguard-locked, so they don't count). Used by the
+    /// bedtime reminder as background-queryable wake evidence at tick time.
+    private fun isPhoneActive(result: MethodChannel.Result) {
+        try {
+            val pm = context.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+            val km = context.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
+            result.success(mapOf("active" to (pm.isInteractive && !km.isKeyguardLocked)))
+        } catch (e: Exception) {
+            result.success(mapOf("active" to false))
+        }
+    }
+
     private fun getBattery(result: MethodChannel.Result) {
         try {
             CommandHandle.getInstance().executeReqCmd(

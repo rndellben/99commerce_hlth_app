@@ -7,14 +7,13 @@ import 'package:hlth_app/features/auth/auth_screen.dart';
 import 'package:hlth_app/core/auth/supabase_client_provider.dart';
 import 'package:hlth_app/core/ble/ble_service.dart';
 import 'package:hlth_app/core/bootstrap/active_session.dart';
-import 'package:hlth_app/core/database/app_database.dart' as db;
 import 'package:hlth_app/core/database/enums.dart';
 import 'package:hlth_app/core/models/user.dart';
 import 'package:hlth_app/core/repositories/user_repository.dart';
-import 'package:hlth_app/features/onboarding/onboarding_screen.dart';
 import 'package:hlth_app/features/settings/monitoring_screen.dart';
 import 'package:hlth_app/features/settings/notifications_screen.dart';
 import 'package:hlth_app/ui/theme/app_colors.dart';
+import 'package:hlth_app/core/providers/user_profile_provider.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -894,12 +893,9 @@ class _ProfileViewScreenState extends ConsumerState<_ProfileViewScreen> {
     if (second != true || !context.mounted) return;
 
     try {
-      // Delete profile row from Drift database
-      final database = ref.read(db.appDatabaseProvider);
-      await (database.delete(database.userProfiles)
-            ..where(
-                (t) => t.userId.equals(ActiveSession.defaultUserId)))
-          .go();
+      await ref
+          .read(userRepositoryProvider)
+          .deleteProfile(ActiveSession.defaultUserId);
       ref.invalidate(userProfileProvider);
       if (context.mounted) {
         context.go('/onboarding');

@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hlth_app/core/bootstrap/active_session.dart';
 import 'package:hlth_app/core/routing/router.dart';
+import 'package:hlth_app/core/services/alerts/alert_evaluator.dart';
+import 'package:hlth_app/core/services/app_activity_tracker.dart';
 import 'package:hlth_app/core/services/scheduled_ppg_capture_service.dart';
-import 'package:hlth_app/core/services/sync_service.dart';
-import 'package:hlth_app/features/home/home_providers.dart';
+import 'package:hlth_app/core/sync/periodic_sync_coordinator.dart';
+import 'package:hlth_app/core/providers/health_data_providers.dart';
 import 'package:hlth_app/ui/theme/app_theme.dart';
 
 class HlthApp extends ConsumerStatefulWidget {
@@ -20,6 +22,25 @@ class _HlthAppState extends ConsumerState<HlthApp>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Launching the app IS user interaction — stamp it so night-time rules
+    // (bedtime reminder) have wake evidence from the very first session.
+    AppActivityTracker.recordAppActive();
+    // Then evaluate alerts against that fresh evidence. Without this, an
+    // alert whose evidence is the launch itself (bedtime reminder at 1 a.m.)
+    // would wait for the next 30-min sync tick — by which time the evidence
+    // may be stale and the moment gone. Post-frame so providers are live;
+    // rate limits make re-evaluation cheap and double-fire-safe.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _evaluateAlerts());
+  }
+
+  void _evaluateAlerts() {
+    try {
+      ref
+          .read(alertEvaluatorProvider)
+          .evaluateAll(userId: ActiveSession.defaultUserId);
+    } catch (_) {
+      // Alert evaluation must never break app startup/resume.
+    }
   }
 
   @override
@@ -38,6 +59,12 @@ class _HlthAppState extends ConsumerState<HlthApp>
     // are invisible. Invalidating them on resume re-evaluates DateTime.now()
     // so "today" is current again whenever the user returns to the app.
     if (state == AppLifecycleState.resumed) {
+      // Foregrounding the app is irrefutable "user is awake" evidence for
+      // the bedtime reminder (a sleeping person cannot resume an app) — and
+      // the evaluation runs NOW, not on the next tick, so the reminder can
+      // fire while the evidence is seconds old.
+      AppActivityTracker.recordAppActive();
+      _evaluateAlerts();
       ref.invalidate(todayDailyMetricsProvider);
       ref.invalidate(hrSparklineProvider);
       ref.invalidate(spo2SparklineProvider);

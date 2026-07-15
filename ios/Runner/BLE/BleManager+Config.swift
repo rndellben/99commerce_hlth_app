@@ -124,4 +124,83 @@ extension BleManager {
             ])
         })
     }
+
+    // MARK: - Task 15: scheduled BP get/set (Android BP_SCHED_*)
+
+    /// Write the scheduled-BP window + interval, ack with Android's
+    /// {isEnable, intervalMinutes} write-ack shape. NOTE: on H59 the write-ack
+    /// lies — Dart always follows with getBpScheduled for ground truth.
+    func setBpScheduled(_ a: [String: Any], _ result: @escaping FlutterResult) {
+        let enabled = a["enabled"] as? Bool ?? true
+        let interval = a["intervalMinutes"] as? Int ?? 60
+        let begin = String(format: "%02d:%02d",
+                           a["startHour"] as? Int ?? 0, a["startMinute"] as? Int ?? 0)
+        let end = String(format: "%02d:%02d",
+                         a["endHour"] as? Int ?? 23, a["endMinute"] as? Int ?? 59)
+        QCSDKCmdCreator.setSchedualBPInfoOn(
+            enabled, beginTime: begin, endTime: end, minuteInterval: interval,
+            success: { featureOn, _, _, minuteInterval in
+                result(["isEnable": featureOn, "intervalMinutes": minuteInterval])
+            }, fail: {
+                result(FlutterError(code: "BP_SCHED_FAILED",
+                                    message: "setSchedualBPInfo failed", details: nil))
+            })
+    }
+
+    /// Read back the scheduled-BP config (the ground truth on H59).
+    /// Header (L492): getSchedualBPInfo:(BOOL,NSString* "HH:mm",NSString*,NSInteger)fail:
+    func getBpScheduled(_ result: @escaping FlutterResult) {
+        QCSDKCmdCreator.getSchedualBPInfo({ featureOn, beginTime, endTime, minuteInterval in
+            func parse(_ s: String?) -> (h: Int, m: Int)? {
+                let parts = (s ?? "").split(separator: ":")
+                guard parts.count == 2, let h = Int(parts[0]), let m = Int(parts[1])
+                else { return nil }
+                return (h, m)
+            }
+            let b = parse(beginTime)
+            let e = parse(endTime)
+            result([
+                "isEnable": featureOn,
+                "intervalMinutes": minuteInterval,
+                "startHour": b?.h ?? 0,
+                "startMinute": b?.m ?? 0,
+                "endHour": e?.h ?? 23,
+                "endMinute": e?.m ?? 59,
+            ])
+        }, fail: {
+            result(FlutterError(code: "BP_SCHED_READ_FAILED",
+                                message: "getSchedualBPInfo failed", details: nil))
+        })
+    }
+
+    // MARK: - Task 15: scheduled stress get/set (Android STRESS_SCHED_*)
+
+    /// Pure on/off — the band picks its own cadence (~30 min). The iOS set
+    /// callback carries only an error, no echo, so we ack with the requested
+    /// state (Android echoes the SDK ack, equally untrustworthy on H59 —
+    /// Dart's read-back is the ground truth either way).
+    func setStressScheduled(_ a: [String: Any], _ result: @escaping FlutterResult) {
+        let enabled = a["enabled"] as? Bool ?? true
+        QCSDKCmdCreator.setSchedualStressStatus(enabled, finshed: { err in
+            if err != nil {
+                result(FlutterError(code: "STRESS_SCHED_FAILED",
+                                    message: "setSchedualStressStatus failed", details: nil))
+            } else {
+                result(["isEnable": enabled])
+            }
+        })
+    }
+
+    /// Header (L1071): getSchedualStressStatusWithFinshed:(BOOL,NSError*)
+    /// [SDK typo "Finshed" is real.]
+    func getStressScheduled(_ result: @escaping FlutterResult) {
+        QCSDKCmdCreator.getSchedualStressStatus(finshed: { isOn, err in
+            if err != nil {
+                result(FlutterError(code: "STRESS_SCHED_READ_FAILED",
+                                    message: "getSchedualStressStatus failed", details: nil))
+            } else {
+                result(["isEnable": isOn])
+            }
+        })
+    }
 }

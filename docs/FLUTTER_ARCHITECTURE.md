@@ -28,16 +28,25 @@ known data-loss gap on fresh install).
 
 | Path | Responsibility |
 |---|---|
-| `core/ble/` | `BleService` (frozen platform-channel contract), `sync_adapters.dart` (native payload → domain samples) |
+| `core/ble/` | `BleService` (frozen platform-channel contract), `ble_types.dart` (pure value types: `BleConnectionState`, `SportTypes`, `SportSessionSummary`, …), `sync_adapters.dart` (native payload → domain samples) |
 | `core/database/` | Drift `AppDatabase`, `tables.dart` (20 tables), `enums.dart`, migrations |
 | `core/models/` | Freezed domain models (`Score`, `DailyMetrics`, `ExerciseSession`, `UserProfile`, health samples) |
 | `core/repositories/` | 20 repos — the only code that touches Drift. Abstract + `Impl` + Riverpod `Provider`. |
-| `core/services/` | Orchestration (sync, aggregation, scoring adapters, alerts, cloud, capture) |
+| `core/providers/` | **Shared UI read-models** (2026-07-14 refactor): `health_data_providers.dart` (latest samples, sparklines, scores, daily metrics), `device_status_providers.dart` (battery, syncing), `bp_calibration_providers.dart`, `user_profile_provider.dart`. Features import these — never each other's providers. |
+| `core/sync/` | **Band-sync module** (2026-07-14 refactor, replaces the old 1.1k-line `services/sync_service.dart`): `band_sync_service.dart` (`BandSyncService.syncAll` + per-metric steps), `periodic_sync_coordinator.dart` (tick sequencing only), `score_refresh_service.dart` (Recovery/Cardio/VO2 backfill), `fall_sweep_service.dart` (HLT-5 accel capture + calibration), `retention_gate.dart` (24h prefs-gated sweep), `band_reconnector.dart` (5-min reconnect loop), `sync_results.dart`. |
+| `core/services/` | Remaining orchestration (aggregation, scoring adapters, alerts, cloud, capture) |
 | `core/scoring/` | **Pure** engines vendored from Ryan: `recovery_stability.dart`, `vascular_load.dart`, `vo2max_estimation.dart`, `sleep_epochs_builder.dart` |
-| `core/processing/` | Signal processing (`fall_detector`, PPG/HRV/respiratory math) |
+| `core/processing/` | Signal processing (`fall_detector`, PPG/HRV/respiratory math, `sleep_scoring.dart` incl. `deepContinuityScore`) |
 | `core/auth/`, `core/bootstrap/`, `core/config/`, `core/routing/` | Auth controller, `ActiveSession` (pre-onboarding user), env config, go_router |
-| `features/**` | One folder per screen (home, activity, sleep, recovery, hrv, spo2, heart_rate, blood_pressure, stress, workouts, one_key, onboarding, pairing, settings, debug). Each may carry `*_providers.dart` + `widgets/`. |
+| `features/**` | One folder per screen (home, activity, sleep, recovery, hrv, spo2, heart_rate, blood_pressure, stress, workouts, one_key, onboarding, pairing, settings, debug). Each may carry `*_providers.dart` (feature-local only), a `*_controller.dart` application service (e.g. `bp_controller.dart`), + `widgets/`. |
 | `ui/theme/`, `ui/widgets/` | `AppColors`, shared widgets (`ScoreGauge`, `TrendChartCard`, `HealthMetricCard`, `MetricTile`) |
+
+**Dependency rules** (2026-07-14 refactor): features may import `core/**` and
+`ui/**` but not other features (remaining known exceptions: navigation pushes
+to `AuthScreen`/`WorkoutsScreen`, settings→monitoring/notifications). `core/`
+never imports `features/**` except `core/routing/router.dart` (route table).
+Only `core/repositories` + `core/database` touch Drift. Screens keep UI state;
+BLE/persistence orchestration lives in services or feature controllers.
 
 ## State management — Riverpod (hand-written, no codegen)
 

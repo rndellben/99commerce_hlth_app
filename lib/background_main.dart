@@ -8,7 +8,7 @@ import 'package:hlth_app/core/auth/supabase_client_provider.dart';
 import 'package:hlth_app/core/config/app_env.dart';
 import 'package:hlth_app/core/services/breadcrumbs.dart';
 import 'package:hlth_app/core/services/notification_service.dart';
-import 'package:hlth_app/core/services/sync_service.dart';
+import 'package:hlth_app/core/sync/periodic_sync_coordinator.dart';
 
 /// Headless entrypoint for background sync — executed by the native
 /// `HeadlessSyncEngine` when the user swipes the app away (or the watchdog

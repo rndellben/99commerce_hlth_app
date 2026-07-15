@@ -86,3 +86,10 @@ int? sleepLatencyMin(SleepSession session, List<SleepEpoch> epochs) {
   }
   return null;
 }
+
+/// QWatch's deep-continuity score reverse-engineered from "1h50min deep
+/// → score 91" ≈ 110 / 120 * 100. Documented as sleep-deep-continuity-v1.
+int deepContinuityScore(int deepMin) {
+  final raw = (deepMin / 120 * 100).round();
+  return raw.clamp(0, 100);
+}

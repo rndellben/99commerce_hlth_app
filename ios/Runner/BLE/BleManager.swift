@@ -94,6 +94,10 @@ final class BleManager: NSObject {
         case "connect": connect(a["deviceId"] as? String, result)
         case "disconnect": disconnect(result)
         case "getBattery": getBattery(result)
+        // Phone-activity probe: iOS provides no background-queryable
+        // screen/lock state — always false; the bedtime reminder's
+        // app-resume evidence covers this platform instead.
+        case "isPhoneActive": result(["active": false])
         // Config (Task 5, 15)
         case "setPersonalInfo": setPersonalInfo(a, result)
         case "setScheduledMonitoring": setScheduledMonitoring(a, result)
@@ -156,69 +160,18 @@ final class SinkStreamHandler: NSObject, FlutterStreamHandler {
     func onCancel(withArguments _: Any?) -> FlutterError? { onSink(nil); return nil }
 }
 
-// MARK: - Temporary stubs (replaced by later tasks)
+// MARK: - Method-body locations
 //
-// Every method routed by the dispatch switch above is implemented in a later
-// task as an `extension BleManager` method in a dedicated file. Until then,
-// these stubs keep the project compiling. As each real implementation lands,
-// delete the matching stub here.
-
-extension BleManager {
-    // --- Connection (Task 4) ---
-    // startScan/stopScan/connect/disconnect/getBattery now live in
-    // BleManager+Connection.swift.
-
-    // --- Config (Task 5, 15) ---
-    // setPersonalInfo/setScheduledMonitoring/getScheduledHr now live in
-    // BleManager+Config.swift (Task 5).
-    func setBpScheduled(_ a: [String: Any], _ result: @escaping FlutterResult) { result(FlutterMethodNotImplemented) }
-    func getBpScheduled(_ result: @escaping FlutterResult) { result(FlutterMethodNotImplemented) }
-    func setStressScheduled(_ a: [String: Any], _ result: @escaping FlutterResult) { result(FlutterMethodNotImplemented) }
-    func getStressScheduled(_ result: @escaping FlutterResult) { result(FlutterMethodNotImplemented) }
-    // setSyncIntervalMinutes now lives in BleManager+Background.swift (Task 10).
-
-    // --- History (Task 6–9, 16–18) ---
-    // getSleepHistory/getHrHistory/getHrvHistory/getStressDay now live in
-    // BleManager+History.swift (Tasks 6–9).
-    func getSpO2Day(_ dayOffset: Int, _ result: @escaping FlutterResult) { result(FlutterMethodNotImplemented) }
-    func getSpO2History(_ result: @escaping FlutterResult) { result(FlutterMethodNotImplemented) }
-    func getSpO2Interval(_ dayOffset: Int, _ result: @escaping FlutterResult) { result(FlutterMethodNotImplemented) }
-    func getSpO2Capability(_ result: @escaping FlutterResult) { result(FlutterMethodNotImplemented) }
-    func enableSpO2Interval(_ a: [String: Any], _ result: @escaping FlutterResult) { result(FlutterMethodNotImplemented) }
-    func getBpDay(_ dayOffset: Int, _ result: @escaping FlutterResult) { result(FlutterMethodNotImplemented) }
-    func getBpHistory(_ result: @escaping FlutterResult) { result(FlutterMethodNotImplemented) }
-    func getDailyTotals(_ result: @escaping FlutterResult) { result(FlutterMethodNotImplemented) }
-    func getStepBucketHistory(_ dayOffset: Int, _ result: @escaping FlutterResult) { result(FlutterMethodNotImplemented) }
-    func getStepDay(_ dayOffset: Int, _ result: @escaping FlutterResult) { result(FlutterMethodNotImplemented) }
-
-    // --- Measurement (Task 19–21) ---
-    func startHeartStream(_ result: @escaping FlutterResult) { result(FlutterMethodNotImplemented) }
-    func stopHeartStream(_ result: @escaping FlutterResult) { result(FlutterMethodNotImplemented) }
-    func startSpo2Stream(_ result: @escaping FlutterResult) { result(FlutterMethodNotImplemented) }
-    func stopSpo2Stream(_ result: @escaping FlutterResult) { result(FlutterMethodNotImplemented) }
-    func startHrvStream(_ result: @escaping FlutterResult) { result(FlutterMethodNotImplemented) }
-    func stopHrvStream(_ result: @escaping FlutterResult) { result(FlutterMethodNotImplemented) }
-    func startBpMeasurement(_ result: @escaping FlutterResult) { result(FlutterMethodNotImplemented) }
-    func stopBpMeasurement(_ result: @escaping FlutterResult) { result(FlutterMethodNotImplemented) }
-    func startOneKeyMeasurement(_ result: @escaping FlutterResult) { result(FlutterMethodNotImplemented) }
-    func stopOneKeyMeasurement(_ result: @escaping FlutterResult) { result(FlutterMethodNotImplemented) }
-
-    // --- Raw PPG (Task 22) ---
-    func startMeasureHrRaw(_ duration: Int, _ result: @escaping FlutterResult) { result(FlutterMethodNotImplemented) }
-    func stopMeasureRaw(_ result: @escaping FlutterResult) { result(FlutterMethodNotImplemented) }
-    func startMeasureSpo2Raw(_ duration: Int, _ result: @escaping FlutterResult) { result(FlutterMethodNotImplemented) }
-    func stopMeasureSpo2Raw(_ result: @escaping FlutterResult) { result(FlutterMethodNotImplemented) }
-
-    // --- Sport (Task 23) ---
-    func sendSportStatus(_ status: Int, _ sportType: Int, _ result: @escaping FlutterResult) { result(FlutterMethodNotImplemented) }
-    func syncSportSessions(_ result: @escaping FlutterResult) { result(FlutterMethodNotImplemented) }
-
-    // --- Void callback-wiring / lifecycle no-ops ---
-    func wireMeasurementCallbacks() {}      // Task 19/20/21
-    // registerDeviceEventObservers() now lives in BleManager+Events.swift (Task 11).
-    // startPeriodicTimer()/stopPeriodicTimer() now live in BleManager+Background.swift (Task 10).
-    // runConnectBootstrap() now lives in BleManager+Config.swift (Task 5).
-}
+// Every method routed by the dispatch switch above lives in an
+// `extension BleManager` in a dedicated file:
+//   Connection (scan/connect/disconnect/battery) → BleManager+Connection.swift
+//   Config (personal info, scheduled monitoring/HR/BP/stress) → BleManager+Config.swift
+//   History (sleep/HR/HRV/stress/SpO2/BP/steps) → BleManager+History.swift
+//   Measurements (streams, BP, one-key) → BleManager+Measure.swift
+//   Raw PPG/accel capture → BleManager+RawPpg.swift
+//   Sport mode + SportPlus sync → BleManager+Sport.swift
+//   Band-initiated events → BleManager+Events.swift
+//   Periodic timer + CB restoration → BleManager+Background.swift
 
 // MARK: - CBCentralManagerDelegate
 //

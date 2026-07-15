@@ -4,8 +4,8 @@ import 'package:hlth_app/core/ble/ble_service.dart';
 import 'package:hlth_app/core/bootstrap/active_session.dart';
 import 'package:hlth_app/core/models/health_samples.dart';
 import 'package:hlth_app/core/repositories/device_repository.dart';
-import 'package:hlth_app/core/services/sync_service.dart';
-import 'package:hlth_app/features/home/home_providers.dart';
+import 'package:hlth_app/core/sync/band_sync_service.dart';
+import 'package:hlth_app/core/providers/health_data_providers.dart';
 import 'package:hlth_app/ui/theme/app_colors.dart';
 import 'package:hlth_app/ui/widgets/metric_trend_scaffold.dart';
 import 'package:hlth_app/ui/widgets/trend_view_sections.dart';
@@ -46,7 +46,7 @@ class _StressScreenState extends ConsumerState<StressScreen> {
           .read(deviceRepositoryProvider)
           .getActiveForUser(ActiveSession.defaultUserId);
       if (device == null) return; // not paired
-      final sync = ref.read(syncServiceProvider);
+      final sync = ref.read(bandSyncServiceProvider);
       // Pull today + yesterday — H59 sometimes files samples under the
       // wear day's index rather than the sync day, per the HRV quirk.
       final today = await sync.syncStress(

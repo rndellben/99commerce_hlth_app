@@ -9,6 +9,9 @@
 /* Begin PBXBuildFile section */
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
 		212B8C703B4A754AF7766624 /* BleManager+History.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38A6C36FA3975A3A6BF94AD2 /* BleManager+History.swift */; };
+		EADE8BC48AE9C3B62AE91F72 /* BleManager+Sport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20CDED2D83277941C5EB2AEF /* BleManager+Sport.swift */; };
+		83248524C4572C2A88F7513F /* BleManager+RawPpg.swift in Sources */ = {isa = PBXBuildFile; fileRef = C451914BCE7C470212D1A6D8 /* BleManager+RawPpg.swift */; };
+		51E8171D841611AE8084C233 /* BleManager+Measure.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC0A1C4F1E73A444EE24FE2D /* BleManager+Measure.swift */; };
 		2B7BEC624283A60A83BA5FA2 /* BleManager+Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = 695DB80596A824598C3643DF /* BleManager+Config.swift */; };
 		2EB3434A00260C8C22ED2DB8 /* BleManager+Background.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0BC9FED33E7749F380884AF /* BleManager+Background.swift */; };
 		331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C807B294A618700263BE5 /* RunnerTests.swift */; };
@@ -56,6 +59,9 @@
 		331C807B294A618700263BE5 /* RunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunnerTests.swift; sourceTree = "<group>"; };
 		331C8081294A63A400263BE5 /* RunnerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunnerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		38A6C36FA3975A3A6BF94AD2 /* BleManager+History.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "BleManager+History.swift"; sourceTree = "<group>"; };
+		20CDED2D83277941C5EB2AEF /* BleManager+Sport.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "BleManager+Sport.swift"; sourceTree = "<group>"; };
+		C451914BCE7C470212D1A6D8 /* BleManager+RawPpg.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "BleManager+RawPpg.swift"; sourceTree = "<group>"; };
+		FC0A1C4F1E73A444EE24FE2D /* BleManager+Measure.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "BleManager+Measure.swift"; sourceTree = "<group>"; };
 		3A0A66094B51AA3698391B00 /* PayloadCodec.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PayloadCodec.swift; sourceTree = "<group>"; };
 		3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = AppFrameworkInfo.plist; path = Flutter/AppFrameworkInfo.plist; sourceTree = "<group>"; };
 		695DB80596A824598C3643DF /* BleManager+Config.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "BleManager+Config.swift"; sourceTree = "<group>"; };
@@ -142,6 +148,9 @@
 				B1DEC7627C109CEBC21BA319 /* BleManager+Connection.swift */,
 				695DB80596A824598C3643DF /* BleManager+Config.swift */,
 				38A6C36FA3975A3A6BF94AD2 /* BleManager+History.swift */,
+				20CDED2D83277941C5EB2AEF /* BleManager+Sport.swift */,
+				C451914BCE7C470212D1A6D8 /* BleManager+RawPpg.swift */,
+				FC0A1C4F1E73A444EE24FE2D /* BleManager+Measure.swift */,
 				D0BC9FED33E7749F380884AF /* BleManager+Background.swift */,
 				BD7B937C2814555F0ED43C10 /* BleManager+Events.swift */,
 				3A0A66094B51AA3698391B00 /* PayloadCodec.swift */,
@@ -433,6 +442,9 @@
 				6BB8F94FA144502F63B6FCE1 /* BleManager+Connection.swift in Sources */,
 				2B7BEC624283A60A83BA5FA2 /* BleManager+Config.swift in Sources */,
 				212B8C703B4A754AF7766624 /* BleManager+History.swift in Sources */,
+				EADE8BC48AE9C3B62AE91F72 /* BleManager+Sport.swift in Sources */,
+				83248524C4572C2A88F7513F /* BleManager+RawPpg.swift in Sources */,
+				51E8171D841611AE8084C233 /* BleManager+Measure.swift in Sources */,
 				2EB3434A00260C8C22ED2DB8 /* BleManager+Background.swift in Sources */,
 				A41396CD226D8519183F1383 /* BleManager+Events.swift in Sources */,
 				FDB805A58850F74538359369 /* PayloadCodec.swift in Sources */,
@@ -530,6 +542,7 @@
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				DEVELOPMENT_TEAM = 7U9ZNKCMUN;
 				ENABLE_BITCODE = NO;
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = arm64;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/Frameworks",
@@ -538,6 +551,10 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-ObjC",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.hlth.hlthApp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -717,6 +734,7 @@
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				DEVELOPMENT_TEAM = 7U9ZNKCMUN;
 				ENABLE_BITCODE = NO;
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = arm64;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/Frameworks",
@@ -725,6 +743,10 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-ObjC",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.hlth.hlthApp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -744,6 +766,7 @@
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				DEVELOPMENT_TEAM = 7U9ZNKCMUN;
 				ENABLE_BITCODE = NO;
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = arm64;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/Frameworks",
@@ -752,6 +775,10 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-ObjC",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.hlth.hlthApp;
 				PRODUCT_NAME = "$(TARGET_NAME)";

@@ -37,8 +37,9 @@ import 'package:hlth_app/core/services/cardio_load_service.dart';
 import 'package:hlth_app/core/services/daily_aggregator.dart';
 import 'package:hlth_app/core/services/nightly_bp_capture_service.dart';
 import 'package:hlth_app/core/services/recovery_score_service.dart';
-import 'package:hlth_app/features/home/home_providers.dart';
-import 'package:hlth_app/core/services/sync_service.dart';
+import 'package:hlth_app/core/providers/health_data_providers.dart';
+import 'package:hlth_app/core/sync/band_sync_service.dart';
+import 'package:hlth_app/core/sync/periodic_sync_coordinator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -763,7 +764,7 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
     if (!_requireSession()) return;
     final label = dayOffset == 0 ? 'today' : 'day-$dayOffset';
     _push('getHrHistory ($label): requesting...');
-    final res = await ref.read(syncServiceProvider).syncHr(
+    final res = await ref.read(bandSyncServiceProvider).syncHr(
           userId: _activeUserId!,
           deviceId: _activeDeviceId!,
           dayOffset: dayOffset,
@@ -804,7 +805,7 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
     if (dayOffset == null) return;
     final label = dayOffset == 0 ? 'today' : 'day-$dayOffset';
     _push('getSpO2Day ($label): requesting...');
-    final res = await ref.read(syncServiceProvider).syncSpo2Day(
+    final res = await ref.read(bandSyncServiceProvider).syncSpo2Day(
           userId: _activeUserId!,
           deviceId: _activeDeviceId!,
           dayOffset: dayOffset,
@@ -868,7 +869,7 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
   Future<void> _getSpo2() async {
     if (!_requireSession()) return;
     _push('getSpO2History: requesting...');
-    final res = await ref.read(syncServiceProvider).syncSpo2(
+    final res = await ref.read(bandSyncServiceProvider).syncSpo2(
           userId: _activeUserId!,
           deviceId: _activeDeviceId!,
         );
@@ -891,7 +892,7 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
   Future<void> _getSleep() async {
     if (!_requireSession()) return;
     _push('getSleepHistory: requesting latest sleep session...');
-    final res = await ref.read(syncServiceProvider).syncSleep(
+    final res = await ref.read(bandSyncServiceProvider).syncSleep(
           userId: _activeUserId!,
           deviceId: _activeDeviceId!,
         );
@@ -1147,7 +1148,7 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
     final offsets = [for (var d = 0; d <= maxDayOffset; d++) d];
     _push('Sync All Sleep: pulling day offsets 0–$maxDayOffset '
         '(${offsets.length} BLE round-trips)...');
-    final results = await ref.read(syncServiceProvider).syncSleepRange(
+    final results = await ref.read(bandSyncServiceProvider).syncSleepRange(
           userId: _activeUserId!,
           deviceId: _activeDeviceId!,
           offsets: offsets,
@@ -1250,7 +1251,7 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
   Future<void> _getSteps() async {
     if (!_requireSession()) return;
     _push('getDailyTotals: requesting...');
-    final res = await ref.read(syncServiceProvider).syncSteps(
+    final res = await ref.read(bandSyncServiceProvider).syncSteps(
           userId: _activeUserId!,
         );
     if (!res.ok) {
@@ -1273,7 +1274,7 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
   Future<void> _getStepBuckets() async {
     if (!_requireSession()) return;
     _push('getStepBucketHistory: requesting (today)...');
-    final res = await ref.read(syncServiceProvider).syncStepBuckets(
+    final res = await ref.read(bandSyncServiceProvider).syncStepBuckets(
           userId: _activeUserId!,
           deviceId: _activeDeviceId!,
         );
@@ -1342,7 +1343,7 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
     final dayOffset = await _promptDayIndex(title: 'HRV Specific Day');
     if (dayOffset == null) return;
     _push('getHrvHistory: requesting (dayOffset=$dayOffset)...');
-    final res = await ref.read(syncServiceProvider).syncHrv(
+    final res = await ref.read(bandSyncServiceProvider).syncHrv(
           userId: _activeUserId!,
           deviceId: _activeDeviceId!,
           dayOffset: dayOffset,
@@ -1370,7 +1371,7 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
     final dayOffset = await _promptDayIndex(title: 'Stress Specific Day');
     if (dayOffset == null) return;
     _push('getStressDay: requesting (dayOffset=$dayOffset)...');
-    final res = await ref.read(syncServiceProvider).syncStress(
+    final res = await ref.read(bandSyncServiceProvider).syncStress(
           userId: _activeUserId!,
           deviceId: _activeDeviceId!,
           dayOffset: dayOffset,
@@ -1420,7 +1421,7 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
     if (dayOffset == null) return;
     final label = dayOffset == 0 ? 'today' : 'day-$dayOffset';
     _push('syncBp ($label): requesting + persisting...');
-    final res = await ref.read(syncServiceProvider).syncBp(
+    final res = await ref.read(bandSyncServiceProvider).syncBp(
           userId: _activeUserId!,
           deviceId: _activeDeviceId!,
           dayOffset: dayOffset,

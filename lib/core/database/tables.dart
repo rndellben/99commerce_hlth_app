@@ -441,7 +441,7 @@ class CloudSyncOutbox extends Table {
 /// on-device; we sync them down on session end and store indefinitely.
 ///
 /// Note: `sportType` is the raw SDK byte (4=Walking, 7=Running, 9=Cycling,
-/// etc. — see BleService.sportTypeX constants). Display label resolution
+/// etc. — see SportTypes constants (core/ble/ble_types.dart)). Display label resolution
 /// lives in the feature layer.
 class ExerciseSessions extends Table {
   TextColumn get id => text()(); // UUID v4
