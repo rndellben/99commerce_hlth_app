@@ -1,0 +1,9 @@
+https://m-path.io/manual/knowledge-base/wearables/
+https://github.com/jiayimaggieshao/wearable-ppg-dataset
+https://huggingface.co/datasets/snowballlab/Multisite-PPG
+https://www.physionet.org/about/database/#open
+https://physiozoo.com/
+https://github.com/SZTU-wearable/Tiny-PPG
+https://github.com/mintisan/awesome-ppg
+https://peterhcharlton.github.io/post/ppg_datasets/
+https://ppg-beats.readthedocs.io/en/latest/

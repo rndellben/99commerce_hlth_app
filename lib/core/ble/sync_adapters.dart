@@ -12,6 +12,7 @@ import 'package:hlth_app/core/models/daily_metrics.dart';
 import 'package:hlth_app/core/models/health_samples.dart';
 import 'package:hlth_app/core/models/sleep.dart';
 import 'package:hlth_app/core/models/step_bucket.dart';
+import 'package:hlth_app/core/processing/bp_formula.dart';
 import 'package:uuid/uuid.dart';
 
 const _uuid = Uuid();
@@ -112,6 +113,143 @@ List<Spo2Sample> spo2FromNative(
 /// H59 caveat: the band's BP is an HR-derived estimate; the cuff calibration
 /// applied downstream (`calibratedLatestBpProvider`) is what makes the
 /// displayed value meaningful. We still store the raw band pair here.
+/// BP **timing-monitor** — native shape from `getBpHistory`
+/// (`CMD_BP_TIMING_MONITOR_DATA`): `{year, month, day, timeDelay,
+/// readings:[{timeMinute, hr}]}`. The band auto-measures once an hour and
+/// buffers an HR value per hour, INCLUDING overnight — verified on-device
+/// 2026-07-21 (22 hourly readings for a full day incl. 02:00–05:00).
+///
+/// This is the resilient sleeping-BP source: it's pulled from the band's own
+/// buffer each morning (like HR/SpO2/HRV), so it does NOT depend on an
+/// on-demand measurement firing mid-sleep or on the background tick timing.
+/// H59 BP is an HR+age estimate regardless (even the manual "Measure Now"
+/// path), so we convert each hourly HR → sbp/dbp via [BpFormula] — the same
+/// `CalcBloodPressureByHeart` model the band uses — and store one reading per
+/// hour. Cuff calibration is intentionally NOT applied here (stored raw, like
+/// the manual band readings); the display layer calibrates.
+///
+/// Idempotent via a deterministic `bptiming:<deviceId>:<epochSec>` id, so
+/// re-pulling the day's buffer every sync overwrites rather than duplicates.
+///
+/// `date + timeMinute` is the band's LOCAL wall-clock (same convention as
+/// sleep). We build the local instant and convert to true UTC so it lands in
+/// the sleep window correctly — NOT the raw-epoch-as-UTC mistake sleep had.
+List<BpReading> bpTimingFromNative(
+  Map<String, dynamic> native, {
+  required String userId,
+  required String deviceId,
+  required int age,
+  int? tzOffsetMin,
+}) {
+  final tz = tzOffsetMin ?? _localTzOffsetMin();
+  final year = (native['year'] as num?)?.toInt() ?? 0;
+  final month = (native['month'] as num?)?.toInt() ?? 0;
+  final day = (native['day'] as num?)?.toInt() ?? 0;
+  final readings = (native['readings'] as List?) ?? const [];
+  if (year == 0 || month == 0 || day == 0) return const [];
+  final out = <BpReading>[];
+  for (final raw in readings) {
+    final m = Map<String, dynamic>.from(raw as Map);
+    final timeMinute = (m['timeMinute'] as num?)?.toInt() ?? -1;
+    final hr = (m['hr'] as num?)?.toInt() ?? 0;
+    if (timeMinute < 0 || hr <= 0) continue;
+    // Local wall-clock (band convention) → true UTC via the phone's zone.
+    final capturedAt =
+        DateTime(year, month, day).add(Duration(minutes: timeMinute)).toUtc();
+    final sbp = BpFormula.calSbp(hr, age);
+    final dbp = BpFormula.calDbp(sbp);
+    final epochSec = capturedAt.millisecondsSinceEpoch ~/ 1000;
+    out.add(BpReading(
+      id: 'bptiming:$deviceId:$epochSec',
+      userId: userId,
+      deviceId: deviceId,
+      capturedAt: capturedAt,
+      tzOffsetMin: tz,
+      systolicMmhg: sbp,
+      diastolicMmhg: dbp,
+      // Keep the source HR so cuff calibration (HR-coupled) can recompute the
+      // displayed value the same way the headline does.
+      pulseBpm: hr,
+      derivation: BpDerivation.bandSensor,
+      source: DataSource.bandScheduled,
+      algorithmVersion: _algoVersion,
+    ));
+  }
+  return out;
+}
+
+/// Derive TODAY's hourly BP from live HR samples.
+///
+/// On H59 the autonomous BP buffer (`CMD_BP_TIMING_MONITOR_DATA`, see
+/// [bpTimingFromNative]) only ever serves the last *completed* calendar day —
+/// today's in-progress hours never appear until midnight rollover (verified
+/// on-device 2026-07-21: a 19:28 sync still returned 07-20's finished day). But
+/// H59 BP is just `BpFormula(hr, age)`, and HR history IS live (synced hourly
+/// like SpO2/HRV). So we reconstruct today's hourly BP straight from today's
+/// HR — giving BP the same freshness as every other metric.
+///
+/// One reading per LOCAL time-slot (median HR in the slot), stamped at the slot
+/// boundary with the SAME `bptiming:<device>:<epoch>` id/source as the buffer
+/// path — so when the band's buffer catches up tomorrow it upserts the aligned
+/// rows (identical value, no duplicates) rather than doubling them.
+///
+/// [slotMinutes] is the cadence of the derived points (default 60 = hourly).
+/// Set it to 30 to derive a reading every half-hour; the on-the-hour points
+/// still align with the band's hourly buffer, the extra :30 points are net-new.
+List<BpReading> bpHourlyFromHrSamples(
+  List<HrSample> samples, {
+  required String userId,
+  required String deviceId,
+  required int age,
+  int? tzOffsetMin,
+  int slotMinutes = 60,
+}) {
+  if (samples.isEmpty) return const [];
+  final tz = tzOffsetMin ?? _localTzOffsetMin();
+  final tzMs = tz * 60 * 1000;
+  final slotMs = slotMinutes * 60 * 1000;
+  // Bucket HR bpm by the local-clock slot it falls in.
+  final buckets = <int, List<int>>{};
+  for (final s in samples) {
+    if (s.bpm <= 0) continue;
+    final localMs = s.capturedAt.millisecondsSinceEpoch + tzMs;
+    final slotStartLocalMs = (localMs ~/ slotMs) * slotMs;
+    (buckets[slotStartLocalMs] ??= <int>[]).add(s.bpm);
+  }
+  final out = <BpReading>[];
+  final slots = buckets.keys.toList()..sort();
+  for (final slotStartLocalMs in slots) {
+    final hr = _medianInt(buckets[slotStartLocalMs]!);
+    if (hr <= 0) continue;
+    // Local slot boundary → true UTC (mirrors bpTimingFromNative's toUtc()).
+    final capturedAt = _utcFromMs(slotStartLocalMs - tzMs);
+    final sbp = BpFormula.calSbp(hr, age);
+    final dbp = BpFormula.calDbp(sbp);
+    final epochSec = capturedAt.millisecondsSinceEpoch ~/ 1000;
+    out.add(BpReading(
+      id: 'bptiming:$deviceId:$epochSec',
+      userId: userId,
+      deviceId: deviceId,
+      capturedAt: capturedAt,
+      tzOffsetMin: tz,
+      systolicMmhg: sbp,
+      diastolicMmhg: dbp,
+      pulseBpm: hr,
+      derivation: BpDerivation.bandSensor,
+      source: DataSource.bandScheduled,
+      algorithmVersion: _algoVersion,
+    ));
+  }
+  return out;
+}
+
+int _medianInt(List<int> xs) {
+  if (xs.isEmpty) return 0;
+  final s = [...xs]..sort();
+  final mid = s.length ~/ 2;
+  return s.length.isOdd ? s[mid] : ((s[mid - 1] + s[mid]) ~/ 2);
+}
+
 List<BpReading> bpFromNative(
   Map<String, dynamic> native, {
   required String userId,
@@ -366,8 +504,21 @@ DailyMetrics? dailyStepsFromNative(
   final wakeSec = (native['wakeTime'] as num?)?.toInt() ?? 0;
   if (sleepSec == 0 || wakeSec == 0) return null;
 
-  final startedAt = _utcFromMs(sleepSec * 1000);
-  final endedAt = _utcFromMs(wakeSec * 1000);
+  // TZ frame fix (2026-07-21): the band encodes sleepTime/wakeTime as LOCAL
+  // wall-clock stuffed into a unix field — the SAME encoding the SpO2/stress
+  // day adapters already back out (`unixTime - tz*60`), and which the HRV/
+  // stress `zeroTime` anchor resolves to true-UTC local midnight. Sleep alone
+  // used to store the raw value AS-IS, leaving the session window tz-shifted
+  // (+8h in Asia/Manila — verified via logcat: sleepTime=1784581440 rendered
+  // as a bogus 05:04 bedtime; HRV zeroTimeMs=1784563200 = true-UTC local
+  // midnight). That shift made the Sleep screen's "Measured during sleep"
+  // query a window that never overlapped the correctly-placed SpO2/HRV
+  // samples, so those tiles read `--` even though the raw samples existed.
+  // Back the tz out here so the window is true-UTC and aligns with every
+  // other metric.
+  final tzSec = tz * 60;
+  final startedAt = _utcFromMs((sleepSec - tzSec) * 1000);
+  final endedAt = _utcFromMs((wakeSec - tzSec) * 1000);
 
   int secToMin(num? v) => ((v ?? 0).toInt() / 60).round();
   final totalMin = secToMin(native['totalSleepDuration']);
@@ -376,14 +527,20 @@ DailyMetrics? dailyStepsFromNative(
   final remMin = secToMin(native['rapidDuration']);
   final awakeMin = secToMin(native['awakeDuration']);
 
-  // Deterministic id keyed on the band's sleep-start epoch so the SAME night
-  // upserts in place instead of inserting a fresh row on every sync. "Sync All
-  // Sleep" pulls 8 day-offsets that can return the same night, and each
-  // periodic sync re-pulls it — with a uuid.v4() id createSession's
-  // upsert-by-id never collided, which is what bloated the table (observed: 64
-  // rows for ~6 nights). Mirrors the BP sync's `bpsync:<deviceId>:<epochSec>`
-  // idempotency pattern. NOTE: `startedAt.toUtc().seconds == sleepSec`, which
-  // the v11 dedup migration relies on to reconstruct this id.
+  // Deterministic id keyed on the band's RAW sleep-start epoch (pre-tz-shift)
+  // so the SAME night upserts in place instead of inserting a fresh row on
+  // every sync. "Sync All Sleep" pulls 8 day-offsets that can return the same
+  // night, and each periodic sync re-pulls it — with a uuid.v4() id
+  // createSession's upsert-by-id never collided, which is what bloated the
+  // table (observed: 64 rows for ~6 nights). Mirrors the BP sync's
+  // `bpsync:<deviceId>:<epochSec>` idempotency pattern. NOTE: since the
+  // 2026-07-21 tz fix, `started_at_utc == sleepSec - tz*60`, so the id
+  // intentionally NO LONGER equals `sleepsync:<device>:<started_at_utc>`.
+  // Keeping the id on the raw band `sleepSec` is deliberate: it stays stable
+  // across the fix, so re-syncing the last ~7 days (band retention) upserts in
+  // place and HEALS the previously tz-shifted timestamps. The historical v11
+  // dedup migration assumed id==started_at_utc; it ran once and is unaffected.
+  // Do NOT reconstruct sleepSec from started_at_utc going forward.
   final sessionId = 'sleepsync:$deviceId:$sleepSec';
   final epochs = <SleepEpoch>[];
   // Accumulators used to derive session-level fields the schema reserves
@@ -399,10 +556,14 @@ DailyMetrics? dailyStepsFromNative(
     final end = (m['sleepEnd'] as num?)?.toInt() ?? 0;
     final type = (m['type'] as num?)?.toInt() ?? 0;
     if (start <= 0 || end <= start) continue;
-    // Auto-detect ms vs sec by magnitude.
+    // Auto-detect ms vs sec by magnitude, then back out the SAME tz shift as
+    // the session bounds above so epochs stay in the session's (true-UTC)
+    // frame. If only the session were shifted, each epoch would sit tz*60 off
+    // its true position and the hypnogram would render skewed against the
+    // bedtime~wake header.
     final inMs = start > 1e12;
-    final startMs = inMs ? start : start * 1000;
-    final endMs = inMs ? end : end * 1000;
+    final startMs = (inMs ? start : start * 1000) - tzSec * 1000;
+    final endMs = (inMs ? end : end * 1000) - tzSec * 1000;
     final durMin = ((endMs - startMs) / 60000).round();
     if (durMin <= 0) continue;
     final stage = _sleepStage(type);

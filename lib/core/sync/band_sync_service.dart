@@ -8,7 +8,10 @@ import 'package:hlth_app/core/repositories/hrv_repository.dart';
 import 'package:hlth_app/core/repositories/sleep_repository.dart';
 import 'package:hlth_app/core/repositories/spo2_repository.dart';
 import 'package:hlth_app/core/repositories/step_bucket_repository.dart';
+import 'package:hlth_app/core/repositories/user_repository.dart';
+import 'package:hlth_app/core/processing/bp_formula.dart';
 import 'package:hlth_app/core/repositories/stress_repository.dart';
+import 'package:hlth_app/core/services/breadcrumbs.dart';
 import 'package:hlth_app/core/services/cloud_sync_service.dart';
 import 'package:hlth_app/core/services/daily_aggregator.dart';
 import 'package:hlth_app/core/sync/score_refresh_service.dart';
@@ -38,6 +41,7 @@ class BandSyncService {
     required this.aggregator,
     required this.scoreRefresh,
     required this.cloudSync,
+    required this.userRepo,
   });
 
   final BleService ble;
@@ -52,6 +56,7 @@ class BandSyncService {
   final DailyAggregator aggregator;
   final ScoreRefreshService scoreRefresh;
   final CloudSyncService cloudSync;
+  final UserRepository userRepo;
 
   /// Shared frame for every per-metric step: run the fetch→adapt→persist
   /// body, and convert any throw into a failed `SyncStepResult` so one
@@ -103,29 +108,41 @@ class BandSyncService {
     steps.add(await syncHrv(userId: userId, deviceId: deviceId, dayOffset: 2));
     steps.add(await syncStress(userId: userId, deviceId: deviceId, dayOffset: 0));
     steps.add(await syncStress(userId: userId, deviceId: deviceId, dayOffset: 1));
-    // NOTE: BP history is intentionally NOT pulled here. On H59 the SDK's
-    // per-day BP API (`getBpDay` → BleOperateManager.getBloodPressure) just
-    // times out (-4001, ~15s) — the firmware has no retrievable stored-BP
-    // history (the only other path, getBpHistory, returns hourly HR, not BP).
-    // Calling it on every tick would add ~30s of dead wait per sync. The
-    // only real BP on H59 is on-demand `startBpMeasurement` ("Measure Now"),
-    // which the BP screen persists directly. `syncBp` stays available for the
-    // debug screen + future firmware/hardware that supports the day API.
+    // BP (two sources, both hourly, HR-derived — see syncBpTiming):
+    //   1. the band's autonomous buffer, which only serves the last COMPLETED
+    //      day on H59 (backfills yesterday + earlier), and
+    //   2. TODAY's hours reconstructed from today's live HR (step above), so
+    //      the headline reads "an hour ago" like SpO2/HRV instead of lagging a
+    //      full day behind the buffer.
+    // Must run AFTER syncHr so today's HR is in the DB. The per-DAY API
+    // `syncBp`/`getBpDay` (BleOperateManager.getBloodPressure) is deliberately
+    // NOT called — it times out (-4001, ~15s) on H59. On-demand
+    // `startBpMeasurement` ("Measure Now") remains for instant readings.
+    steps.add(await syncBpTiming(userId: userId, deviceId: deviceId));
 
     var aggregated = false;
     try {
       await aggregator.aggregateRecent(userId: userId);
       aggregated = true;
-    } catch (_) {
-      // Aggregation failures are logged as a non-fatal step result
-      // rather than thrown; the next run will retry.
+    } catch (e) {
+      // Non-fatal; the next run retries. But it MUST be logged — a silent
+      // catch here hid a real freeze (2026-07-22: rollups + scores stopped
+      // updating at 06:32 while data kept syncing, so today's sleep never
+      // merged and Recovery/morning-report never materialized). A breadcrumb
+      // makes the next occurrence diagnosable instead of invisible.
+      Breadcrumbs.log('aggregate: FAILED — $e');
     }
 
     // Refresh the derived scores (Recovery / Cardio Load / VO2 Max) off the
     // freshly-aggregated rollup. Each recompute is non-fatal inside the
     // service; see ScoreRefreshService for the backfill-window rationale.
+    // Guarded + logged for the same reason as aggregation above.
     if (aggregated) {
-      await scoreRefresh.refreshAfterAggregation(userId: userId);
+      try {
+        await scoreRefresh.refreshAfterAggregation(userId: userId);
+      } catch (e) {
+        Breadcrumbs.log('scoreRefresh: FAILED — $e');
+      }
     }
 
     // Enqueue recent metrics for cloud sync (non-fatal).
@@ -425,6 +442,95 @@ class BandSyncService {
       );
     });
   }
+
+  /// Pull the band's autonomous hourly BP buffer (`CMD_BP_TIMING_MONITOR_DATA`
+  /// via `getBpHistory`) and persist one BP reading per hour. Unlike
+  /// [syncBp] (`getBpDay`, which times out `-4001` on H59), this path WORKS —
+  /// the band records HR hourly all day incl. overnight and returns it in one
+  /// pull, so sleeping BP no longer depends on an on-demand measurement firing
+  /// mid-sleep. HR→BP conversion happens in `bpTimingFromNative` using the
+  /// user's age (H59 BP is an HR+age estimate regardless). Idempotent via the
+  /// adapter's deterministic id, so re-pulling the day's buffer upserts.
+  Future<SyncStepResult> syncBpTiming({
+    required String userId,
+    required String deviceId,
+  }) {
+    return _guarded('bpTiming', () async {
+      final profile = await userRepo.getProfile(userId);
+      final dob = profile?.dateOfBirth;
+      final age = dob == null ? BpFormula.ageDefault : _ageFrom(dob);
+      // (1) Band's autonomous BP buffer — this serves the last COMPLETED
+      // calendar day only (H59 never exposes today's in-progress hours here;
+      // verified 2026-07-21). So it backfills yesterday + earlier.
+      //
+      // Wrapped in its OWN try/catch: `getBpHistory` can time out (-4001), and
+      // it must NOT take down step (2) below, which needs no band call at all.
+      // Before this decoupling a buffer timeout skipped the whole step, so a
+      // sync would refresh HR but leave BP stale (observed 2026-07-21: HR
+      // synced at 22:06 but BP frozen at the 20:11 run).
+      Map<String, dynamic> r = const {};
+      var bufferedCount = 0;
+      try {
+        r = await ble.getBpHistory();
+        final buffered = adapters.bpTimingFromNative(
+          r,
+          userId: userId,
+          deviceId: deviceId,
+          age: age,
+        );
+        if (buffered.isNotEmpty) {
+          await bpRepo.insertMany(buffered);
+          bufferedCount = buffered.length;
+        }
+      } catch (_) {
+        // Buffer (completed-day) pull failed — non-fatal; step (2) still runs.
+      }
+
+      // (2) TODAY's hourly BP, derived from today's live HR (synced in the
+      // step just before this one). H59 BP == BpFormula(hr, age), and HR
+      // history IS current — so this gives BP the same freshness as SpO2/HRV
+      // instead of waiting a full day for the buffer. Same id scheme as (1),
+      // so tomorrow's buffer upserts these rows rather than duplicating them.
+      final now = DateTime.now();
+      final dayStartUtc =
+          DateTime(now.year, now.month, now.day).toUtc();
+      final todayHr = await hrRepo.getInRange(
+        userId: userId,
+        from: dayStartUtc,
+        to: now.toUtc(),
+        deviceId: deviceId,
+      );
+      final derived = adapters.bpHourlyFromHrSamples(
+        todayHr,
+        userId: userId,
+        deviceId: deviceId,
+        age: age,
+        // TEST (2026-07-21): 30-min cadence to match the band's 30-min BP
+        // schedule. Revert to 60 (or drop the arg) to go back to hourly.
+        slotMinutes: kBpSlotMinutes,
+      );
+      if (derived.isNotEmpty) {
+        await bpRepo.insertMany(derived);
+      }
+
+      return SyncStepResult(
+        metric: 'bpTiming',
+        count: bufferedCount + derived.length,
+        rawMap: r,
+      );
+    });
+  }
+
+  /// Whole years elapsed since [dob] (band/formula want an integer age).
+  int _ageFrom(DateTime dob) {
+    final now = DateTime.now();
+    var age = now.year - dob.year;
+    if (now.month < dob.month ||
+        (now.month == dob.month && now.day < dob.day)) {
+      age--;
+    }
+    return age < 0 ? BpFormula.ageDefault : age;
+  }
 }
 
 final bandSyncServiceProvider = Provider<BandSyncService>((ref) {
@@ -441,5 +547,6 @@ final bandSyncServiceProvider = Provider<BandSyncService>((ref) {
     aggregator: ref.watch(dailyAggregatorProvider),
     scoreRefresh: ref.watch(scoreRefreshServiceProvider),
     cloudSync: ref.watch(cloudSyncServiceProvider),
+    userRepo: ref.watch(userRepositoryProvider),
   );
 });

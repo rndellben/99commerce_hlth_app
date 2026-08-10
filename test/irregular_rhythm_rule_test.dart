@@ -11,7 +11,7 @@ void main() {
 
   // Days are offsets back from `now`. cov/ectopic null = a day with no
   // rhythm assessment (capture didn't pass the gate).
-  DailyMetrics dm(int daysAgo, {double? cov, double? ectopic}) {
+  DailyMetrics dm(int daysAgo, {double? cov, double? ectopic, double? entropy}) {
     final date = DateTime(2026, 6, 22).subtract(Duration(days: daysAgo));
     return DailyMetrics(
       id: 'd$daysAgo',
@@ -20,6 +20,7 @@ void main() {
       tzOffsetMin: 0,
       rrIrregularityPct: cov,
       ectopicBeatPct: ectopic,
+      rrEntropyNorm: entropy,
       computedAt: now,
       algorithmVersion: 'test',
       source: DataSource.appRecomputed,
@@ -91,6 +92,46 @@ void main() {
       dm(1, cov: 7, ectopic: 9), // recent, normal
     ]);
     expect(c, isNull);
+  });
+
+  test('high entropy corroborates — the three-axis pattern fires', () async {
+    final c = await run([
+      dm(0, cov: 25, ectopic: 35, entropy: 0.85),
+      dm(1, cov: 22, ectopic: 32, entropy: 0.78),
+      dm(2, cov: 28, ectopic: 40, entropy: 0.9),
+      dm(5, cov: 8, ectopic: 10, entropy: 0.3),
+      dm(7, cov: 7, ectopic: 9, entropy: 0.28),
+    ]);
+    expect(c, isNotNull);
+    expect(c!.payload!['flaggedDays'], 3);
+    expect(c.payload!['entropyCorroborated'], isTrue);
+  });
+
+  test('low entropy vetoes — high CoV+ectopic but ordered timing → silent',
+      () async {
+    // All three days have elevated CoV and ectopic%, but their R-R histograms
+    // are tightly ordered (low entropy) — not the disordered AFib signature.
+    final c = await run([
+      dm(0, cov: 25, ectopic: 35, entropy: 0.4),
+      dm(1, cov: 22, ectopic: 32, entropy: 0.35),
+      dm(2, cov: 28, ectopic: 40, entropy: 0.45),
+      dm(4, cov: 24, ectopic: 33, entropy: 0.38),
+      dm(6, cov: 26, ectopic: 34, entropy: 0.42),
+    ]);
+    expect(c, isNull);
+  });
+
+  test('absent entropy (pre-v13 rows) still evaluates on the original axes',
+      () async {
+    final c = await run([
+      dm(0, cov: 25, ectopic: 35), // entropy null
+      dm(1, cov: 22, ectopic: 32),
+      dm(2, cov: 28, ectopic: 40),
+      dm(5, cov: 8, ectopic: 10),
+      dm(7, cov: 7, ectopic: 9),
+    ]);
+    expect(c, isNotNull);
+    expect(c!.payload!['entropyCorroborated'], isFalse);
   });
 }
 

@@ -287,6 +287,7 @@ class ScheduledPpgCaptureService {
       rrIrregularityPct:
           result.rrIrregularityPct ?? existing?.rrIrregularityPct,
       ectopicBeatPct: result.ectopicBeatPct ?? existing?.ectopicBeatPct,
+      rrEntropyNorm: result.rrEntropyNorm ?? existing?.rrEntropyNorm,
       computedAt: nowUtc,
     );
     await dailyRepo.upsert(merged);

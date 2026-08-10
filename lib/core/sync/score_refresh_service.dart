@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hlth_app/core/services/cardio_load_service.dart';
+import 'package:hlth_app/core/services/mental_wellness_service.dart';
 import 'package:hlth_app/core/services/recovery_score_service.dart';
 import 'package:hlth_app/core/services/vo2max_service.dart';
 
@@ -15,11 +16,13 @@ class ScoreRefreshService {
     required this.recoveryScore,
     required this.cardioLoad,
     required this.vo2Max,
+    required this.mentalWellness,
   });
 
   final RecoveryScoreService recoveryScore;
   final CardioLoadService cardioLoad;
   final Vo2MaxService vo2Max;
+  final MentalWellnessService mentalWellness;
 
   /// How many days back to recompute Recovery / Cardio Load each sync so scores
   /// "settle" once the H59 releases a night's HRV (which it only does the next
@@ -72,6 +75,17 @@ class ScoreRefreshService {
     try {
       await vo2Max.computeForDay(userId: userId, localDate: DateTime.now());
     } catch (_) {}
+
+    // Mental Wellness reads the same trailing rollups; recompute the trailing
+    // days (oldest → newest) so a day's score settles once its HRV backfills.
+    for (var d = _scoreBackfillDays; d >= 0; d--) {
+      try {
+        await mentalWellness.computeForDay(
+          userId: userId,
+          localDate: today.subtract(Duration(days: d)),
+        );
+      } catch (_) {}
+    }
   }
 }
 
@@ -80,5 +94,6 @@ final scoreRefreshServiceProvider = Provider<ScoreRefreshService>((ref) {
     recoveryScore: ref.watch(recoveryScoreServiceProvider),
     cardioLoad: ref.watch(cardioLoadServiceProvider),
     vo2Max: ref.watch(vo2MaxServiceProvider),
+    mentalWellness: ref.watch(mentalWellnessServiceProvider),
   );
 });

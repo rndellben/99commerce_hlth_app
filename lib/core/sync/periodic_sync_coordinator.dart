@@ -152,9 +152,36 @@ class PeriodicSyncCoordinator {
       // the band is past its (sometimes ~1 min) bind/time-set handshake and
       // responsive. Idempotent + self-healing on every connect edge.
       try {
-        await ble.setScheduledMonitoring();
+        // BP interval driven by the shared test knob (kBpSlotMinutes) so the
+        // band's schedule matches the today-from-HR derivation cadence.
+        await ble.setScheduledMonitoring(bpIntervalMinutes: kBpSlotMinutes);
       } catch (_) {}
     });
+  }
+
+  /// Runs [op] with a hard [limit] so a stalled BLE call can never hang the
+  /// tick. The active-measurement steps (`startBpMeasurement`,
+  /// `startMeasureHrRaw`, history pulls) complete via a native callback that
+  /// simply never arrives if the link drops mid-op — without a ceiling that
+  /// await hangs forever, `_onTick` never reaches its `finally`, `_inFlight`
+  /// latches `true`, and EVERY later tick is silently dropped (root cause of
+  /// overnight sync dying after one bad capture on a flaky link). On timeout
+  /// or error we crumb and move on — the next tick retries.
+  Future<T?> _bounded<T>(
+    String label,
+    Duration limit,
+    Future<T> Function() op,
+  ) async {
+    try {
+      return await op().timeout(limit);
+    } on TimeoutException {
+      Breadcrumbs.log('tick: $label timed out after ${limit.inSeconds}s — '
+          'skipped (link likely stalled mid-op)');
+      return null;
+    } catch (e) {
+      Breadcrumbs.log('tick: $label errored ($e)');
+      return null;
+    }
   }
 
   Future<void> _onTick() async {
@@ -180,7 +207,10 @@ class PeriodicSyncCoordinator {
       // avoids a burst of guaranteed-failure steps against a dead link.
       if (ble.currentConnectionState != BleConnectionState.connected) {
         Breadcrumbs.log('tick: band disconnected — attempting reconnect');
-        await reconnector.tryNow();
+        await _bounded('reconnect', const Duration(seconds: 45), () async {
+          await reconnector.tryNow();
+          return true;
+        });
         // Alert rules read only the local DB — a dropped BLE link must not
         // silence them (2026-07-14: the bedtime/morning reminders live in
         // exactly the hours overnight drops happen, and this early return
@@ -194,7 +224,9 @@ class PeriodicSyncCoordinator {
         } catch (_) {}
         return;
       }
-      final result = await _runSyncWithRetention(device.id);
+      final result = await _bounded('syncAll', const Duration(minutes: 3),
+          () => _runSyncWithRetention(device.id));
+      if (result == null) return; // stalled/errored — _inFlight resets, retry next tick
       _runs.add(result);
       Breadcrumbs.log('tick: synced ${result.totalSamples} samples, '
           '${result.failed.length} step errors');
@@ -234,19 +266,19 @@ class PeriodicSyncCoordinator {
       // HLT-5: run the background fall sweep once data sync is done.
       // Sequenced after sync so we never have two `startMeasureHrRaw`
       // sessions racing for the same BLE link.
-      final fallResult = await fallSweep.run();
-      _fallSweeps.add(fallResult);
+      final fallResult = await _bounded(
+          'fallSweep', const Duration(seconds: 90), () => fallSweep.run());
+      if (fallResult != null) _fallSweeps.add(fallResult);
       // Step 3: once-a-day PPG capture for resting respiratory + HRV.
       // Sequenced last (after the fall sweep's raw window) so the two raw
       // captures never overlap. Daily-gated internally + non-fatal. The
       // asleep verdict bypasses the awake rest gate — sleep IS rest, and the
       // strongest RSA (respiratory) signal of the day.
-      try {
-        await scheduledPpgCapture.maybeRunDaily(
-          userId: ActiveSession.defaultUserId,
-          asleep: asleep,
-        );
-      } catch (_) {}
+      await _bounded('ppgCapture', const Duration(seconds: 120),
+          () => scheduledPpgCapture.maybeRunDaily(
+                userId: ActiveSession.defaultUserId,
+                asleep: asleep,
+              ));
       // Nightly resting BP: H59 has no retrievable scheduled-BP history, so
       // we fire our own on-demand measurement once per HOUR of sleep (Ryan
       // 2026-06-23: hourly BP cadence; sleep screen shows the sleep-window
@@ -254,12 +286,11 @@ class PeriodicSyncCoordinator {
       // ticks used to burn the attempt cap on motion readings).
       // Sequenced last (after the raw-PPG captures) so the band-side active
       // measurements never overlap. Gated + non-fatal.
-      try {
-        await nightlyBpCapture.maybeRunNightly(
-          userId: ActiveSession.defaultUserId,
-          asleep: asleep,
-        );
-      } catch (_) {}
+      await _bounded('nightlyBp', const Duration(seconds: 120),
+          () => nightlyBpCapture.maybeRunNightly(
+                userId: ActiveSession.defaultUserId,
+                asleep: asleep,
+              ));
     } finally {
       _inFlight = false;
     }

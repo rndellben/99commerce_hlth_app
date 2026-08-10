@@ -7,6 +7,7 @@ import 'package:hlth_app/core/models/score.dart';
 import 'package:hlth_app/core/models/sleep.dart';
 import 'package:hlth_app/core/repositories/bp_calibration_repository.dart';
 import 'package:hlth_app/core/repositories/daily_metrics_repository.dart';
+import 'package:hlth_app/core/repositories/hr_repository.dart';
 import 'package:hlth_app/core/repositories/score_repository.dart';
 import 'package:hlth_app/core/repositories/sleep_repository.dart';
 import 'package:hlth_app/core/repositories/spo2_repository.dart';
@@ -152,13 +153,45 @@ void main() {
           source: DataSource.bandScheduled,
         );
 
+    // A prior night, [days] days before wake, reusing the same relative
+    // SpO2 shape so the fake repo (which returns one sample set for any
+    // range) treats every returned night as disrupted.
+    SleepSession priorNight(int days) => SleepSession(
+          id: 's-$days',
+          userId: userId,
+          deviceId: 'd',
+          startedAt: bed.subtract(Duration(days: days)),
+          endedAt: wake.subtract(Duration(days: days)),
+          tzOffsetMin: 480,
+          type: SleepSessionType.night,
+          protocolVersion: 2,
+          totalMin: 480,
+          deepMin: 100,
+          source: DataSource.bandScheduled,
+        );
+
+    HrSample hr(int hour, int bpm) => HrSample(
+          id: 'h$hour',
+          userId: userId,
+          deviceId: 'd',
+          capturedAt: bed.add(Duration(minutes: hour * 10)),
+          tzOffsetMin: 480,
+          bpm: bpm,
+          intervalMin: 10,
+          isResting: false,
+          source: DataSource.bandScheduled,
+        );
+
     BreathingDisruptionRule rule({
       SleepSession? session,
+      List<SleepSession> recentNights = const [],
       List<Spo2Sample> spo2 = const [],
+      List<HrSample> hrSamples = const [],
     }) =>
         BreathingDisruptionRule(
-          sleepRepo: _FakeSleepRepo(session),
+          sleepRepo: _FakeSleepRepo(session, recentNights),
           spo2Repo: _FakeSpo2Repo(spo2),
+          hrRepo: _FakeHrRepo(hrSamples),
         );
 
     AlertContext ctx({DateTime? now}) =>
@@ -176,9 +209,52 @@ void main() {
       expect(r.minPct, 88);
     });
 
+    test('detect() severity escalates with depth', () {
+      expect(
+        BreathingDisruptionRule.detect(
+            [bucket(1, 89), bucket(2, 88)]).severity,
+        BreathingSeverity.mild,
+      );
+      expect(
+        BreathingDisruptionRule.detect(
+            [bucket(1, 84), bucket(2, 83)]).severity,
+        BreathingSeverity.moderate,
+      );
+      expect(
+        BreathingDisruptionRule.detect(
+            [bucket(1, 78), bucket(2, 88)]).severity,
+        BreathingSeverity.marked, // one deep dip drives the band up
+      );
+    });
+
+    test('detect() counts HR bradycardia-tachycardia swings', () {
+      // Oscillating 60↔80 every sample → each middle sample is a peak/trough
+      // with amplitude 20 ≥ 8bpm threshold.
+      final osc = [
+        for (var i = 0; i < 8; i++) hr(i, i.isEven ? 60 : 80),
+      ];
+      final r = BreathingDisruptionRule.detect(
+        [bucket(0, 96), bucket(1, 88), bucket(2, 87), bucket(3, 95)],
+        hrSamples: osc,
+      );
+      expect(r.hrCyclingSwings, greaterThanOrEqualTo(3));
+      expect(r.corroborated, isTrue);
+    });
+
+    test('detect() flat HR → no swings, not corroborated', () {
+      final flat = [for (var i = 0; i < 8; i++) hr(i, 62)];
+      final r = BreathingDisruptionRule.detect(
+        [bucket(1, 88), bucket(2, 87)],
+        hrSamples: flat,
+      );
+      expect(r.hrCyclingSwings, 0);
+      expect(r.corroborated, isFalse);
+    });
+
     test('stale night (>24h old) → null', () async {
       final r = rule(
         session: night(),
+        recentNights: [night(), priorNight(1)],
         spo2: [for (var h = 0; h < 6; h++) bucket(h, 88)],
       );
       final c = await r.evaluate(
@@ -194,14 +270,32 @@ void main() {
     test('a single low hour never fires', () async {
       final r = rule(
         session: night(),
+        recentNights: [night(), priorNight(1)],
         spo2: [bucket(0, 97), bucket(1, 96), bucket(2, 89), bucket(3, 97)],
       );
       expect(await r.evaluate(ctx()), isNull);
     });
 
-    test('fires on ≥2 low hours with coverage', () async {
+    test('one disrupted night alone does NOT fire (needs a pattern)',
+        () async {
       final r = rule(
         session: night(),
+        recentNights: [night()], // only tonight flags
+        spo2: [
+          bucket(0, 97),
+          bucket(1, 89),
+          bucket(2, 96),
+          bucket(3, 87),
+          bucket(4, 98),
+        ],
+      );
+      expect(await r.evaluate(ctx()), isNull);
+    });
+
+    test('fires when ≥2 of the recent nights are disrupted', () async {
+      final r = rule(
+        session: night(),
+        recentNights: [night(), priorNight(1), priorNight(2)],
         spo2: [
           bucket(0, 97),
           bucket(1, 89),
@@ -214,7 +308,10 @@ void main() {
       expect(c, isNotNull);
       expect(c!.payload!['lowBuckets'], 2);
       expect(c.payload!['minPct'], 87);
+      expect(c.payload!['disruptedNights'], 3);
+      expect(c.payload!['severity'], isNotNull);
       expect(c.title.toLowerCase(), isNot(contains('apnea'))); // regulatory
+      expect(c.body.toLowerCase(), isNot(contains('apnea')));
     });
   });
 
@@ -327,11 +424,36 @@ class _FakeCalRepo extends _Fake implements BpCalibrationRepository {
 }
 
 class _FakeSleepRepo extends _Fake implements SleepRepository {
-  _FakeSleepRepo(this._night);
+  _FakeSleepRepo(this._night, [this._recent = const []]);
   final SleepSession? _night;
+  final List<SleepSession> _recent;
 
   @override
   Future<SleepSession?> getMostRecentNightFor(String userId) async => _night;
+
+  @override
+  Future<List<SleepSession>> getInRange({
+    required String userId,
+    required DateTime from,
+    required DateTime to,
+    SleepSessionType? type,
+  }) async =>
+      _recent;
+}
+
+class _FakeHrRepo extends _Fake implements HrRepository {
+  _FakeHrRepo([this._samples = const []]);
+  final List<HrSample> _samples;
+
+  @override
+  Future<List<HrSample>> getInRange({
+    required String userId,
+    required DateTime from,
+    required DateTime to,
+    String? deviceId,
+    int? limit,
+  }) async =>
+      _samples;
 }
 
 class _FakeSpo2Repo extends _Fake implements Spo2Repository {

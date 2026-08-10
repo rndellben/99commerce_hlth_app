@@ -27,7 +27,8 @@ mixin _$DailyMetrics {
   double? get restingRespRateBpm =>
       throw _privateConstructorUsedError; // Rhythm — irregular-heartbeat screen
   double? get rrIrregularityPct => throw _privateConstructorUsedError;
-  double? get ectopicBeatPct => throw _privateConstructorUsedError; // SpO2
+  double? get ectopicBeatPct => throw _privateConstructorUsedError;
+  double? get rrEntropyNorm => throw _privateConstructorUsedError; // SpO2
   double? get spo2OvernightAvg => throw _privateConstructorUsedError;
   int? get spo2OvernightMin => throw _privateConstructorUsedError; // BP
   int? get systolicMmhg => throw _privateConstructorUsedError;
@@ -81,6 +82,7 @@ abstract class $DailyMetricsCopyWith<$Res> {
     double? restingRespRateBpm,
     double? rrIrregularityPct,
     double? ectopicBeatPct,
+    double? rrEntropyNorm,
     double? spo2OvernightAvg,
     int? spo2OvernightMin,
     int? systolicMmhg,
@@ -134,6 +136,7 @@ class _$DailyMetricsCopyWithImpl<$Res, $Val extends DailyMetrics>
     Object? restingRespRateBpm = freezed,
     Object? rrIrregularityPct = freezed,
     Object? ectopicBeatPct = freezed,
+    Object? rrEntropyNorm = freezed,
     Object? spo2OvernightAvg = freezed,
     Object? spo2OvernightMin = freezed,
     Object? systolicMmhg = freezed,
@@ -201,6 +204,10 @@ class _$DailyMetricsCopyWithImpl<$Res, $Val extends DailyMetrics>
             ectopicBeatPct: freezed == ectopicBeatPct
                 ? _value.ectopicBeatPct
                 : ectopicBeatPct // ignore: cast_nullable_to_non_nullable
+                      as double?,
+            rrEntropyNorm: freezed == rrEntropyNorm
+                ? _value.rrEntropyNorm
+                : rrEntropyNorm // ignore: cast_nullable_to_non_nullable
                       as double?,
             spo2OvernightAvg: freezed == spo2OvernightAvg
                 ? _value.spo2OvernightAvg
@@ -328,6 +335,7 @@ abstract class _$$DailyMetricsImplCopyWith<$Res>
     double? restingRespRateBpm,
     double? rrIrregularityPct,
     double? ectopicBeatPct,
+    double? rrEntropyNorm,
     double? spo2OvernightAvg,
     int? spo2OvernightMin,
     int? systolicMmhg,
@@ -380,6 +388,7 @@ class __$$DailyMetricsImplCopyWithImpl<$Res>
     Object? restingRespRateBpm = freezed,
     Object? rrIrregularityPct = freezed,
     Object? ectopicBeatPct = freezed,
+    Object? rrEntropyNorm = freezed,
     Object? spo2OvernightAvg = freezed,
     Object? spo2OvernightMin = freezed,
     Object? systolicMmhg = freezed,
@@ -447,6 +456,10 @@ class __$$DailyMetricsImplCopyWithImpl<$Res>
         ectopicBeatPct: freezed == ectopicBeatPct
             ? _value.ectopicBeatPct
             : ectopicBeatPct // ignore: cast_nullable_to_non_nullable
+                  as double?,
+        rrEntropyNorm: freezed == rrEntropyNorm
+            ? _value.rrEntropyNorm
+            : rrEntropyNorm // ignore: cast_nullable_to_non_nullable
                   as double?,
         spo2OvernightAvg: freezed == spo2OvernightAvg
             ? _value.spo2OvernightAvg
@@ -567,6 +580,7 @@ class _$DailyMetricsImpl implements _DailyMetrics {
     this.restingRespRateBpm,
     this.rrIrregularityPct,
     this.ectopicBeatPct,
+    this.rrEntropyNorm,
     this.spo2OvernightAvg,
     this.spo2OvernightMin,
     this.systolicMmhg,
@@ -616,6 +630,8 @@ class _$DailyMetricsImpl implements _DailyMetrics {
   final double? rrIrregularityPct;
   @override
   final double? ectopicBeatPct;
+  @override
+  final double? rrEntropyNorm;
   // SpO2
   @override
   final double? spo2OvernightAvg;
@@ -677,7 +693,7 @@ class _$DailyMetricsImpl implements _DailyMetrics {
 
   @override
   String toString() {
-    return 'DailyMetrics(id: $id, userId: $userId, localDate: $localDate, tzOffsetMin: $tzOffsetMin, restingHrBpm: $restingHrBpm, hrvRmssdMs: $hrvRmssdMs, hrvSdnnMs: $hrvSdnnMs, restingRespRateBpm: $restingRespRateBpm, rrIrregularityPct: $rrIrregularityPct, ectopicBeatPct: $ectopicBeatPct, spo2OvernightAvg: $spo2OvernightAvg, spo2OvernightMin: $spo2OvernightMin, systolicMmhg: $systolicMmhg, diastolicMmhg: $diastolicMmhg, sleepTotalMin: $sleepTotalMin, sleepDeepPct: $sleepDeepPct, sleepRemPct: $sleepRemPct, sleepLightPct: $sleepLightPct, sleepEfficiencyPct: $sleepEfficiencyPct, bedtime: $bedtime, wake: $wake, steps: $steps, distanceM: $distanceM, caloriesKcal: $caloriesKcal, activeMinutes: $activeMinutes, stiffnessIndex: $stiffnessIndex, augmentationIndex: $augmentationIndex, strokeVolumeIndex: $strokeVolumeIndex, breathingDisruptionsHr: $breathingDisruptionsHr, recoveryScore: $recoveryScore, wellnessScore: $wellnessScore, cyclePhase: $cyclePhase, computedAt: $computedAt, algorithmVersion: $algorithmVersion, source: $source)';
+    return 'DailyMetrics(id: $id, userId: $userId, localDate: $localDate, tzOffsetMin: $tzOffsetMin, restingHrBpm: $restingHrBpm, hrvRmssdMs: $hrvRmssdMs, hrvSdnnMs: $hrvSdnnMs, restingRespRateBpm: $restingRespRateBpm, rrIrregularityPct: $rrIrregularityPct, ectopicBeatPct: $ectopicBeatPct, rrEntropyNorm: $rrEntropyNorm, spo2OvernightAvg: $spo2OvernightAvg, spo2OvernightMin: $spo2OvernightMin, systolicMmhg: $systolicMmhg, diastolicMmhg: $diastolicMmhg, sleepTotalMin: $sleepTotalMin, sleepDeepPct: $sleepDeepPct, sleepRemPct: $sleepRemPct, sleepLightPct: $sleepLightPct, sleepEfficiencyPct: $sleepEfficiencyPct, bedtime: $bedtime, wake: $wake, steps: $steps, distanceM: $distanceM, caloriesKcal: $caloriesKcal, activeMinutes: $activeMinutes, stiffnessIndex: $stiffnessIndex, augmentationIndex: $augmentationIndex, strokeVolumeIndex: $strokeVolumeIndex, breathingDisruptionsHr: $breathingDisruptionsHr, recoveryScore: $recoveryScore, wellnessScore: $wellnessScore, cyclePhase: $cyclePhase, computedAt: $computedAt, algorithmVersion: $algorithmVersion, source: $source)';
   }
 
   @override
@@ -703,6 +719,8 @@ class _$DailyMetricsImpl implements _DailyMetrics {
                 other.rrIrregularityPct == rrIrregularityPct) &&
             (identical(other.ectopicBeatPct, ectopicBeatPct) ||
                 other.ectopicBeatPct == ectopicBeatPct) &&
+            (identical(other.rrEntropyNorm, rrEntropyNorm) ||
+                other.rrEntropyNorm == rrEntropyNorm) &&
             (identical(other.spo2OvernightAvg, spo2OvernightAvg) ||
                 other.spo2OvernightAvg == spo2OvernightAvg) &&
             (identical(other.spo2OvernightMin, spo2OvernightMin) ||
@@ -764,6 +782,7 @@ class _$DailyMetricsImpl implements _DailyMetrics {
     restingRespRateBpm,
     rrIrregularityPct,
     ectopicBeatPct,
+    rrEntropyNorm,
     spo2OvernightAvg,
     spo2OvernightMin,
     systolicMmhg,
@@ -812,6 +831,7 @@ abstract class _DailyMetrics implements DailyMetrics {
     final double? restingRespRateBpm,
     final double? rrIrregularityPct,
     final double? ectopicBeatPct,
+    final double? rrEntropyNorm,
     final double? spo2OvernightAvg,
     final int? spo2OvernightMin,
     final int? systolicMmhg,
@@ -858,7 +878,9 @@ abstract class _DailyMetrics implements DailyMetrics {
   @override
   double? get rrIrregularityPct;
   @override
-  double? get ectopicBeatPct; // SpO2
+  double? get ectopicBeatPct;
+  @override
+  double? get rrEntropyNorm; // SpO2
   @override
   double? get spo2OvernightAvg;
   @override

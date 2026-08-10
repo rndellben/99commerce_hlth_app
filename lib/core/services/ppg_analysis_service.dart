@@ -33,6 +33,7 @@ class PpgAnalysisResult {
     this.respRateBpm,
     this.rrIrregularityPct,
     this.ectopicBeatPct,
+    this.rrEntropyNorm,
     this.rrIntervalsMs = const [],
     this.cleanedRrMs = const [],
     this.passedQualityGate = false,
@@ -74,6 +75,13 @@ class PpgAnalysisResult {
   /// irregularity" companion to [rrIrregularityPct]. High when many beats
   /// fall outside the moving-median band.
   final double? ectopicBeatPct;
+
+  /// Normalised Shannon entropy (0..1) of the gap-stripped R-R histogram —
+  /// the AFib guide's third irregularity axis. Sinus rhythm concentrates
+  /// intervals in a narrow band (low entropy); disordered timing spreads
+  /// them across many bins (high entropy). Independent of the CoV/ectopic
+  /// pair, so it corroborates rather than duplicates them.
+  final double? rrEntropyNorm;
 
   /// The derived R-R interval series in milliseconds, BEFORE ectopic cleaning
   /// (sub-sample refined). This is the array the cleaner operates on — what to
@@ -397,10 +405,14 @@ class PpgAnalysisService {
           (enoughBeats && captureOk) ? _rrCovPct(rrIntervals) : null;
       final ectopicBeatPct =
           (enoughBeats && captureOk) ? ectopicFrac * 100 : null;
+      final rrEntropyNorm =
+          (enoughBeats && captureOk) ? _rrEntropyNorm(rrIntervals) : null;
       if (rrIrregularityPct != null) {
         log.add('  rhythm: R-R irregularity (CoV) = '
             '${rrIrregularityPct.toStringAsFixed(1)}%, '
-            'ectopic beats = ${ectopicBeatPct!.toStringAsFixed(1)}%');
+            'ectopic beats = ${ectopicBeatPct!.toStringAsFixed(1)}%'
+            '${rrEntropyNorm != null ? ", entropy = "
+                "${rrEntropyNorm.toStringAsFixed(2)}" : ""}');
       } else {
         log.add('  rhythm: not assessed (need ≥$minRrForRhythm clean beats on '
             'a passing capture; have ${rrIntervals.length}'
@@ -457,6 +469,7 @@ class PpgAnalysisService {
         respRateBpm: respRate,
         rrIrregularityPct: rrIrregularityPct,
         ectopicBeatPct: ectopicBeatPct,
+        rrEntropyNorm: rrEntropyNorm,
         rrIntervalsMs: rrIntervals,
         cleanedRrMs: cleanedRr,
         passedQualityGate: captureOk,
@@ -512,6 +525,57 @@ class PpgAnalysisService {
     }
     final sd = math.sqrt(sq / kept.length);
     return sd / mean * 100;
+  }
+
+  /// Normalised Shannon entropy (0..1) of the R-R histogram — the AFib
+  /// guide's Layer-4 irregularity metric. Same gap-stripping as [_rrCovPct]
+  /// (drop missed-beat / double-detection outliers so BLE loss doesn't fake
+  /// disorder), then bin the survivors into fixed 25 ms bins across their
+  /// range and take H = −Σ p·log(p), normalised by log(binsUsed) so the
+  /// result is scale-free in [0,1]. Sinus rhythm packs intervals into a few
+  /// neighbouring bins (low H); AFib's beat-to-beat chaos spreads them wide
+  /// (high H). Independent of CoV magnitude — a rhythm can have modest scatter
+  /// yet high disorder — so it's a genuine third axis, not a restatement.
+  /// Needs ≥8 kept beats (a histogram from a handful of beats is noise).
+  double? _rrEntropyNorm(List<double> rr) {
+    if (rr.length < 8) return null;
+    final sorted = [...rr]..sort();
+    final median = sorted[sorted.length ~/ 2];
+    if (median <= 0) return null;
+    final kept = [
+      for (final v in rr)
+        if (v >= 0.4 * median && v <= 1.75 * median) v
+    ];
+    if (kept.length < 8) return null;
+
+    const binMs = 25.0;
+    var lo = kept.first, hi = kept.first;
+    for (final v in kept) {
+      if (v < lo) lo = v;
+      if (v > hi) hi = v;
+    }
+    final span = hi - lo;
+    if (span < binMs) return 0; // all within one bin → no disorder
+    final binCount = (span / binMs).ceil() + 1;
+    final counts = List<int>.filled(binCount, 0);
+    for (final v in kept) {
+      var idx = ((v - lo) / binMs).floor();
+      if (idx < 0) idx = 0;
+      if (idx >= binCount) idx = binCount - 1;
+      counts[idx]++;
+    }
+    final n = kept.length;
+    var h = 0.0;
+    var used = 0;
+    for (final c in counts) {
+      if (c == 0) continue;
+      used++;
+      final p = c / n;
+      h -= p * (math.log(p) / math.ln2);
+    }
+    if (used <= 1) return 0;
+    final hMax = math.log(used) / math.ln2; // maximum entropy for bins used
+    return hMax <= 0 ? 0 : (h / hMax).clamp(0.0, 1.0);
   }
 
   ({double min, double max, double mean, double std}) _stats(Float64List s) {

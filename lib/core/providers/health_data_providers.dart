@@ -94,6 +94,14 @@ final latestCardioLoadScoreProvider = StreamProvider<Score?>((ref) {
   );
 });
 
+final latestWellnessScoreProvider = StreamProvider<Score?>((ref) {
+  final repo = ref.watch(scoreRepositoryProvider);
+  return repo.watchLatest(
+    userId: ActiveSession.defaultUserId,
+    scoreType: ScoreType.wellness,
+  );
+});
+
 // ─── Sparkline providers (last 24h sample series) ────────────────────────────
 
 DateTime _last24hCutoff() =>

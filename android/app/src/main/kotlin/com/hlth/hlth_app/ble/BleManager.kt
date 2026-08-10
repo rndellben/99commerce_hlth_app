@@ -25,6 +25,7 @@ import com.oudmon.ble.base.communication.entity.BlePressure
 import com.oudmon.ble.base.communication.entity.BleStepDetails
 import com.oudmon.ble.base.communication.entity.StartEndTimeEntity
 import com.oudmon.ble.base.communication.req.BloodOxygenSettingReq
+import com.oudmon.ble.base.communication.req.BpReadConformReq
 import com.oudmon.ble.base.communication.req.BpSettingReq
 import com.oudmon.ble.base.communication.req.HRVReq
 import com.oudmon.ble.base.communication.req.DeviceSupportReq
@@ -392,6 +393,7 @@ class BleManager(
             )
             "getHrvHistory" -> syncHRV(call.argument<Int>("dayOffset") ?: 0, result)
             "getBpHistory" -> syncBloodPressure(result)
+            "confirmBpTiming" -> confirmBpTiming(result)
             "getBpDay" -> syncBloodPressureDay(call.argument<Int>("dayOffset") ?: 0, result)
             "startBpMeasurement" -> startBpMeasurement(result)
             "stopBpMeasurement" -> stopBpMeasurement(result)
@@ -2257,6 +2259,32 @@ class BleManager(
         } catch (e: Exception) {
             Log.e("HlthBLE", "stopOneKeyMeasurement failed", e)
             result.error("OKM_FAILED", e.message, null)
+        }
+    }
+
+    /**
+     * Acknowledge the BP timing-monitor buffer so the band deletes the
+     * records we just synced and the NEXT read advances to the following
+     * day. Without this the buffer behaves as a queue stuck on the OLDEST
+     * un-acked day — verified on-device 2026-07-21: it kept serving 07-20
+     * and never reached the current day (so last night's post-midnight
+     * hours + today never arrived). SDK: `BpReadConformReq(true)`, called
+     * "after receiving the callback" per the manual.
+     *
+     * Fire-and-forget (`executeReqCmdNoCallback`); the Dart side calls this
+     * ONLY after it has persisted the readings, so a dropped ack can never
+     * lose data — the next tick just re-pulls the same day and re-persists
+     * (idempotent by deterministic id) before acking again.
+     */
+    private fun confirmBpTiming(result: MethodChannel.Result) {
+        try {
+            CommandHandle.getInstance()
+                .executeReqCmdNoCallback(BpReadConformReq(true))
+            Log.i("HlthBLE", "confirmBpTiming: acked buffer → advance to next day")
+            result.success(mapOf("ok" to true))
+        } catch (e: Exception) {
+            Log.e("HlthBLE", "confirmBpTiming failed", e)
+            result.error("BP_CONFORM_FAILED", e.message, null)
         }
     }
 

@@ -8,6 +8,12 @@ import 'package:hlth_app/core/models/ppg_sample.dart';
 // types from this file. New code should import `ble_types.dart` directly.
 export 'package:hlth_app/core/ble/ble_types.dart';
 
+/// TEST KNOB (2026-07-21) — BP cadence in minutes. Drives BOTH the band's
+/// scheduled-monitoring interval AND the today-from-HR derivation slot, so the
+/// two stay in lockstep. Set to 30 to trial half-hourly BP; set back to 60 to
+/// restore hourly. One line to flip.
+const int kBpSlotMinutes = 30;
+
 class BleService {
   // Channel names match hlth-ble-platform-channel.md §1.
   static const _channel = MethodChannel('hlth/ble');
@@ -609,6 +615,14 @@ class BleService {
   Future<Map<String, dynamic>> getBpHistory() async {
     final r = await _channel.invokeMethod('getBpHistory');
     return Map<String, dynamic>.from(r as Map);
+  }
+
+  /// Acknowledge the BP timing-monitor buffer so the band deletes synced
+  /// records and the next [getBpHistory] advances to the following day.
+  /// MUST be called only AFTER the readings are persisted — the band drops
+  /// acked records, so acking before a successful write would lose data.
+  Future<void> confirmBpTiming() async {
+    await _channel.invokeMethod('confirmBpTiming');
   }
 
   /// BP per-day via the SDK's public API. Returns `{readings: [{time, sbp, dbp}]}` —

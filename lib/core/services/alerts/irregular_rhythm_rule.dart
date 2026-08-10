@@ -6,18 +6,23 @@ import 'package:hlth_app/core/services/alerts/alert_rule.dart';
 ///
 /// Sensor-agnostic: reads the rhythm metrics that `PpgAnalysisService` writes
 /// into `daily_metrics` on quality-gate-PASSED captures only —
-/// `rrIrregularityPct` (gap-robust R-R coefficient of variation) and
-/// `ectopicBeatPct` (fraction of beats outside the moving-median band).
+/// `rrIrregularityPct` (gap-robust R-R coefficient of variation),
+/// `ectopicBeatPct` (fraction of beats outside the moving-median band), and
+/// `rrEntropyNorm` (normalised Shannon entropy of the R-R histogram — the
+/// AFib guide's third irregularity axis).
 ///
 /// Deliberately hard to trigger — Ryan's hard requirement is no false alarms,
 /// and we learned on hardware that a single bursty-BLE capture can look
 /// irregular from missed beats alone. So this fires only on a SUSTAINED
-/// pattern: a capture must clear BOTH thresholds to "flag" a day, and we need
-/// at least [minFlaggedDays] flagged days inside the trailing [lookback]
-/// window, with at least one of them recent ([recencyWindow]). Both metrics
-/// are required to be elevated together — high irregularity scatter AND a
-/// high off-median beat fraction — which artifact alone doesn't produce once
-/// the gap-robust CoV strips BLE drops.
+/// pattern: a capture must clear ALL THREE thresholds to "flag" a day, and we
+/// need at least [minFlaggedDays] flagged days inside the trailing [lookback]
+/// window, with at least one of them recent ([recencyWindow]). Requiring
+/// three independent axes together — scatter (CoV) AND off-median beats
+/// (ectopic%) AND histogram disorder (entropy) — is what artifact alone
+/// can't fake once the gap-robust measures strip BLE drops. Entropy is
+/// treated as optional-when-absent so pre-v13 rows (no entropy persisted)
+/// still evaluate on the original two axes rather than silently never
+/// flagging.
 ///
 /// Regulatory framing: this is a wellness *observation*, never a diagnosis.
 /// No "AFib" / "atrial fibrillation" / arrhythmia-diagnosis language in any
@@ -29,6 +34,7 @@ class IrregularRhythmRule implements AlertRule {
     this.recencyWindow = const Duration(days: 3),
     this.minCovPct = 20.0,
     this.minEctopicPct = 30.0,
+    this.minEntropyNorm = 0.7,
     this.minFlaggedDays = 3,
     this.minDataDays = 4,
   });
@@ -48,6 +54,10 @@ class IrregularRhythmRule implements AlertRule {
 
   /// …and its off-median beat fraction is at least this. Normal ~5-15%.
   final double minEctopicPct;
+
+  /// …and its normalised R-R entropy is at least this (when present). Sinus
+  /// rhythm sits low (~0.2-0.5); disordered timing pushes toward 1.0.
+  final double minEntropyNorm;
 
   /// Minimum flagged days in the window before we'll fire.
   final int minFlaggedDays;
@@ -82,7 +92,10 @@ class IrregularRhythmRule implements AlertRule {
     final flagged = [
       for (final r in assessed)
         if (r.rrIrregularityPct! >= minCovPct &&
-            r.ectopicBeatPct! >= minEctopicPct)
+            r.ectopicBeatPct! >= minEctopicPct &&
+            // Entropy is the third axis. Absent (pre-v13 rows) → don't let a
+            // missing value block flagging; present → it must also clear.
+            (r.rrEntropyNorm == null || r.rrEntropyNorm! >= minEntropyNorm))
           r
     ];
     if (flagged.length < minFlaggedDays) return null;
@@ -102,6 +115,8 @@ class IrregularRhythmRule implements AlertRule {
         'flaggedDays': flagged.length,
         'assessedDays': assessed.length,
         'lookbackDays': lookback.inDays,
+        'entropyCorroborated':
+            flagged.any((r) => r.rrEntropyNorm != null),
       },
     );
   }

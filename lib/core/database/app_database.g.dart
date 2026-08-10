@@ -7335,6 +7335,17 @@ class $DailyMetricsTable extends DailyMetrics
     type: DriftSqlType.double,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _rrEntropyNormMeta = const VerificationMeta(
+    'rrEntropyNorm',
+  );
+  @override
+  late final GeneratedColumn<double> rrEntropyNorm = GeneratedColumn<double>(
+    'rr_entropy_norm',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _spo2OvernightAvgMeta = const VerificationMeta(
     'spo2OvernightAvg',
   );
@@ -7631,6 +7642,7 @@ class $DailyMetricsTable extends DailyMetrics
     restingRespRateBpm,
     rrIrregularityPct,
     ectopicBeatPct,
+    rrEntropyNorm,
     spo2OvernightAvg,
     spo2OvernightMin,
     systolicMmhg,
@@ -7750,6 +7762,15 @@ class $DailyMetricsTable extends DailyMetrics
         ectopicBeatPct.isAcceptableOrUnknown(
           data['ectopic_beat_pct']!,
           _ectopicBeatPctMeta,
+        ),
+      );
+    }
+    if (data.containsKey('rr_entropy_norm')) {
+      context.handle(
+        _rrEntropyNormMeta,
+        rrEntropyNorm.isAcceptableOrUnknown(
+          data['rr_entropy_norm']!,
+          _rrEntropyNormMeta,
         ),
       );
     }
@@ -8016,6 +8037,10 @@ class $DailyMetricsTable extends DailyMetrics
         DriftSqlType.double,
         data['${effectivePrefix}ectopic_beat_pct'],
       ),
+      rrEntropyNorm: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}rr_entropy_norm'],
+      ),
       spo2OvernightAvg: attachedDatabase.typeMapping.read(
         DriftSqlType.double,
         data['${effectivePrefix}spo2_overnight_avg'],
@@ -8145,6 +8170,7 @@ class DailyMetric extends DataClass implements Insertable<DailyMetric> {
   final double? restingRespRateBpm;
   final double? rrIrregularityPct;
   final double? ectopicBeatPct;
+  final double? rrEntropyNorm;
   final double? spo2OvernightAvg;
   final int? spo2OvernightMin;
   final int? systolicMmhg;
@@ -8182,6 +8208,7 @@ class DailyMetric extends DataClass implements Insertable<DailyMetric> {
     this.restingRespRateBpm,
     this.rrIrregularityPct,
     this.ectopicBeatPct,
+    this.rrEntropyNorm,
     this.spo2OvernightAvg,
     this.spo2OvernightMin,
     this.systolicMmhg,
@@ -8233,6 +8260,9 @@ class DailyMetric extends DataClass implements Insertable<DailyMetric> {
     }
     if (!nullToAbsent || ectopicBeatPct != null) {
       map['ectopic_beat_pct'] = Variable<double>(ectopicBeatPct);
+    }
+    if (!nullToAbsent || rrEntropyNorm != null) {
+      map['rr_entropy_norm'] = Variable<double>(rrEntropyNorm);
     }
     if (!nullToAbsent || spo2OvernightAvg != null) {
       map['spo2_overnight_avg'] = Variable<double>(spo2OvernightAvg);
@@ -8339,6 +8369,9 @@ class DailyMetric extends DataClass implements Insertable<DailyMetric> {
       ectopicBeatPct: ectopicBeatPct == null && nullToAbsent
           ? const Value.absent()
           : Value(ectopicBeatPct),
+      rrEntropyNorm: rrEntropyNorm == null && nullToAbsent
+          ? const Value.absent()
+          : Value(rrEntropyNorm),
       spo2OvernightAvg: spo2OvernightAvg == null && nullToAbsent
           ? const Value.absent()
           : Value(spo2OvernightAvg),
@@ -8434,6 +8467,7 @@ class DailyMetric extends DataClass implements Insertable<DailyMetric> {
         json['rrIrregularityPct'],
       ),
       ectopicBeatPct: serializer.fromJson<double?>(json['ectopicBeatPct']),
+      rrEntropyNorm: serializer.fromJson<double?>(json['rrEntropyNorm']),
       spo2OvernightAvg: serializer.fromJson<double?>(json['spo2OvernightAvg']),
       spo2OvernightMin: serializer.fromJson<int?>(json['spo2OvernightMin']),
       systolicMmhg: serializer.fromJson<int?>(json['systolicMmhg']),
@@ -8486,6 +8520,7 @@ class DailyMetric extends DataClass implements Insertable<DailyMetric> {
       'restingRespRateBpm': serializer.toJson<double?>(restingRespRateBpm),
       'rrIrregularityPct': serializer.toJson<double?>(rrIrregularityPct),
       'ectopicBeatPct': serializer.toJson<double?>(ectopicBeatPct),
+      'rrEntropyNorm': serializer.toJson<double?>(rrEntropyNorm),
       'spo2OvernightAvg': serializer.toJson<double?>(spo2OvernightAvg),
       'spo2OvernightMin': serializer.toJson<int?>(spo2OvernightMin),
       'systolicMmhg': serializer.toJson<int?>(systolicMmhg),
@@ -8530,6 +8565,7 @@ class DailyMetric extends DataClass implements Insertable<DailyMetric> {
     Value<double?> restingRespRateBpm = const Value.absent(),
     Value<double?> rrIrregularityPct = const Value.absent(),
     Value<double?> ectopicBeatPct = const Value.absent(),
+    Value<double?> rrEntropyNorm = const Value.absent(),
     Value<double?> spo2OvernightAvg = const Value.absent(),
     Value<int?> spo2OvernightMin = const Value.absent(),
     Value<int?> systolicMmhg = const Value.absent(),
@@ -8573,6 +8609,9 @@ class DailyMetric extends DataClass implements Insertable<DailyMetric> {
     ectopicBeatPct: ectopicBeatPct.present
         ? ectopicBeatPct.value
         : this.ectopicBeatPct,
+    rrEntropyNorm: rrEntropyNorm.present
+        ? rrEntropyNorm.value
+        : this.rrEntropyNorm,
     spo2OvernightAvg: spo2OvernightAvg.present
         ? spo2OvernightAvg.value
         : this.spo2OvernightAvg,
@@ -8650,6 +8689,9 @@ class DailyMetric extends DataClass implements Insertable<DailyMetric> {
       ectopicBeatPct: data.ectopicBeatPct.present
           ? data.ectopicBeatPct.value
           : this.ectopicBeatPct,
+      rrEntropyNorm: data.rrEntropyNorm.present
+          ? data.rrEntropyNorm.value
+          : this.rrEntropyNorm,
       spo2OvernightAvg: data.spo2OvernightAvg.present
           ? data.spo2OvernightAvg.value
           : this.spo2OvernightAvg,
@@ -8736,6 +8778,7 @@ class DailyMetric extends DataClass implements Insertable<DailyMetric> {
           ..write('restingRespRateBpm: $restingRespRateBpm, ')
           ..write('rrIrregularityPct: $rrIrregularityPct, ')
           ..write('ectopicBeatPct: $ectopicBeatPct, ')
+          ..write('rrEntropyNorm: $rrEntropyNorm, ')
           ..write('spo2OvernightAvg: $spo2OvernightAvg, ')
           ..write('spo2OvernightMin: $spo2OvernightMin, ')
           ..write('systolicMmhg: $systolicMmhg, ')
@@ -8778,6 +8821,7 @@ class DailyMetric extends DataClass implements Insertable<DailyMetric> {
     restingRespRateBpm,
     rrIrregularityPct,
     ectopicBeatPct,
+    rrEntropyNorm,
     spo2OvernightAvg,
     spo2OvernightMin,
     systolicMmhg,
@@ -8819,6 +8863,7 @@ class DailyMetric extends DataClass implements Insertable<DailyMetric> {
           other.restingRespRateBpm == this.restingRespRateBpm &&
           other.rrIrregularityPct == this.rrIrregularityPct &&
           other.ectopicBeatPct == this.ectopicBeatPct &&
+          other.rrEntropyNorm == this.rrEntropyNorm &&
           other.spo2OvernightAvg == this.spo2OvernightAvg &&
           other.spo2OvernightMin == this.spo2OvernightMin &&
           other.systolicMmhg == this.systolicMmhg &&
@@ -8858,6 +8903,7 @@ class DailyMetricsCompanion extends UpdateCompanion<DailyMetric> {
   final Value<double?> restingRespRateBpm;
   final Value<double?> rrIrregularityPct;
   final Value<double?> ectopicBeatPct;
+  final Value<double?> rrEntropyNorm;
   final Value<double?> spo2OvernightAvg;
   final Value<int?> spo2OvernightMin;
   final Value<int?> systolicMmhg;
@@ -8896,6 +8942,7 @@ class DailyMetricsCompanion extends UpdateCompanion<DailyMetric> {
     this.restingRespRateBpm = const Value.absent(),
     this.rrIrregularityPct = const Value.absent(),
     this.ectopicBeatPct = const Value.absent(),
+    this.rrEntropyNorm = const Value.absent(),
     this.spo2OvernightAvg = const Value.absent(),
     this.spo2OvernightMin = const Value.absent(),
     this.systolicMmhg = const Value.absent(),
@@ -8935,6 +8982,7 @@ class DailyMetricsCompanion extends UpdateCompanion<DailyMetric> {
     this.restingRespRateBpm = const Value.absent(),
     this.rrIrregularityPct = const Value.absent(),
     this.ectopicBeatPct = const Value.absent(),
+    this.rrEntropyNorm = const Value.absent(),
     this.spo2OvernightAvg = const Value.absent(),
     this.spo2OvernightMin = const Value.absent(),
     this.systolicMmhg = const Value.absent(),
@@ -8980,6 +9028,7 @@ class DailyMetricsCompanion extends UpdateCompanion<DailyMetric> {
     Expression<double>? restingRespRateBpm,
     Expression<double>? rrIrregularityPct,
     Expression<double>? ectopicBeatPct,
+    Expression<double>? rrEntropyNorm,
     Expression<double>? spo2OvernightAvg,
     Expression<int>? spo2OvernightMin,
     Expression<int>? systolicMmhg,
@@ -9020,6 +9069,7 @@ class DailyMetricsCompanion extends UpdateCompanion<DailyMetric> {
         'resting_resp_rate_bpm': restingRespRateBpm,
       if (rrIrregularityPct != null) 'rr_irregularity_pct': rrIrregularityPct,
       if (ectopicBeatPct != null) 'ectopic_beat_pct': ectopicBeatPct,
+      if (rrEntropyNorm != null) 'rr_entropy_norm': rrEntropyNorm,
       if (spo2OvernightAvg != null) 'spo2_overnight_avg': spo2OvernightAvg,
       if (spo2OvernightMin != null) 'spo2_overnight_min': spo2OvernightMin,
       if (systolicMmhg != null) 'systolic_mmhg': systolicMmhg,
@@ -9063,6 +9113,7 @@ class DailyMetricsCompanion extends UpdateCompanion<DailyMetric> {
     Value<double?>? restingRespRateBpm,
     Value<double?>? rrIrregularityPct,
     Value<double?>? ectopicBeatPct,
+    Value<double?>? rrEntropyNorm,
     Value<double?>? spo2OvernightAvg,
     Value<int?>? spo2OvernightMin,
     Value<int?>? systolicMmhg,
@@ -9102,6 +9153,7 @@ class DailyMetricsCompanion extends UpdateCompanion<DailyMetric> {
       restingRespRateBpm: restingRespRateBpm ?? this.restingRespRateBpm,
       rrIrregularityPct: rrIrregularityPct ?? this.rrIrregularityPct,
       ectopicBeatPct: ectopicBeatPct ?? this.ectopicBeatPct,
+      rrEntropyNorm: rrEntropyNorm ?? this.rrEntropyNorm,
       spo2OvernightAvg: spo2OvernightAvg ?? this.spo2OvernightAvg,
       spo2OvernightMin: spo2OvernightMin ?? this.spo2OvernightMin,
       systolicMmhg: systolicMmhg ?? this.systolicMmhg,
@@ -9165,6 +9217,9 @@ class DailyMetricsCompanion extends UpdateCompanion<DailyMetric> {
     }
     if (ectopicBeatPct.present) {
       map['ectopic_beat_pct'] = Variable<double>(ectopicBeatPct.value);
+    }
+    if (rrEntropyNorm.present) {
+      map['rr_entropy_norm'] = Variable<double>(rrEntropyNorm.value);
     }
     if (spo2OvernightAvg.present) {
       map['spo2_overnight_avg'] = Variable<double>(spo2OvernightAvg.value);
@@ -9267,6 +9322,7 @@ class DailyMetricsCompanion extends UpdateCompanion<DailyMetric> {
           ..write('restingRespRateBpm: $restingRespRateBpm, ')
           ..write('rrIrregularityPct: $rrIrregularityPct, ')
           ..write('ectopicBeatPct: $ectopicBeatPct, ')
+          ..write('rrEntropyNorm: $rrEntropyNorm, ')
           ..write('spo2OvernightAvg: $spo2OvernightAvg, ')
           ..write('spo2OvernightMin: $spo2OvernightMin, ')
           ..write('systolicMmhg: $systolicMmhg, ')
@@ -24312,6 +24368,7 @@ typedef $$DailyMetricsTableCreateCompanionBuilder =
       Value<double?> restingRespRateBpm,
       Value<double?> rrIrregularityPct,
       Value<double?> ectopicBeatPct,
+      Value<double?> rrEntropyNorm,
       Value<double?> spo2OvernightAvg,
       Value<int?> spo2OvernightMin,
       Value<int?> systolicMmhg,
@@ -24352,6 +24409,7 @@ typedef $$DailyMetricsTableUpdateCompanionBuilder =
       Value<double?> restingRespRateBpm,
       Value<double?> rrIrregularityPct,
       Value<double?> ectopicBeatPct,
+      Value<double?> rrEntropyNorm,
       Value<double?> spo2OvernightAvg,
       Value<int?> spo2OvernightMin,
       Value<int?> systolicMmhg,
@@ -24455,6 +24513,11 @@ class $$DailyMetricsTableFilterComposer
 
   ColumnFilters<double> get ectopicBeatPct => $composableBuilder(
     column: $table.ectopicBeatPct,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get rrEntropyNorm => $composableBuilder(
+    column: $table.rrEntropyNorm,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -24667,6 +24730,11 @@ class $$DailyMetricsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<double> get rrEntropyNorm => $composableBuilder(
+    column: $table.rrEntropyNorm,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<double> get spo2OvernightAvg => $composableBuilder(
     column: $table.spo2OvernightAvg,
     builder: (column) => ColumnOrderings(column),
@@ -24869,6 +24937,11 @@ class $$DailyMetricsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<double> get rrEntropyNorm => $composableBuilder(
+    column: $table.rrEntropyNorm,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<double> get spo2OvernightAvg => $composableBuilder(
     column: $table.spo2OvernightAvg,
     builder: (column) => column,
@@ -25053,6 +25126,7 @@ class $$DailyMetricsTableTableManager
                 Value<double?> restingRespRateBpm = const Value.absent(),
                 Value<double?> rrIrregularityPct = const Value.absent(),
                 Value<double?> ectopicBeatPct = const Value.absent(),
+                Value<double?> rrEntropyNorm = const Value.absent(),
                 Value<double?> spo2OvernightAvg = const Value.absent(),
                 Value<int?> spo2OvernightMin = const Value.absent(),
                 Value<int?> systolicMmhg = const Value.absent(),
@@ -25091,6 +25165,7 @@ class $$DailyMetricsTableTableManager
                 restingRespRateBpm: restingRespRateBpm,
                 rrIrregularityPct: rrIrregularityPct,
                 ectopicBeatPct: ectopicBeatPct,
+                rrEntropyNorm: rrEntropyNorm,
                 spo2OvernightAvg: spo2OvernightAvg,
                 spo2OvernightMin: spo2OvernightMin,
                 systolicMmhg: systolicMmhg,
@@ -25131,6 +25206,7 @@ class $$DailyMetricsTableTableManager
                 Value<double?> restingRespRateBpm = const Value.absent(),
                 Value<double?> rrIrregularityPct = const Value.absent(),
                 Value<double?> ectopicBeatPct = const Value.absent(),
+                Value<double?> rrEntropyNorm = const Value.absent(),
                 Value<double?> spo2OvernightAvg = const Value.absent(),
                 Value<int?> spo2OvernightMin = const Value.absent(),
                 Value<int?> systolicMmhg = const Value.absent(),
@@ -25169,6 +25245,7 @@ class $$DailyMetricsTableTableManager
                 restingRespRateBpm: restingRespRateBpm,
                 rrIrregularityPct: rrIrregularityPct,
                 ectopicBeatPct: ectopicBeatPct,
+                rrEntropyNorm: rrEntropyNorm,
                 spo2OvernightAvg: spo2OvernightAvg,
                 spo2OvernightMin: spo2OvernightMin,
                 systolicMmhg: systolicMmhg,

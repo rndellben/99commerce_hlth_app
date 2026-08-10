@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hlth_app/core/bootstrap/active_session.dart';
+import 'package:hlth_app/core/database/enums.dart';
 import 'package:hlth_app/core/repositories/bp_repository.dart';
 import 'package:hlth_app/core/repositories/hr_repository.dart';
 import 'package:hlth_app/core/repositories/hrv_repository.dart';
+import 'package:hlth_app/core/repositories/score_repository.dart';
 import 'package:hlth_app/core/repositories/sleep_repository.dart';
 import 'package:hlth_app/core/repositories/spo2_repository.dart';
 import 'package:hlth_app/core/repositories/stress_repository.dart';
@@ -94,6 +96,7 @@ class _DataDetailsScreenState extends State<DataDetailsScreen> {
         'stress' => 'Stress',
         'blood-pressure' => 'Blood Pressure',
         'recovery' => 'Stability',
+        'cardio-load' => 'Cardio Load',
         _ => metric,
       };
 }
@@ -394,13 +397,38 @@ class _DayReadingsBody extends ConsumerWidget {
                 ))
             .toList();
 
+      // Daily scores: one persisted row per day in the scores table. The
+      // "reading" for a day is that day's score + label (e.g. "49.3 /100 —
+      // Moderate"), timestamped by when it was computed.
       case 'recovery':
-        // Recovery is a daily score — no intraday readings.
-        return [];
+        return _scoreRows(ref, userId, ScoreType.recovery);
+
+      case 'cardio-load':
+        return _scoreRows(ref, userId, ScoreType.cardioLoad);
 
       default:
         return [];
     }
+  }
+
+  Future<List<_ReadingRow>> _scoreRows(
+      WidgetRef ref, String userId, ScoreType type) async {
+    final rows = await ref
+        .read(scoreRepositoryProvider)
+        .getHistory(userId: userId, scoreType: type);
+    return rows
+        .where((s) =>
+            s.computedForDate.year == day.year &&
+            s.computedForDate.month == day.month &&
+            s.computedForDate.day == day.day)
+        .map((s) => _ReadingRow(
+              time: s.computedAt.toLocal(),
+              value: s.score.toStringAsFixed(1),
+              unit:
+                  '/100${s.label != null ? ' — ${s.label}' : ''}'
+                  '${s.provisional ? ' (calibrating)' : ''}',
+            ))
+        .toList();
   }
 
   String _formatMinutes(int? min) {
@@ -564,6 +592,7 @@ String _metricDisplayName(String metric) => switch (metric) {
       'stress' => 'Stress',
       'blood-pressure' => 'Blood Pressure',
       'recovery' => 'Stability',
+      'cardio-load' => 'Cardio Load',
       _ => metric,
     };
 
@@ -575,6 +604,7 @@ IconData _metricIcon(String metric) => switch (metric) {
       'stress' => Icons.spa,
       'blood-pressure' => Icons.monitor_heart_outlined,
       'recovery' => Icons.shield_outlined,
+      'cardio-load' => Icons.favorite_border,
       _ => Icons.bar_chart,
     };
 
@@ -586,5 +616,6 @@ Color _metricColor(String metric) => switch (metric) {
       'stress' => AppColors.warning,
       'blood-pressure' => AppColors.bloodPressure,
       'recovery' => AppColors.recovery,
+      'cardio-load' => AppColors.heartRate,
       _ => AppColors.primary,
     };

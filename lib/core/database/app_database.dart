@@ -49,7 +49,7 @@ class AppDatabase extends _$AppDatabase {
   /// Bump on every schema change. Add a migration step in
   /// `migration` below. See hlth-db-schema.md §"Schema versioning".
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -180,6 +180,13 @@ class AppDatabase extends _$AppDatabase {
             await customStatement(
               'UPDATE daily_metrics SET hrv_rmssd_ms = NULL, hrv_sdnn_ms = NULL',
             );
+          }
+          // v12 → v13: add R-R Shannon entropy column to daily_metrics — the
+          // AFib guide's third irregularity axis, alongside CoV + ectopic%.
+          // Nullable addColumn is non-destructive; the next passing PPG
+          // capture backfills it.
+          if (from < 13) {
+            await m.addColumn(dailyMetrics, dailyMetrics.rrEntropyNorm);
           }
         },
       );

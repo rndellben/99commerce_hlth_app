@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/metric-validation-gate.sh\"",
+            "timeout": 10,
+            "statusMessage": "Checking metric-validation triggers..."
+          }
+        ]
+      }
+    ]
+  }
+}

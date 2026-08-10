@@ -19,6 +19,7 @@ import 'package:hlth_app/features/recovery/recovery_screen.dart';
 import 'package:hlth_app/features/settings/device_settings_screen.dart';
 import 'package:hlth_app/features/settings/settings_screen.dart';
 import 'package:hlth_app/features/sleep/sleep_screen.dart';
+import 'package:hlth_app/features/wellness/wellness_screen.dart';
 import 'package:hlth_app/features/spo2/spo2_screen.dart';
 import 'package:hlth_app/features/stress/stress_screen.dart';
 import 'package:hlth_app/features/workouts/workouts_screen.dart';
@@ -92,6 +93,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/blood-pressure', builder: (_, __) => const BloodPressureScreen()),
       GoRoute(path: '/stress', builder: (_, __) => const StressScreen()),
       GoRoute(path: '/recovery', builder: (_, __) => const RecoveryScreen()),
+      GoRoute(path: '/wellness', builder: (_, __) => const WellnessScreen()),
       GoRoute(path: '/workouts', builder: (_, __) => const WorkoutsScreen()),
       GoRoute(path: '/one-key', builder: (_, __) => const OneKeyMeasurementScreen()),
 

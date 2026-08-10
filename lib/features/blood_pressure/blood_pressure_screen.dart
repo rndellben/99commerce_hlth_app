@@ -3,10 +3,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hlth_app/core/ble/ble_service.dart';
 import 'package:hlth_app/core/models/bp_calibration.dart';
+import 'package:hlth_app/core/models/health_samples.dart';
+import 'package:hlth_app/core/processing/bp_formula.dart';
 import 'package:hlth_app/core/providers/bp_calibration_providers.dart';
 import 'package:hlth_app/features/blood_pressure/bp_controller.dart';
+import 'package:hlth_app/features/blood_pressure/bp_providers.dart';
 import 'package:hlth_app/ui/theme/app_colors.dart';
+import 'package:hlth_app/ui/widgets/date_selector.dart';
+import 'package:hlth_app/ui/widgets/metric_tile.dart';
 import 'package:hlth_app/ui/widgets/metric_trend_scaffold.dart';
+import 'package:hlth_app/ui/widgets/period_toggle.dart';
+import 'package:hlth_app/ui/widgets/trend_chart_card.dart';
 import 'package:hlth_app/ui/widgets/trend_view_sections.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -40,6 +47,37 @@ class _BloodPressureScreenState extends ConsumerState<BloodPressureScreen> {
   bool _hasSeenIntro = true;
   bool _showPerformancePrompt = false;
   bool _hypertensionDismissed = false;
+
+  // History view state (Day/Week/Month trend).
+  Period _period = Period.day;
+  DateTime _anchor = _today();
+
+  static DateTime _today() {
+    final n = DateTime.now();
+    return DateTime(n.year, n.month, n.day);
+  }
+
+  VoidCallback _shiftAnchor(int direction) {
+    return () {
+      setState(() {
+        switch (_period) {
+          case Period.day:
+            _anchor = _anchor.add(Duration(days: direction));
+            break;
+          case Period.week:
+            _anchor = _anchor.add(Duration(days: 7 * direction));
+            break;
+          case Period.month:
+            _anchor =
+                DateTime(_anchor.year, _anchor.month + direction, _anchor.day);
+            break;
+          case Period.threeMonths:
+            _anchor = DateTime(
+                _anchor.year, _anchor.month + (3 * direction), _anchor.day);
+        }
+      });
+    };
+  }
 
   @override
   void initState() {
@@ -381,6 +419,28 @@ class _BloodPressureScreenState extends ConsumerState<BloodPressureScreen> {
                 ),
               ],
               const SizedBox(height: 24),
+              // ── History (Day / Week / Month) BP trend ───────────────────
+              // Fed by the band's autonomous hourly buffer + manual readings.
+              PeriodToggle(
+                value: _period,
+                onChanged: (p) => setState(() {
+                  _period = p;
+                  _anchor = _today();
+                }),
+              ),
+              const SizedBox(height: 16),
+              DateSelector(
+                period: _period,
+                anchor: _anchor,
+                onPrev: _shiftAnchor(-1),
+                onNext: _shiftAnchor(1),
+              ),
+              const SizedBox(height: 16),
+              if (_period == Period.day)
+                _BpTrendDay(anchor: _anchor)
+              else
+                _BpTrendRange(period: _period, anchor: _anchor),
+              const SizedBox(height: 24),
               DataDetailsCard(metric: 'blood-pressure'),
               const SizedBox(height: 16),
               Last7DaysTile(
@@ -409,6 +469,344 @@ class _BloodPressureScreenState extends ConsumerState<BloodPressureScreen> {
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
     if (diff.inHours < 24) return '${diff.inHours}h ago';
     return '${diff.inDays}d ago';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// BP trend (Day / Week / Month) — hourly buffer + manual readings
+// ---------------------------------------------------------------------------
+
+/// One calibrated point (local time + display sbp/dbp), applying the active
+/// cuff calibration the SAME way the headline does so the trend matches.
+typedef _BpPoint = ({DateTime at, int sbp, int dbp});
+
+BpCalibrationAnchor? _bpAnchorFor(BpCalibration? cal) {
+  if (cal == null) return null;
+  return BpCalibrationAnchor(
+    systolic: cal.cuffSystolic,
+    diastolic: cal.cuffDiastolic,
+    hrAtCalibration: cal.hrAtCalibration ?? 0,
+  );
+}
+
+List<_BpPoint> _calibratedPoints(List<BpReading> readings, BpCalibration? cal) {
+  final anchor = _bpAnchorFor(cal);
+  final out = <_BpPoint>[];
+  for (final r in readings) {
+    final c = applyBpCalibration(
+      rawSbp: r.systolicMmhg,
+      rawDbp: r.diastolicMmhg,
+      hr: r.pulseBpm,
+      anchor: anchor,
+    );
+    out.add((at: r.capturedAt.toLocal(), sbp: c.sbp, dbp: c.dbp));
+  }
+  return out;
+}
+
+double? _bpAvg(Iterable<int> xs) {
+  final l = xs.toList();
+  if (l.isEmpty) return null;
+  return l.reduce((a, b) => a + b) / l.length;
+}
+
+int? _bpMedian(Iterable<int> xs) {
+  final l = xs.toList()..sort();
+  if (l.isEmpty) return null;
+  final m = l.length ~/ 2;
+  return l.length.isOdd ? l[m] : ((l[m - 1] + l[m]) / 2).round();
+}
+
+class _BpTrendDay extends ConsumerWidget {
+  const _BpTrendDay({required this.anchor});
+  final DateTime anchor;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(bpReadingsForDateProvider(anchor));
+    final cal = ref.watch(activeBpCalibrationProvider).valueOrNull;
+    return async.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.symmetric(vertical: 32),
+        child: Center(child: CircularProgressIndicator()),
+      ),
+      error: (e, _) => _BpTrendEmpty(message: 'Failed to load BP: $e'),
+      data: (readings) {
+        if (readings.isEmpty) {
+          return const _BpTrendEmpty(
+            message:
+                'No BP readings for this day. The band measures hourly while '
+                'worn — sync after wearing it, or tap Measure Now.',
+          );
+        }
+        final pts = _calibratedPoints(readings, cal);
+        final sysPoints = [
+          for (final p in pts) TrendPoint(at: p.at, value: p.sbp.toDouble())
+        ];
+        final diaPoints = [
+          for (final p in pts) TrendPoint(at: p.at, value: p.dbp.toDouble())
+        ];
+        final avgSys = _bpAvg(pts.map((p) => p.sbp));
+        final avgDia = _bpAvg(pts.map((p) => p.dbp));
+        final maxSys = pts.map((p) => p.sbp).reduce((a, b) => a > b ? a : b);
+        final minDia = pts.map((p) => p.dbp).reduce((a, b) => a < b ? a : b);
+        final labels = pts.length >= 2
+            ? [hm(pts.first.at), hm(pts.last.at)]
+            : const <String>[];
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TrendChartCard(
+              title: 'Systolic across the day',
+              subtitle: ymd(anchor),
+              points: sysPoints,
+              color: AppColors.bloodPressure,
+              axis: const TrendAxis.bounded(
+                min: 80,
+                max: 180,
+                referenceMin: 90,
+                referenceMax: 120,
+              ),
+              bottomLabels: labels,
+              showDots: true,
+            ),
+            const SizedBox(height: 16),
+            TrendChartCard(
+              title: 'Diastolic across the day',
+              points: diaPoints,
+              color: AppColors.bloodPressure.withValues(alpha: 0.6),
+              axis: const TrendAxis.bounded(
+                min: 40,
+                max: 120,
+                referenceMin: 60,
+                referenceMax: 80,
+              ),
+              bottomLabels: labels,
+              showDots: true,
+            ),
+            const SizedBox(height: 16),
+            MetricGrid(
+              tiles: [
+                MetricTile(
+                  label: 'Average',
+                  reference: 'Reference: ~120/80',
+                  value: (avgSys == null || avgDia == null)
+                      ? '--'
+                      : '${avgSys.round()}/${avgDia.round()}',
+                  valueUnit: 'mmHg',
+                ),
+                MetricTile(
+                  label: 'Readings',
+                  reference: 'hourly while worn',
+                  value: readings.length.toString(),
+                ),
+                MetricTile(
+                  label: 'Highest systolic',
+                  reference: 'Reference: 90~120',
+                  value: '$maxSys',
+                  valueUnit: 'mmHg',
+                  status: statusFor(
+                    value: maxSys.toDouble(),
+                    ok: const MetricRange(90, 120),
+                    highIfAbove: 130,
+                  ),
+                ),
+                MetricTile(
+                  label: 'Lowest diastolic',
+                  reference: 'Reference: 60~80',
+                  value: '$minDia',
+                  valueUnit: 'mmHg',
+                ),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _BpTrendRange extends ConsumerWidget {
+  const _BpTrendRange({required this.period, required this.anchor});
+  final Period period;
+  final DateTime anchor;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final range = _resolveRange(period, anchor);
+    final async = ref.watch(bpReadingsInRangeProvider(range));
+    final cal = ref.watch(activeBpCalibrationProvider).valueOrNull;
+    return async.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.symmetric(vertical: 32),
+        child: Center(child: CircularProgressIndicator()),
+      ),
+      error: (e, _) => _BpTrendEmpty(message: 'Failed to load: $e'),
+      data: (readings) {
+        if (readings.isEmpty) {
+          return const _BpTrendEmpty(
+            message: 'No BP in this range. Wear the band to log hourly '
+                'readings across the day.',
+          );
+        }
+        // Group calibrated readings by local day → daily median sbp/dbp.
+        final pts = _calibratedPoints(readings, cal);
+        final byDay = <String, List<_BpPoint>>{};
+        for (final p in pts) {
+          final key = ymd(DateTime(p.at.year, p.at.month, p.at.day));
+          (byDay[key] ??= []).add(p);
+        }
+        final dayKeys = byDay.keys.toList()..sort();
+        final sysPoints = <TrendPoint>[];
+        final diaPoints = <TrendPoint>[];
+        final dailySys = <int>[];
+        final dailyDia = <int>[];
+        for (final k in dayKeys) {
+          final ds = byDay[k]!;
+          final medSys = _bpMedian(ds.map((p) => p.sbp))!;
+          final medDia = _bpMedian(ds.map((p) => p.dbp))!;
+          final noon = DateTime(ds.first.at.year, ds.first.at.month,
+              ds.first.at.day, 12);
+          sysPoints.add(TrendPoint(at: noon, value: medSys.toDouble()));
+          diaPoints.add(TrendPoint(at: noon, value: medDia.toDouble()));
+          dailySys.add(medSys);
+          dailyDia.add(medDia);
+        }
+        final avgSys = _bpAvg(dailySys);
+        final avgDia = _bpAvg(dailyDia);
+        final span = period == Period.week
+            ? 'this week'
+            : period == Period.month
+                ? 'this month'
+                : '3 months';
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TrendChartCard(
+              title: 'Systolic (daily median) — $span',
+              points: sysPoints,
+              color: AppColors.bloodPressure,
+              axis: const TrendAxis.bounded(
+                min: 80,
+                max: 180,
+                referenceMin: 90,
+                referenceMax: 120,
+              ),
+              bottomLabels: _bottomLabels(period, anchor),
+              showDots: true,
+            ),
+            const SizedBox(height: 16),
+            TrendChartCard(
+              title: 'Diastolic (daily median) — $span',
+              points: diaPoints,
+              color: AppColors.bloodPressure.withValues(alpha: 0.6),
+              axis: const TrendAxis.bounded(
+                min: 40,
+                max: 120,
+                referenceMin: 60,
+                referenceMax: 80,
+              ),
+              bottomLabels: _bottomLabels(period, anchor),
+              showDots: true,
+            ),
+            const SizedBox(height: 16),
+            MetricGrid(
+              tiles: [
+                MetricTile(
+                  label: 'Average',
+                  reference: 'Reference: ~120/80',
+                  value: (avgSys == null || avgDia == null)
+                      ? '--'
+                      : '${avgSys.round()}/${avgDia.round()}',
+                  valueUnit: 'mmHg',
+                ),
+                MetricTile(
+                  label: 'Days with data',
+                  reference: '',
+                  value: dayKeys.length.toString(),
+                ),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  BpDateRange _resolveRange(Period p, DateTime a) {
+    switch (p) {
+      case Period.day:
+        final s = DateTime(a.year, a.month, a.day);
+        return BpDateRange(fromDate: s, toDate: s);
+      case Period.week:
+        final monday = a.subtract(Duration(days: a.weekday - 1));
+        final sunday = monday.add(const Duration(days: 6));
+        return BpDateRange(
+          fromDate: DateTime(monday.year, monday.month, monday.day),
+          toDate: DateTime(sunday.year, sunday.month, sunday.day),
+        );
+      case Period.month:
+        final first = DateTime(a.year, a.month, 1);
+        final lastDay = DateTime(a.year, a.month + 1, 0);
+        return BpDateRange(fromDate: first, toDate: lastDay);
+      case Period.threeMonths:
+        final first = DateTime(a.year, a.month - 2, 1);
+        final lastDay = DateTime(a.year, a.month + 1, 0);
+        return BpDateRange(fromDate: first, toDate: lastDay);
+    }
+  }
+
+  List<String> _bottomLabels(Period period, DateTime anchor) {
+    switch (period) {
+      case Period.day:
+        return const [];
+      case Period.week:
+        final monday = anchor.subtract(Duration(days: anchor.weekday - 1));
+        return List.generate(7, (i) => md(monday.add(Duration(days: i))));
+      case Period.month:
+        final first = DateTime(anchor.year, anchor.month, 1);
+        final next = DateTime(anchor.year, anchor.month + 1, 1);
+        final days = next.difference(first).inDays;
+        return [
+          for (final day in [1, 7, 13, 19, 25, days])
+            md(DateTime(first.year, first.month, day)),
+        ];
+      case Period.threeMonths:
+        final first = DateTime(anchor.year, anchor.month - 2, 1);
+        return [
+          md(first),
+          md(DateTime(first.year, first.month + 1, 1)),
+          md(DateTime(first.year, first.month + 2, 1)),
+        ];
+    }
+  }
+}
+
+class _BpTrendEmpty extends StatelessWidget {
+  const _BpTrendEmpty({required this.message});
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.favorite_border,
+              color: AppColors.bloodPressure, size: 28),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(message,
+                style: const TextStyle(color: AppColors.textSecondary)),
+          ),
+        ],
+      ),
+    );
   }
 }
 

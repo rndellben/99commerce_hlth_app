@@ -39,6 +39,12 @@ void main() {
       expect(r.rrIrregularityPct!, lessThan(10.0),
           reason: 'CoV=${r.rrIrregularityPct} log=${r.log.join('\n')}');
       expect(r.ectopicBeatPct, isNotNull);
+      // A maximally regular rhythm packs every R-R interval into one histogram
+      // bin → normalised Shannon entropy near 0, well under the rule's 0.7
+      // AFib-flag threshold.
+      expect(r.rrEntropyNorm, isNotNull);
+      expect(r.rrEntropyNorm!, lessThan(0.5),
+          reason: 'entropy=${r.rrEntropyNorm} log=${r.log.join('\n')}');
     });
 
     test('derived HR far from band HR fails the quality gate', () {

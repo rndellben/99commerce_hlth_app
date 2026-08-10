@@ -19,6 +19,7 @@ class DailyMetrics with _$DailyMetrics {
     // Rhythm — irregular-heartbeat screen
     double? rrIrregularityPct,
     double? ectopicBeatPct,
+    double? rrEntropyNorm,
     // SpO2
     double? spo2OvernightAvg,
     int? spo2OvernightMin,

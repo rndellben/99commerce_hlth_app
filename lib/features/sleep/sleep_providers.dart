@@ -2,9 +2,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hlth_app/core/bootstrap/active_session.dart';
 import 'package:hlth_app/core/database/enums.dart';
 import 'package:hlth_app/core/models/daily_metrics.dart';
-import 'package:hlth_app/core/models/nightly_record_row.dart';
 import 'package:hlth_app/core/models/sleep.dart';
 import 'package:hlth_app/core/repositories/daily_metrics_repository.dart';
+import 'package:hlth_app/core/repositories/hr_repository.dart';
+import 'package:hlth_app/core/repositories/hrv_repository.dart';
 import 'package:hlth_app/core/repositories/nightly_record_repository.dart';
 import 'package:hlth_app/core/repositories/sleep_repository.dart';
 import 'package:hlth_app/core/repositories/spo2_repository.dart';
@@ -80,27 +81,55 @@ final sleepNightMetricsProvider =
   );
 });
 
-/// STRICTLY sleep-window HRV for a wake date: the `nightly_records` row's
-/// `rmssdMedian` (the exact per-night median Cardio Load banks — computed
-/// only from HRV samples inside [bedtime, wake)). The Sleep screen's HRV
-/// tile reads THIS instead of `daily_metrics.hrvRmssdMs`, because that
-/// rollup is also written by the daytime PPG capture as a fallback — which
-/// let an awake capture's (sometimes inflated) RMSSD masquerade as "measured
-/// during sleep" (290 ms seen on-device 2026-07-07).
+/// STRICTLY sleep-window HRV for a session. Primary source: the
+/// `nightly_records` row's `rmssdMedian` (the exact per-night median Cardio
+/// Load banks). The Sleep screen's HRV tile reads THIS instead of
+/// `daily_metrics.hrvRmssdMs`, because that rollup is also written by the
+/// daytime PPG capture as a fallback — which let an awake capture's
+/// (sometimes inflated) RMSSD masquerade as "measured during sleep"
+/// (290 ms seen on-device 2026-07-07).
+///
+/// Fallback: the nightly record's median needs ≥5 RMSSD epochs
+/// (`vascular_load.reduceSession`), so a short night — 3.7 h yields only 4
+/// hourly band samples — stores null and the tile showed '--' even though
+/// in-sleep HRV existed (2026-07-15). That threshold is a SCORING validity
+/// gate, not a display rule: when the record has no median, take the median
+/// directly over band HRV samples inside [startedAt, endedAt). Bounded by
+/// the session window, so awake/daytime captures still can't leak in.
 final sleepWindowHrvProvider =
-    FutureProvider.family<NightlyRecordRow?, DateTime>((ref, wakeDate) async {
-  final repo = ref.watch(nightlyRecordRepositoryProvider);
-  return repo.getForDate(
-    userId: ActiveSession.defaultUserId,
-    localDate: DateTime(wakeDate.year, wakeDate.month, wakeDate.day),
-  );
+    FutureProvider.family<double?, SleepSession>((ref, session) async {
+  final wake = session.endedAt.toLocal();
+  final record = await ref.watch(nightlyRecordRepositoryProvider).getForDate(
+        userId: ActiveSession.defaultUserId,
+        localDate: DateTime(wake.year, wake.month, wake.day),
+      );
+  final banked = record?.rmssdMedian;
+  if (banked != null && banked.isFinite) return banked;
+
+  final samples = await ref.watch(hrvRepositoryProvider).getInRange(
+        userId: ActiveSession.defaultUserId,
+        from: session.startedAt,
+        to: session.endedAt,
+      );
+  final vals = samples
+      .map((s) => s.rmssdMs)
+      .where((v) => v.isFinite && v > 0)
+      .toList()
+    ..sort();
+  // A 1-sample "median" is a coin flip; 2+ genuine in-sleep readings is an
+  // honest, if coarse, night value.
+  if (vals.length < 2) return null;
+  final mid = vals.length ~/ 2;
+  return vals.length.isOdd ? vals[mid] : (vals[mid - 1] + vals[mid]) / 2;
 });
 
 /// Overnight low-oxygen scan for one session — Ryan's June 17 "surfaced card
 /// on the sleep dashboard" ask. Runs the SAME pure detection as
 /// [BreathingDisruptionRule] (which drives the notification), so the card and
 /// the push can never disagree. The card decides visibility from the result
-/// (≥2 low hourly buckets with ≥4 buckets of coverage).
+/// (≥2 low hourly buckets with ≥4 buckets of coverage). Also pulls the
+/// night's HR so the detector can add the bradycardia-tachycardia
+/// corroboration signal.
 final breathingRiskForSessionProvider =
     FutureProvider.family<BreathingDisruptionResult, SleepSession>(
         (ref, session) async {
@@ -109,7 +138,56 @@ final breathingRiskForSessionProvider =
         from: session.startedAt,
         to: session.endedAt,
       );
-  return BreathingDisruptionRule.detect(spo2);
+  final hr = await ref.watch(hrRepositoryProvider).getInRange(
+        userId: ActiveSession.defaultUserId,
+        from: session.startedAt,
+        to: session.endedAt,
+      );
+  return BreathingDisruptionRule.detect(spo2, hrSamples: hr);
+});
+
+/// One flagged night in the breathing-disruption trend.
+class BreathingTrendNight {
+  const BreathingTrendNight({required this.wakeDate, required this.result});
+  final DateTime wakeDate;
+  final BreathingDisruptionResult result;
+}
+
+/// Last [days] nights of breathing-disruption results (most recent first),
+/// keeping only nights with enough SpO2 coverage to judge. Powers the
+/// multi-night trend strip on the sleep card so a recurring pattern — the
+/// thing that actually warrants attention (guide Layer 6) — is visible, not
+/// just last night in isolation.
+final breathingTrendProvider =
+    FutureProvider.family<List<BreathingTrendNight>, int>((ref, days) async {
+  final now = DateTime.now();
+  final sessions = await ref.watch(sleepRepositoryProvider).getInRange(
+        userId: ActiveSession.defaultUserId,
+        from: now.subtract(Duration(days: days)),
+        to: now,
+        type: SleepSessionType.night,
+      );
+  final spo2Repo = ref.watch(spo2RepositoryProvider);
+  final hrRepo = ref.watch(hrRepositoryProvider);
+  final out = <BreathingTrendNight>[];
+  for (final s in sessions) {
+    final spo2 = await spo2Repo.getInRange(
+      userId: ActiveSession.defaultUserId,
+      from: s.startedAt,
+      to: s.endedAt,
+    );
+    final hr = await hrRepo.getInRange(
+      userId: ActiveSession.defaultUserId,
+      from: s.startedAt,
+      to: s.endedAt,
+    );
+    final r = BreathingDisruptionRule.detect(spo2, hrSamples: hr);
+    if (r.totalBuckets >= 4) {
+      out.add(BreathingTrendNight(wakeDate: s.endedAt.toLocal(), result: r));
+    }
+  }
+  out.sort((a, b) => b.wakeDate.compareTo(a.wakeDate));
+  return out;
 });
 
 /// Range request — used by Week + Month tabs.

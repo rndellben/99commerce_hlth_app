@@ -6,6 +6,7 @@ import 'package:hlth_app/core/models/daily_metrics.dart';
 import 'package:hlth_app/core/models/sleep.dart';
 import 'package:hlth_app/core/repositories/device_repository.dart';
 import 'package:hlth_app/core/sync/band_sync_service.dart';
+import 'package:hlth_app/core/services/alerts/breathing_disruption_rule.dart';
 import 'package:hlth_app/features/sleep/sleep_providers.dart';
 import 'package:hlth_app/ui/theme/app_colors.dart';
 import 'package:hlth_app/ui/widgets/date_selector.dart';
@@ -99,6 +100,12 @@ class _SleepScreenState extends ConsumerState<SleepScreen> {
     final today = _today();
     switch (_period) {
       case Period.day:
+        // Band sleep day-offset N returns the night whose WAKE date is
+        // (today - N) — verified on-device 2026-07-21 (offset 0 → last night
+        // that woke today, offset 1 → the night that woke yesterday). So the
+        // offset for the anchored day is exactly `delta`. (The blank-vitals
+        // bug that first looked offset-related was actually the sleep-session
+        // TZ frame shift, fixed in sync_adapters.sleepFromNative.)
         final delta = today.difference(_anchor).inDays;
         return [delta.clamp(0, 7)];
       case Period.week:
@@ -261,12 +268,11 @@ class _DaySessionContent extends ConsumerWidget {
     final nightMetrics = ref
         .watch(sleepNightMetricsProvider(session.endedAt.toLocal()))
         .valueOrNull;
-    // Strict sleep-window HRV (nightly record median) — see
-    // _SleepVitalsSection for why this doesn't use the daily_metrics rollup.
-    final sleepHrv = ref
-        .watch(sleepWindowHrvProvider(session.endedAt.toLocal()))
-        .valueOrNull
-        ?.rmssdMedian;
+    // Strict sleep-window HRV (nightly record median, session-window
+    // fallback for short nights) — see _SleepVitalsSection for why this
+    // doesn't use the daily_metrics rollup.
+    final sleepHrv =
+        ref.watch(sleepWindowHrvProvider(session)).valueOrNull;
     final totalMin = session.totalMin;
     final deepPct = totalMin > 0 ? (session.deepMin * 100 / totalMin) : 0.0;
     final lightPct = totalMin > 0 ? (session.lightMin * 100 / totalMin) : 0.0;
@@ -477,11 +483,12 @@ class _BreathingRiskCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final result =
         ref.watch(breathingRiskForSessionProvider(session)).valueOrNull;
-    if (result == null ||
-        result.totalBuckets < 4 ||
-        result.lowBuckets < 2) {
+    if (result == null || !result.flags) {
       return const SizedBox.shrink();
     }
+    final trend = ref.watch(breathingTrendProvider(14)).valueOrNull ??
+        const <BreathingTrendNight>[];
+    final disruptedNights = trend.where((n) => n.result.flags).length;
     return Container(
       margin: const EdgeInsets.only(top: 16),
       padding: const EdgeInsets.all(16),
@@ -490,40 +497,135 @@ class _BreathingRiskCard extends ConsumerWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.scoreFair.withValues(alpha: 0.4)),
       ),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.air, color: AppColors.scoreFair, size: 22),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Potential breathing disruption',
-                  style: TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.air, color: AppColors.scoreFair, size: 22),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'Potential breathing disruption',
+                            style: TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        _SeverityChip(severity: result.severity),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Blood oxygen dipped to ${result.minPct}% and stayed '
+                      'below 90% during ${result.lowBuckets} hours of this '
+                      'sleep.${result.corroborated ? ' Your heart rate also '
+                          'swung in a matching pattern.' : ''} This isn’t a '
+                      'diagnosis — if it happens often, consider mentioning '
+                      'it to a healthcare professional.',
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'Blood oxygen dipped to ${result.minPct}% and stayed below '
-                  '90% during ${result.lowBuckets} hours of this sleep. This '
-                  'isn’t a diagnosis — if it happens often, consider '
-                  'mentioning it to a healthcare professional.',
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 12,
-                    height: 1.4,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
+          if (trend.length >= 2) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Flagged on $disruptedNights of the last ${trend.length} '
+              'tracked nights',
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 6),
+            _BreathingTrendStrip(nights: trend),
+          ],
         ],
       ),
+    );
+  }
+}
+
+/// Small wellness severity pill (mild → marked). Never uses clinical apnea
+/// grades — this reflects desaturation depth/count only.
+class _SeverityChip extends StatelessWidget {
+  const _SeverityChip({required this.severity});
+  final BreathingSeverity severity;
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, color) = switch (severity) {
+      BreathingSeverity.marked => ('Marked', AppColors.scorePoor),
+      BreathingSeverity.moderate => ('Moderate', AppColors.scoreFair),
+      _ => ('Mild', AppColors.scoreFair),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+/// Row of dots, one per tracked night (most recent on the right). Filled =
+/// flagged, hollow = clear — a glanceable multi-night pattern.
+class _BreathingTrendStrip extends StatelessWidget {
+  const _BreathingTrendStrip({required this.nights});
+  final List<BreathingTrendNight> nights;
+
+  @override
+  Widget build(BuildContext context) {
+    final ordered = [...nights]
+      ..sort((a, b) => a.wakeDate.compareTo(b.wakeDate));
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: [
+        for (final n in ordered)
+          Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: n.result.flags
+                  ? AppColors.scoreFair
+                  : Colors.transparent,
+              border: Border.all(
+                color: n.result.flags
+                    ? AppColors.scoreFair
+                    : AppColors.textTertiary,
+                width: 1.5,
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

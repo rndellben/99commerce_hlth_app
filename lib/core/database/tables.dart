@@ -237,6 +237,10 @@ class DailyMetrics extends Table {
   // Rhythm — irregular-heartbeat screen (raw R-R, pre-ectopic-cleaning)
   RealColumn get rrIrregularityPct => real().nullable()();
   RealColumn get ectopicBeatPct => real().nullable()();
+  // Normalised Shannon entropy (0..1) of the R-R histogram — the guide's
+  // third irregularity axis. Low in sinus rhythm (narrow interval spread),
+  // high when beat timing is disordered.
+  RealColumn get rrEntropyNorm => real().nullable()();
   // SpO2
   RealColumn get spo2OvernightAvg => real().nullable()();
   IntColumn get spo2OvernightMin => integer().nullable()();

@@ -2016,12 +2016,14 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
       restingRespRateBpm: result.respRateBpm,
       rrIrregularityPct: result.rrIrregularityPct ?? existing?.rrIrregularityPct,
       ectopicBeatPct: result.ectopicBeatPct ?? existing?.ectopicBeatPct,
+      rrEntropyNorm: result.rrEntropyNorm ?? existing?.rrEntropyNorm,
       computedAt: nowUtc,
     );
     await repo.upsert(merged);
     _push('  persisted resp=${result.respRateBpm?.toStringAsFixed(1)} '
         'irregularity=${result.rrIrregularityPct?.toStringAsFixed(1) ?? "—"}% '
-        'ectopic=${result.ectopicBeatPct?.toStringAsFixed(1) ?? "—"}% for today');
+        'ectopic=${result.ectopicBeatPct?.toStringAsFixed(1) ?? "—"}% '
+        'entropy=${result.rrEntropyNorm?.toStringAsFixed(2) ?? "—"} for today');
   }
 
   Future<void> _showDbCounts() async {

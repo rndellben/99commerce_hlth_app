@@ -150,6 +150,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         : (cardioLoadScore.provisional
                             ? 'Calibrating'
                             : cardioLoadScore.label),
+                    onTap: () =>
+                        context.push('/data-details?metric=cardio-load'),
                   ),
 
                   // 3 — Stability Score (= Recovery)
