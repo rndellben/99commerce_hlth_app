@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:hlth_app/core/ble/ble_service.dart';
 import 'package:hlth_app/core/models/bp_calibration.dart';
 import 'package:hlth_app/core/models/health_samples.dart';
-import 'package:hlth_app/core/processing/bp_formula.dart';
 import 'package:hlth_app/core/providers/bp_calibration_providers.dart';
 import 'package:hlth_app/features/blood_pressure/bp_controller.dart';
 import 'package:hlth_app/features/blood_pressure/bp_providers.dart';
@@ -480,25 +479,12 @@ class _BloodPressureScreenState extends ConsumerState<BloodPressureScreen> {
 /// cuff calibration the SAME way the headline does so the trend matches.
 typedef _BpPoint = ({DateTime at, int sbp, int dbp});
 
-BpCalibrationAnchor? _bpAnchorFor(BpCalibration? cal) {
-  if (cal == null) return null;
-  return BpCalibrationAnchor(
-    systolic: cal.cuffSystolic,
-    diastolic: cal.cuffDiastolic,
-    hrAtCalibration: cal.hrAtCalibration ?? 0,
-  );
-}
-
 List<_BpPoint> _calibratedPoints(List<BpReading> readings, BpCalibration? cal) {
-  final anchor = _bpAnchorFor(cal);
   final out = <_BpPoint>[];
   for (final r in readings) {
-    final c = applyBpCalibration(
-      rawSbp: r.systolicMmhg,
-      rawDbp: r.diastolicMmhg,
-      hr: r.pulseBpm,
-      anchor: anchor,
-    );
+    // Same helper the headline uses — a local copy of the anchor logic is
+    // how the chart and the headline drifted apart in the first place.
+    final c = calibrateBpReading(reading: r, cal: cal);
     out.add((at: r.capturedAt.toLocal(), sbp: c.sbp, dbp: c.dbp));
   }
   return out;

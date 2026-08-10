@@ -438,3 +438,115 @@ out ahead of the current working-tree changes without a migration.
    crumb file?** Probably not — the redaction rules mean it holds nothing
    sensitive by construction, which is the stronger guarantee. Flagging it only
    because §6 violation 1 shows the file has drifted sensitive once already.
+
+---
+
+## Adversarial verification 2026-08-10
+
+Second pass by a different model under `metric-validation` rule 6: the brief was
+to **refute** §4.1, defaulting to "not a defect" when uncertain. The asymmetry
+(`_onTick` bounded, `triggerNow` not) was already established; the open question
+was **reachability** — can `MethodChannel.invokeMethod` on a history pull
+actually hang forever, or does a native bridge time out and reply? Read: the
+Dart `BleService`, the Android Kotlin bridge, and the iOS Swift bridge. No code
+changed; no build or test run.
+
+### §4.1 — the `triggerNow` latch — **CONFIRMED** (reachable on Android; iOS STILL-UNKNOWN)
+
+**Dart layer bounds nothing.** `ble_service.dart` contains zero `.timeout(`
+calls across all 49 channel methods. `BandSyncService._guarded`
+([band_sync_service.dart:64-72](../../lib/core/sync/band_sync_service.dart#L64))
+converts a *throw* into a `SyncStepResult` but has no ceiling, so a step that
+never returns hangs `syncAll` itself. `triggerNow` awaits
+`_runSyncWithRetention` bare at
+[coordinator:320](../../lib/core/sync/periodic_sync_coordinator.dart#L320); the
+`finally` that clears `_inFlight` is at
+[:327-329](../../lib/core/sync/periodic_sync_coordinator.dart#L327) and is
+reached only if that await completes. Confirmed as written.
+
+**Android — three classes of history handler, and one of them cannot reply.**
+
+| Class | Methods | Reply guaranteed? |
+|---|---|---|
+| **A — locally guarded** | `syncHRV` → `getHrvHistory` | ✅ 10 s `mainHandler.postDelayed` + `AtomicBoolean`, replies empty on timeout ([BleManager.kt:1818-1826](../../android/app/src/main/kotlin/com/hlth/hlth_app/ble/BleManager.kt#L1818)) |
+| **B — SDK callback with an error path** | `syncHeartRate` ([:1461](../../android/app/src/main/kotlin/com/hlth/hlth_app/ble/BleManager.kt#L1461)), `syncStressDay` ([:1376](../../android/app/src/main/kotlin/com/hlth/hlth_app/ble/BleManager.kt#L1376)), `syncSleep` ([:2342](../../android/app/src/main/kotlin/com/hlth/hlth_app/ble/BleManager.kt#L2342)), `syncSpO2`, `syncStepsDay` | ⚠️ Only if the vendor `BleOperateManager.HealthDataCallback` fires. No local timer. There *is* evidence the SDK times out on this path — `getBpDay` "hangs ~15 s then `-4001`" (`docs/TROUBLESHOOTING.md:47-49`) is an `onError` arriving — but nothing in this repo proves it fires on every disconnect. |
+| **C — success-only lambda, no timer, no error channel at all** | **`syncBloodPressure` → `getBpHistory`** ([:2295-2324](../../android/app/src/main/kotlin/com/hlth/hlth_app/ble/BleManager.kt#L2295)), **`syncSteps` → `getDailyTotals`** ([:2402-2430](../../android/app/src/main/kotlin/com/hlth/hlth_app/ble/BleManager.kt#L2402)), **`syncStepsDetail` → `getStepBucketHistory`** ([:2443-2469](../../android/app/src/main/kotlin/com/hlth/hlth_app/ble/BleManager.kt#L2443)) | ❌ **No.** `CommandHandle.executeReqCmd(req, ICommandResponse{ … })` registers a success-only lambda. There is no `onError` override, no `AtomicBoolean`, no `postDelayed`. The outer `try/catch` only covers the synchronous enqueue. If the notify never comes back up the queue, `result` is never fulfilled and the Dart future never completes. |
+
+All three class-C methods are in `syncAll`'s step list
+([band_sync_service.dart:82-157](../../lib/core/sync/band_sync_service.dart#L82)),
+so the connect-edge sync routes through them on every run.
+
+The repo already states this in its own words. The guard added to `syncHRV` —
+also a `CommandHandle` path — is commented: *"A command the band never answers
+must not hang the Dart await forever (mirrors the BP measure safety net)"*
+([BleManager.kt:1819-1820](../../android/app/src/main/kotlin/com/hlth/hlth_app/ble/BleManager.kt#L1819)).
+That is an on-device-derived statement that `CommandHandle.executeReqCmd` does
+not guarantee a reply, written by whoever hit it. `docs/ANDROID_SDK_REFERENCE.md:45-62`
+describes the SDK as asynchronous and callback-driven and documents no timeout
+contract for `CommandHandle`. **Reachability: confirmed on Android.**
+
+**iOS — no local guard anywhere on the history path; SDK behaviour undetermined.**
+Every method in
+[BleManager+History.swift](../../ios/Runner/BLE/BleManager+History.swift) calls
+`result(...)` only from inside a `QCSDKCmdCreator` completion block. There is no
+`asyncAfter` fallback on `getSleepHistory` (:23), `getHrHistory` (:36),
+`getHrvHistory` (:58), `getStressDay` (:71), `getDailyTotals` (:216) or
+`getStepBucketHistory` (:228). The two `timedOut` branches that do exist
+(`getSpO2Interval` :123, `getSpO2Capability` :154) are SDK-reported flags, not a
+local ceiling. `getSpO2History` (:99-112) is worse in shape — it chains seven
+sequential per-day SDK calls and calls `result` only when the recursion reaches
+day 7, so one non-firing completion strands the whole chain. The file header
+claims *"On failure every method returns the empty-shape payload — it never
+throws"* (:9-11), but that holds only if the SDK invokes `fail:` / `finished:`;
+nothing in this repo establishes that it does. One narrowing: iOS
+`getBpHistory` is a stub that replies immediately (:208-210), so the single
+worst Android offender has no iOS counterpart. **Verdict for iOS:
+STILL-UNKNOWN** — plausible, unproven, and not determinable without either the
+QCBandSDK sources or an on-device link-drop test.
+
+**Severity: as stated, and the "forever" wording is defensible.** `_inFlight` is
+an instance field ([:108](../../lib/core/sync/periodic_sync_coordinator.dart#L108))
+on a coordinator built by a plain, non-`autoDispose` `Provider`
+([:361-365](../../lib/core/sync/periodic_sync_coordinator.dart#L361)), so it
+lives as long as the container — the engine's process. The refutation I expected
+to work was "the watchdog restarts the engine and clears it": it does not.
+`SyncWatchdogWorker.doWork` returns early when `MainActivity.uiEngineAlive` or
+`HeadlessSyncEngine.isRunning`
+([SyncWatchdogWorker.kt:36-42](../../android/app/src/main/kotlin/com/hlth/hlth_app/SyncWatchdogWorker.kt#L36)) —
+a latched engine is a *live* engine, so the watchdog explicitly declines to
+intervene. Meanwhile `BandReconnector.start()`'s own `Timer.periodic(5 min)`
+([band_reconnector.dart:33-37](../../lib/core/sync/band_reconnector.dart#L33))
+is independent of the coordinator and keeps reconnecting, and each reconnect
+edge calls `triggerNow` again ([:140](../../lib/core/sync/periodic_sync_coordinator.dart#L140))
+only to bounce off `if (_inFlight)` at
+[:304](../../lib/core/sync/periodic_sync_coordinator.dart#L304). The plan's
+"alive but deaf, and the reconnector keeps happily reconnecting a band nothing
+will ever read from" is accurate. One precision edit worth making: the latch
+clears on process death, so the field signature is *silent until the app or
+engine is restarted*, not literally permanent — which matters, because it predicts
+"the user force-quits the app and sync works again for a while", a testable
+claim against the reported symptom.
+
+**Sequencing implication:** phase 0.5 is not merely "likely fixes the reported
+symptom" — the three class-C Kotlin handlers mean the Dart-side ceiling on
+`triggerNow` is the *only* thing that can bound them. A Kotlin-side guard
+mirroring `syncHRV`'s `AtomicBoolean` + `postDelayed` on those three would be
+the durable fix, but that is three synchronized edits under the frozen-channel
+rule (`CLAUDE.md`), so the Dart ceiling is correctly the first move.
+
+### Rule 6 — what the next pass should attack
+
+This pass is one model refuting another and does not settle it. A third model
+should try to refute, specifically:
+
+1. **That `CommandHandle.executeReqCmd` never times out.** The strongest counter
+   would be decompiled evidence from `classes.jar` of an internal timeout in the
+   command queue that surfaces as a `null` response to the same
+   `ICommandResponse` lambda — which would make class C reply (with `rsp == null`,
+   which `syncBloodPressure:2300` and `syncSteps:2407` already handle) and
+   collapse this finding to iOS-only.
+2. **That the connect-edge path can actually reach a class-C step before the
+   link drops** — `syncAll` runs HR/SpO2/sleep/steps *before* `getBpHistory`, so
+   a refuter should check whether an earlier class-B step would fail first and
+   short-circuit the sweep.
+3. **The iOS half**, which this pass could not decide either way.

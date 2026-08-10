@@ -16,7 +16,8 @@
       "Bash(echo \"=== HLTH APP contents ===\" && ls -la ~/\"HLTH APP\")",
       "Read(//Users/randellbenedictcalilung/HLTH APP/**)",
       "Bash(mv ~/Downloads/\"Transfered Files\" ~/\"HLTH APP\"/)",
-      "Bash(mv ~/99commerce_hlth_app ~/\"HLTH APP\"/)"
+      "Bash(mv ~/99commerce_hlth_app ~/\"HLTH APP\"/)",
+      "Bash(flutter test *)"
     ]
   }
 }
