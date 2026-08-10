@@ -258,3 +258,234 @@ Why #5: it is the first test of `lib/core/sync/` at all, and it pins four H59 qu
    line; no package change either way.
 5. **`flutter test` was not run** during this audit. Test counts come from
    `grep`, not from a run. No test file was created or modified.
+
+## Adversarial verification 2026-08-10
+
+Second pass by a different model, run under `metric-validation` rule 6: the brief
+was to **refute** each finding, defaulting to "not a defect" when uncertain.
+Scope: **Unverified §1** (rank 1 reachability) and **Unverified §3** (rank 4
+index convergence). Source + `git` history only — `flutter test` and
+`flutter analyze` still not run, no file outside this section changed.
+
+### Rank 1 — BP calibration HR-coupling — **CONFIRMED** (live defect, not a latent guard)
+
+Refutation attempted: prove `hrAtCalibration` is always captured, which would
+demote this to a latent guard. **It is not.** The write path admits null on two
+independent routes and has no guard against it.
+
+| # | Link in the chain | Evidence |
+|---|---|---|
+| 1 | There is exactly **one** write path for a `BpCalibration` row: `BpController.saveCalibration` → `upsertNewActive`. No other construction site exists in `lib/` (`grep "BpCalibration("` returns only the freezed factory, the repository's `_rowToDomain`, and this call). | `bp_controller.dart:118-132` |
+| 2 | It sets `hrAtCalibration: hrNow` where `hrNow = _ref.read(latestHrSampleProvider).valueOrNull?.bpm` — an `int?` with no fallback, no guard, no retry. | `bp_controller.dart:115`, `:124` |
+| 3 | The field is nullable end-to-end: freezed model, drift column, companion. Nothing coerces it. | `bp_calibration.dart:21`, `tables.dart:345`, `bp_calibration_repository.dart:71` |
+| 4 | The save flow validates SBP/DBP ranges and `sbp > dbp` only. HR is never mentioned, and the flow cannot fail on a missing HR. | `blood_pressure_screen.dart:1241-1268` |
+
+**Null route A — empty `hr_samples` (the likely one).** `latestHrSampleProvider`
+is `repo.watchLatest(...)` (`health_data_providers.dart:54-57`); with no HR rows
+it emits `AsyncData(null)` and `?.bpm` yields null. A user who pairs a ring and
+calibrates before the first HR history sync lands hits this — and the app
+actively steers them there ("Calibrating now takes about 2 minutes and
+significantly improves accuracy", `blood_pressure_screen.dart:1054`, on a card
+shown when no calibration exists).
+
+**Null route B — provider not yet resolved.** Nothing in `features/blood_pressure/`
+watches `latestHrSampleProvider`; its only watchers are
+`home_screen.dart:72` and `heart_rate_screen.dart:236`. A `read` of a
+never-listened `StreamProvider` returns `AsyncLoading`, so `valueOrNull` is null
+on any entry path that has not built the home screen — and `/blood-pressure` is
+a top-level route, not a child of the home shell (`router.dart:93` vs `:81`).
+
+**The reading side does supply HR, so the HR-coupled branch really fires.** Both
+band BP decoders stamp `pulseBpm` (`sync_adapters.dart:172` timing-monitor,
+`:237` today-from-HR), which is what `watchLatest` returns for a normal user.
+`applyBpCalibration` then branches on `hr != null` (`bp_formula.dart:143`) and
+computes `cuff.systolic + (hr − 0) × 0.45` (`:47`). Confirmed as the audit
+describes.
+
+**Severity: rank 1 is still rank 1**, and its "Likelihood: Med — unverified" cell
+should now read confirmed-reachable. Two corrections to the row, though:
+
+**(a) The inflation is a *constant*, not `≈0.45 × pulse`.** For a band-derived
+reading the raw value already carries the same `0.45 × hr` term, so it cancels:
+
+```
+raw            = 80.75 + ageCoef + 0.45·hr        (bp_formula.dart:60-65 expanded)
+buggy display  = cuffSbp + 0.45·hr                (:47, anchor HR = 0)
+intended       = raw + (cuffSbp − 120)            (:150)
+buggy − intended = 39.25 − ageCoef                ← no hr term
+```
+
+With `_ageBpCoefficient` (`bp_formula.dart:37`) that is **+49 mmHg under 20,
++34 at 20-29, +24 at 30-39, +19 at 40-49, +14 at 50-59, +9 at 60+** — dependent
+on age bracket and independent of pulse. The audit's "+27…+36 mmHg at 60-80 bpm"
+lands in the right bucket for a young user by coincidence, not by mechanism. The
+error *does* scale with the reading's HR for a user-entered cuff row
+(`storeManualReading`, `bp_controller.dart:77-98`), where the raw value is not a
+`BpFormula` output — but those are not what `watchLatest` normally returns.
+
+**(b) The acceptance criterion's counter-value is off by one.**
+`130 + 70 × 0.45 = 161.5`, and `(161.5).round()` is **162** in Dart, not 161.
+The expected value (`128`) is correct. Displayed pair for that fixture is
+**162/117** (`calDbp` preserves the 45 mmHg cuff gap, `bp_formula.dart:73-77`).
+
+**(c) A second instance of the same defect, outside the audited scope.**
+`_bpAnchorFor` in the BP screen does `hrAtCalibration: cal.hrAtCalibration ?? 0`
+(`blood_pressure_screen.dart:488`) and then passes `hr: r.pulseBpm`
+(`:499`) — identical bug, applied to **every point of the BP trend chart**, not
+just the headline. Whatever fix lands in `bp_calibration_providers.dart:45-70`
+has to land here too, or the chart and the headline will disagree. The
+hypertension alert is **not** affected: it passes `hr: null` explicitly, so its
+`hrAtCalibration: 0` is genuinely inert (`hypertension_risk_rule.dart:91-100`).
+
+**Severity caveat that belongs in the row** (CLAUDE.md "Blood pressure" standing
+warning): the "correct" branch is not clinically better than the buggy one. Both
+are arithmetic over HR and age with no pressure sensor and no pulse-transit-time
+term. This is a **display-magnitude defect** — the app shows a number ~10-49 mmHg
+higher than its own model intends, on a readout users read as medical — not a
+measurement-accuracy defect. Test #1 remains the right first test; the
+justification is "the app contradicts its own model on a medical-looking
+readout", not "the calibrated value is accurate".
+
+### Rank 4 — HRV dedup: do `onCreate` and `onUpgrade` converge? — **REFUTED**
+
+**Answer: yes, they converge. Zero divergences in the index set**, and
+`idx_hrv_dedup` specifically is present on every reachable install path.
+
+`onUpgrade` never needs to create an index for a table that already existed at
+the user's install version, because `onCreate` runs `_createIndices()` in full
+(`app_database.dart:56-59`). So convergence fails only if an index was added to
+`_createIndices` *after* v1 without a matching migration step. Diffing all 12
+migration steps against the 32 statements in `_createIndices`
+(`app_database.dart:199-256`):
+
+| Index group | Created by | Convergent? |
+|---|---|---|
+| 22 indices present at **v1** — `idx_hr_*` ×3, **`idx_hrv_user_time`, `idx_hrv_dedup`**, `idx_spo2_*` ×2, `idx_bp_*` ×3, `idx_step_*` ×2, `idx_daily_user_date`, `idx_sleep_user_time`, `idx_epoch_session`, `idx_baseline_*` ×2, `idx_sync_state_unique`, `idx_devices_*` ×2, `idx_users_*` ×2 | `onCreate` only — their tables are all v1 tables, never re-created by a migration step | ✅ every install path runs `_createIndices` |
+| `idx_stress_user_time`, `idx_stress_dedup` | `from < 2` (`:64-69`) — identical DDL to `:209-210` | ✅ |
+| `idx_bpcal_user_time`, `idx_bpcal_user_active` | `from < 3` (`:75-80`) ≡ `:233-234` | ✅ |
+| `idx_battery_time` | `from < 4` (`:86-88`) ≡ `:236` | ✅ |
+| `idx_exercise_user_time`, `idx_exercise_dedup` | `from < 5` (`:93-98`) ≡ `:238-239` | ✅ |
+| `idx_notiflog_user_type_time` | `from < 6` (`:103-105`) ≡ `:243` | ✅ |
+| `idx_scores_user_type_date` | `from < 8` (`:116-118`) ≡ `:231` | ✅ |
+| `idx_nightly_records_user_date` | `from < 9` (`:123-126`) ≡ `:245` | ✅ |
+| `cloud_sync_outbox` | no index in either path | ✅ convergent (and that is exactly rank 7's hazard — a real defect, but not a *divergence*) |
+
+Git history closes it. `_createIndices` at the initial commit
+(`018a9e0`, `schemaVersion => 1`) already contained `idx_hrv_dedup` and
+`idx_hrv_user_time`, and the hrv statements are byte-identical in all nine
+commits that touched the file. `HrvSamples` is in the v1 table set
+(`git show 018a9e0:lib/core/database/tables.dart` — 13 tables, `HrvSamples`
+among them) and no migration step ever drops or re-creates it. **There is no
+install path that reaches v13 without `idx_hrv_dedup`.**
+
+Consequence for the ranking: rank 4's likelihood cell ("Med — nothing asserts
+they converge") should read **Low**. The test itself is still worth writing —
+it pins the dedup contract against a future adapter change, and `sync_adapters.dart:328`'s
+`_uuid.v4()` means the index is the *only* thing standing between three pulls
+per tick and triplicated HRV — but it is a regression guard, not a live-defect
+proof. Test #3's "single riskiest write-path assumption" framing overstates it.
+
+### Adjacent finding, surfaced by the migration diff — **CONFIRMED BY EXECUTION**, fixed 2026-08-10
+
+Not part of the three findings under review, but it falls out of reading all 12
+steps and is a harder failure than anything in §1:
+
+`exercise_sessions` is created at `from < 5` with `m.createTable(exerciseSessions)`
+(`app_database.dart:92`), and drift's `createTable` emits the **current** table
+definition — which already includes `vo2max_ml` and `vo2_confidence`
+(`tables.dart:475-476`). The `from < 10` step then runs
+`m.addColumn(exerciseSessions, exerciseSessions.vo2maxMl)` unconditionally
+(`app_database.dart:132-133`). For any device upgrading from **schema 1-4**
+straight to ≥10, both blocks execute in the same `onUpgrade`, so the second
+issues `ALTER TABLE exercise_sessions ADD COLUMN vo2max_ml` against a table that
+already has it → SQLite `duplicate column name` → the migration throws and the
+database fails to open.
+
+Shipped versions per git are 1, 2, 3, then 7 (`39806be` jumps 3 → 7), so the
+exposed set is any install still at v1-v3. `exercise_sessions` is the only table
+with both a `createTable` step and a later `addColumn` step — `daily_metrics`
+takes `addColumn` at v7/v13 but is a v1 table, so its `createTable` never
+re-runs.
+
+**Executed 2026-08-10. It reproduces.** `test/app_database_migration_test.dart`
+stamps a real in-memory SQLite database with each historical schema and lets
+drift dispatch the actual `onUpgrade`. Pre-fix, 1 of 6 tests passed:
+
+```
+00:00 +0 -1: schema 1 -> 13 opens … [E]
+  SqliteException(1): while executing, duplicate column name: vo2max_ml, SQL logic error (code 1)
+    Causing statement: ALTER TABLE "exercise_sessions" ADD COLUMN "vo2max_ml" REAL NULL;
+  package:drift/src/runtime/query_builder/migration.dart 465:12  Migrator.addColumn
+  package:hlth_app/core/database/app_database.dart 132:21        AppDatabase.migration.<fn>
+00:00 +1 -5: Some tests failed.
+```
+
+`from` = 1, 2 and 3 all threw at `app_database.dart:132` — the predicted line —
+and the throw happens inside `DelegatedDatabase._runMigrations`, so the
+executor never opens: **not a degraded database, an unopenable one.** `from` = 7
+was the single pre-fix pass, which is the control: it already had
+`exercise_sessions` without the VO2 columns, so there was nothing to collide
+with. The prediction was right in both directions.
+
+**Fix** (`app_database.dart:141`): guard the step on the versions that actually
+need it — `if (from >= 5 && from < 10)`. Installs at 1-4 get both columns from
+the `from < 5` `createTable`; only 5-9 have the table without them. Removing
+the guard again fails 5 of the 6 tests, so the test is a live regression guard,
+not a vacuous one. Post-fix: 6/6, `flutter analyze` clean, full suite green.
+
+Coverage is all twelve origin versions, not just the four git committed — git is
+not a distribution record, and an internal build could have put any intermediate
+version on a device. 15 tests: one per `from` ∈ 1..12 asserting the database
+opens with **exactly one** `vo2max_ml` / `vo2_confidence` (which catches a throw,
+a duplicate, and an omission alike), plus data preservation across the
+`addColumn` at `from` = 7, plus one case asserting every origin converges on the
+same schema as a fresh `onCreate` (table set, per-table column sets, and index
+name → normalised DDL).
+
+That convergence case is the executed form of Rank 4's question, and it
+generalises past this bug: a future `addColumn` on a table some migration step
+also `createTable`s breaks the low origins, and an index added to
+`_createIndices` without a matching migration step breaks the high ones. Either
+way this test goes red. The pre-fix failure split is the evidence it discriminates
+— 6 failures at origins 1-4 (plus the two cross-cutting cases), 9 passes at 5-12.
+
+Note the fixture technique, since drift's documented `SchemaVerifier` helpers
+need per-version schema dumps this repo never generated:
+`NativeDatabase.memory(setup: …)` hands over the raw sqlite3 handle after open
+but *before* drift reads `user_version` (drift 2.28
+`lib/src/sqlite3/database.dart` `_initializeDatabase`), so `setup` writes the
+historical DDL and stamps the version, and the real `onUpgrade` runs on top.
+The historical DDL is drift's own emitted output, reduced per version; `git diff
+ac06c9a HEAD -- lib/core/database/tables.dart` is three hunks (`DailyMetrics`
++3 columns, five new table classes) so no pre-v3 table definition changed and
+the reduction is exact.
+
+### Rule 6 — what the next pass should attack
+
+This pass is one model refuting another and does **not** settle these. A third
+model should try to refute, specifically:
+
+1. That `latestHrSampleProvider` can be unresolved or empty at
+   `bp_controller.dart:115` — the strongest counter would be evidence that some
+   bootstrap path eagerly warms it, or that `hr_samples` is never empty once a
+   band is paired.
+2. That `_createIndices` has run on every real device — i.e. that no device in
+   the field was ever created by `db/build_schema_db.py` or a hand-restored
+   `.db` file that bypassed `onCreate`. The git diff proves the *code* converges;
+   it does not prove every on-disk file came from that code.
+3. ~~The `duplicate column name` claim above, by actually running the 3 → 13
+   migration rather than reading drift's `createTable` semantics.~~
+   **Settled 2026-08-10 — executed, reproduced, fixed.** See the adjacent-finding
+   section above and `test/app_database_migration_test.dart`.
+
+   What a third model should attack next is the **fixture**, not the claim. The
+   historical DDL is reconstructed (drift's emitted v13 output, reduced per
+   version) rather than dumped from the shipped binaries, because this repo
+   never generated the per-version schema dumps drift's `SchemaVerifier` wants.
+   The reduction is argued from a three-hunk `git diff` on `tables.dart`, and
+   that argument is the load-bearing part: if a v1-v3 table definition ever
+   changed *without* a migration step, the fixture would encode the same drift
+   as the production code and both would agree on something wrong. The strongest
+   refutation is a real on-disk `.db` from a v1-v3 device compared against
+   `_schemaAt(n)`. That is also the residue of item 2 — the code path is now
+   proven, the population of on-disk files still isn't.

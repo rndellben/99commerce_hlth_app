@@ -128,7 +128,18 @@ class AppDatabase extends _$AppDatabase {
           // v9 → v10: add VO2 max estimate columns to exercise_sessions
           // (aerobic-fitness feature, Åstrand-Ryhming Algorithm A). Nullable
           // addColumn is non-destructive; existing rows compute lazily.
-          if (from < 10) {
+          //
+          // Guarded on `from >= 5` — NOT redundant. `exercise_sessions` is
+          // created by the `from < 5` step above, and drift's `createTable`
+          // emits the *current* table definition, which already carries both
+          // of these columns (tables.dart:475-476). An install at schema 1-4
+          // runs both blocks in this same onUpgrade, so an unguarded addColumn
+          // here issued `ALTER TABLE exercise_sessions ADD COLUMN vo2max_ml`
+          // against a table that already had it → `duplicate column name` →
+          // the migration threw and the database never opened. Only installs
+          // that already had the table without the columns (v5-v9) need the
+          // ALTER. Regression guard: test/app_database_migration_test.dart.
+          if (from >= 5 && from < 10) {
             await m.addColumn(exerciseSessions, exerciseSessions.vo2maxMl);
             await m.addColumn(exerciseSessions, exerciseSessions.vo2Confidence);
           }
