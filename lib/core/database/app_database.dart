@@ -44,7 +44,7 @@ part 'app_database.g.dart';
   ],
 )
 class AppDatabase extends _$AppDatabase {
-  AppDatabase() : super(_openConnection());
+  AppDatabase([QueryExecutor? e]) : super(e ?? _openConnection());
 
   /// Bump on every schema change. Add a migration step in
   /// `migration` below. See hlth-db-schema.md §"Schema versioning".
