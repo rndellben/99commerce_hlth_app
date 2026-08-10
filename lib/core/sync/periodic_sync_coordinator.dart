@@ -259,10 +259,21 @@ class PeriodicSyncCoordinator {
       // step evidence. Ryan 2026-06-23: "when sleep is triggered, we trigger
       // these things to run" — the H59 has no realtime sleep event, so the
       // detector approximates it. Never throws (resolves to awake).
+      // Bounded like every other await here: `isProbablyAsleep` swallows its
+      // own errors but CANNOT rescue a wedged sqlite read, and this used to be
+      // the one awaited call in `_onTick` outside `_bounded` — a hang latched
+      // `_inFlight` and killed the tick loop for the process lifetime. An
+      // expired verdict falls back to `false`, matching the detector's own
+      // conservative contract (every ambiguous input resolves to awake).
       final asleep = sleepOnset == null
           ? false
-          : await sleepOnset!
-              .isProbablyAsleep(userId: ActiveSession.defaultUserId);
+          : await _bounded(
+                'sleepOnset',
+                const Duration(seconds: 30),
+                () => sleepOnset!
+                    .isProbablyAsleep(userId: ActiveSession.defaultUserId),
+              ) ??
+              false;
       // HLT-5: run the background fall sweep once data sync is done.
       // Sequenced after sync so we never have two `startMeasureHrRaw`
       // sessions racing for the same BLE link.
@@ -317,7 +328,19 @@ class PeriodicSyncCoordinator {
         return null;
       }
       lastSkipReason = null;
-      final result = await _runSyncWithRetention(device.id);
+      // Bounded exactly like `_onTick`'s syncAll step. `triggerNow` runs on
+      // every disconnected → connected edge, and `MethodChannel.invokeMethod`
+      // has no timeout of its own: the H59's history pulls complete via a
+      // native callback that never arrives if the link drops mid-op. Unbounded,
+      // that await latched `_inFlight` forever and every later tick was
+      // silently dropped — the app stayed "alive but deaf" while the
+      // reconnector happily kept reconnecting a band nothing would read from.
+      final result = await _bounded('triggerNow', const Duration(minutes: 3),
+          () => _runSyncWithRetention(device.id));
+      if (result == null) {
+        lastSkipReason = 'sync stalled or errored — see breadcrumbs';
+        return null;
+      }
       _runs.add(result);
       if (fallSweep) {
         final sweepResult = await this.fallSweep.run();
