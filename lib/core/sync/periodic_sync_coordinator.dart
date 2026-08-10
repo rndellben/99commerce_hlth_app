@@ -122,6 +122,14 @@ class PeriodicSyncCoordinator {
   /// successful runs.
   String? lastSkipReason;
 
+  /// How many runs have been dropped because a previous one was still in
+  /// flight. Overlapping ticks are *expected* to drop occasionally (a slow
+  /// sync on a flaky link), so a nonzero value is not itself a fault — but a
+  /// monotonically climbing counter while `runs` emits nothing is the
+  /// signature of a latched `_inFlight`, which is otherwise entirely silent.
+  /// Read by debug UIs; paired with a breadcrumb at each drop site.
+  int inFlightDrops = 0;
+
   /// Fires `triggerNow()` once per `disconnected → connected` edge so
   /// data populates without the user having to open the debug screen.
   /// The band sometimes emits redundant `connected` events; we only act
@@ -155,7 +163,20 @@ class PeriodicSyncCoordinator {
         // BP interval driven by the shared test knob (kBpSlotMinutes) so the
         // band's schedule matches the today-from-HR derivation cadence.
         await ble.setScheduledMonitoring(bpIntervalMinutes: kBpSlotMinutes);
-      } catch (_) {}
+        // The ack is advisory only — quirk #2: the write-ack `isEnable` lies.
+        // Trust the overnight sample count, not this line.
+        Breadcrumbs.log('monitoring: enable call returned OK '
+            '(bpInterval=${kBpSlotMinutes}m) — ack only, verify via sample '
+            'count');
+      } catch (e) {
+        // Was a bare `catch (_) {}`. Quirk #1: the band records NOTHING until
+        // this lands, so a silent failure here is indistinguishable from an
+        // unworn ring — every sync step returns zero rows and the tick crumb
+        // reads "synced 0 samples, 0 step errors". This is the only signal
+        // that separates the two.
+        Breadcrumbs.log('monitoring: ENABLE FAILED — $e '
+            '(band stays dormant; no scheduled metric will record)');
+      }
     });
   }
 
@@ -185,7 +206,12 @@ class PeriodicSyncCoordinator {
   }
 
   Future<void> _onTick() async {
-    if (_inFlight) return;
+    if (_inFlight) {
+      inFlightDrops++;
+      Breadcrumbs.log(
+          'tick: DROPPED — previous sync still in flight (drop #$inFlightDrops)');
+      return;
+    }
     _inFlight = true;
     try {
       final device = await deviceRepo.getActiveForUser(
@@ -198,7 +224,14 @@ class PeriodicSyncCoordinator {
       try {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('has_bonded_band', device != null);
-      } catch (_) {}
+      } catch (e) {
+        // Was a bare `catch (_) {}`. If this write fails the native watchdog
+        // reads a missing/stale pref, concludes "no band ever paired", and
+        // stops reviving the headless engine — a permanent, self-inflicted
+        // engine death that looks exactly like OEM battery management.
+        Breadcrumbs.log('tick: has_bonded_band write FAILED — $e '
+            '(watchdog may stop reviving the headless engine)');
+      }
       if (device == null) return;
       // Self-healing tick: the native alarm chain keeps firing while the
       // band is disconnected (Doze fix, 2026-07-08), so an overnight BLE
@@ -313,7 +346,10 @@ class PeriodicSyncCoordinator {
   /// (off by default for fast manual debug runs).
   Future<SyncRunResult?> triggerNow({bool fallSweep = false}) async {
     if (_inFlight) {
-      lastSkipReason = 'sync already in flight';
+      inFlightDrops++;
+      lastSkipReason = 'sync already in flight (drop #$inFlightDrops)';
+      Breadcrumbs.log('triggerNow: DROPPED — previous sync still in flight '
+          '(drop #$inFlightDrops)');
       return null;
     }
     _inFlight = true;

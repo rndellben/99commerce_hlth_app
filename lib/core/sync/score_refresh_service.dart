@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hlth_app/core/services/breadcrumbs.dart';
 import 'package:hlth_app/core/services/cardio_load_service.dart';
 import 'package:hlth_app/core/services/mental_wellness_service.dart';
 import 'package:hlth_app/core/services/recovery_score_service.dart';
@@ -54,15 +55,33 @@ class ScoreRefreshService {
   /// VO2 Max refreshes the rolling aerobic-fitness score. Idempotent over
   /// whatever per-session estimates exist; covers band-native workouts
   /// synced without going through the workout screen.
+  /// Every catch below was bare. A consistently-throwing engine is
+  /// indistinguishable from "not enough data yet" — which is the *expected*
+  /// state for a new user, so nobody investigates. Each engine now names
+  /// itself in a breadcrumb on failure.
+  ///
+  /// The two day-loops fold their failures into ONE crumb per engine per run
+  /// rather than one per day: a broken engine at a 30-min tick cadence would
+  /// otherwise write ~144 lines/day per engine and evict the narrative
+  /// context that the 800-line ring buffer exists to preserve.
   Future<void> refreshAfterAggregation({required String userId}) async {
     final today = DateTime.now();
+    var recoveryFailed = 0;
+    Object? recoveryFirstError;
     for (var d = _scoreBackfillDays; d >= 0; d--) {
       try {
         await recoveryScore.computeForDay(
           userId: userId,
           localDate: today.subtract(Duration(days: d)),
         );
-      } catch (_) {}
+      } catch (e) {
+        recoveryFailed++;
+        recoveryFirstError ??= e;
+      }
+    }
+    if (recoveryFailed > 0) {
+      Breadcrumbs.log('scoreRefresh: recovery FAILED on $recoveryFailed/'
+          '${_scoreBackfillDays + 1} days — $recoveryFirstError');
     }
 
     try {
@@ -70,21 +89,34 @@ class ScoreRefreshService {
         userId: userId,
         nights: _cardioLoadBackfillNights,
       );
-    } catch (_) {}
+    } catch (e) {
+      Breadcrumbs.log('scoreRefresh: cardioLoad FAILED — $e');
+    }
 
     try {
       await vo2Max.computeForDay(userId: userId, localDate: DateTime.now());
-    } catch (_) {}
+    } catch (e) {
+      Breadcrumbs.log('scoreRefresh: vo2Max FAILED — $e');
+    }
 
     // Mental Wellness reads the same trailing rollups; recompute the trailing
     // days (oldest → newest) so a day's score settles once its HRV backfills.
+    var wellnessFailed = 0;
+    Object? wellnessFirstError;
     for (var d = _scoreBackfillDays; d >= 0; d--) {
       try {
         await mentalWellness.computeForDay(
           userId: userId,
           localDate: today.subtract(Duration(days: d)),
         );
-      } catch (_) {}
+      } catch (e) {
+        wellnessFailed++;
+        wellnessFirstError ??= e;
+      }
+    }
+    if (wellnessFailed > 0) {
+      Breadcrumbs.log('scoreRefresh: mentalWellness FAILED on $wellnessFailed/'
+          '${_scoreBackfillDays + 1} days — $wellnessFirstError');
     }
   }
 }

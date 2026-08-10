@@ -53,13 +53,27 @@ class BandReconnector {
           await deviceRepo.getActiveForUser(ActiveSession.defaultUserId);
       final mac = device?.macAddress;
       if (mac == null || mac.isEmpty) return;
-      Breadcrumbs.log('reconnect: band disconnected — trying $mac');
+      Breadcrumbs.log('reconnect: band disconnected — trying ${_redact(mac)}');
       await ble.connect(mac);
     } catch (e) {
       Breadcrumbs.log('reconnect: attempt failed ($e)');
     } finally {
       _reconnecting = false;
     }
+  }
+
+  /// Last two octets only. A full MAC is a persistent hardware identifier
+  /// that is trackable across apps, and the crumb file is plaintext that
+  /// survives reinstall-in-place — so it must never hold one. Two octets are
+  /// enough to tell two bands apart in a log, which is all the crumb needs.
+  /// iOS hands back a peripheral UUID rather than a MAC; that gets a short
+  /// tail by the same rule.
+  static String _redact(String id) {
+    final octets = id.split(':');
+    if (octets.length >= 2) {
+      return '…:${octets.sublist(octets.length - 2).join(':')}';
+    }
+    return id.length <= 4 ? '…' : '…${id.substring(id.length - 4)}';
   }
 
   void dispose() {
